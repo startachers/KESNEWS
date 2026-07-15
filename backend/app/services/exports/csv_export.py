@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import briefing_repository as briefing_repo
-from backend.app.services.classification.service import CLASSIFIER_VERSION, get_relevance
+from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article, get_relevance
 from backend.app.services.normalization.dates import since_bound_iso
 
 RISK_LABELS = {"critical": "긴급", "watch": "주의", "routine": "일상"}
@@ -139,16 +139,30 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
                 dedup_score=None,
             )
 
+        classified = classify_article(
+            {"title": title, "description": "", "category": category}
+        )
+        imported_priority = {"critical": "required", "watch": "review", "routine": "reference"}.get(risk)
+        classified["assessment"]["autoReasons"]["matchedTerms"] = list(
+            dict.fromkeys([*classified["assessment"]["autoReasons"]["matchedTerms"], *keywords])
+        )
         article_repo.upsert_assessment(
             connection,
             article_id=article_id,
-            auto_category=category,
-            auto_risk=risk,
-            auto_risk_score=None,
-            auto_sentiment=sentiment,
-            auto_reasons=keywords,
+            assessment={
+                **classified["assessment"],
+                "autoCategory": category or classified["assessment"]["autoCategory"],
+                "autoTone": sentiment or classified["assessment"]["autoTone"],
+            },
             classifier_version=CLASSIFIER_VERSION,
         )
+        final_patch = {
+            "finalCategory": category,
+            "finalPriority": imported_priority,
+            "finalTone": sentiment,
+        }
+        if any(value is not None for value in final_patch.values()):
+            article_repo.patch_final_assessment(connection, article_id, final_patch)
         briefing_repo.set_article_state(
             connection,
             briefing["id"],

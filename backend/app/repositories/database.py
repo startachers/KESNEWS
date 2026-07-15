@@ -40,6 +40,38 @@ def init_db(db_path: Path = DB_PATH) -> list[str]:
     try:
         if pending_migrations(connection):
             backup_database(db_path)
-        return apply_migrations(connection)
+        applied = apply_migrations(connection)
+        _backfill_phase5_assessments(connection)
+        return applied
     finally:
         connection.close()
+
+
+def _backfill_phase5_assessments(connection: sqlite3.Connection) -> None:
+    """Phase 4 판정행을 새 축으로 재계산한다. upsert는 final_* 컬럼을 갱신하지 않는다."""
+    from backend.app.repositories import article_repository as article_repo
+    from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
+
+    rows = connection.execute(
+        """
+        SELECT a.id, a.title, a.description, aa.auto_category
+        FROM articles a
+        JOIN article_assessments aa ON aa.article_id = a.id
+        WHERE aa.auto_priority IS NULL
+        """
+    ).fetchall()
+    with connection:
+        for row in rows:
+            classified = classify_article(
+                {
+                    "title": row["title"],
+                    "description": row["description"] or "",
+                    "category": row["auto_category"],
+                }
+            )
+            article_repo.upsert_assessment(
+                connection,
+                article_id=row["id"],
+                assessment=classified["assessment"],
+                classifier_version=CLASSIFIER_VERSION,
+            )

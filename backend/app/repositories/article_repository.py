@@ -194,20 +194,20 @@ def upsert_assessment(
     connection: sqlite3.Connection,
     *,
     article_id: str,
-    auto_category: str | None,
-    auto_risk: str | None,
-    auto_risk_score: int | None,
-    auto_sentiment: str | None,
-    auto_reasons: list[str] | None,
+    assessment: dict[str, Any],
     classifier_version: str,
 ) -> None:
     now = now_iso()
+    priority = assessment.get("autoPriority")
+    legacy_risk = {"required": "critical", "review": "watch", "reference": "routine"}.get(priority)
     connection.execute(
         """
         INSERT INTO article_assessments (
             article_id, auto_category, auto_risk, auto_risk_score, auto_sentiment,
-            auto_reasons_json, classifier_version, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            auto_reasons_json, classifier_version, updated_at, auto_event_type,
+            auto_relevance_score, auto_severity_score, auto_priority_score,
+            auto_priority, auto_tone
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(article_id) DO UPDATE SET
             auto_category = excluded.auto_category,
             auto_risk = excluded.auto_risk,
@@ -215,19 +215,95 @@ def upsert_assessment(
             auto_sentiment = excluded.auto_sentiment,
             auto_reasons_json = excluded.auto_reasons_json,
             classifier_version = excluded.classifier_version,
+            auto_event_type = excluded.auto_event_type,
+            auto_relevance_score = excluded.auto_relevance_score,
+            auto_severity_score = excluded.auto_severity_score,
+            auto_priority_score = excluded.auto_priority_score,
+            auto_priority = excluded.auto_priority,
+            auto_tone = excluded.auto_tone,
             updated_at = excluded.updated_at
         """,
         (
             article_id,
-            auto_category,
-            auto_risk,
-            auto_risk_score,
-            auto_sentiment,
-            json.dumps(auto_reasons or [], ensure_ascii=False),
+            assessment.get("autoCategory"),
+            legacy_risk,
+            assessment.get("autoSeverityScore"),
+            assessment.get("autoTone"),
+            json.dumps(assessment.get("autoReasons") or {}, ensure_ascii=False),
             classifier_version,
             now,
+            assessment.get("autoEventType"),
+            assessment.get("autoRelevanceScore"),
+            assessment.get("autoSeverityScore"),
+            assessment.get("autoPriorityScore"),
+            priority,
+            assessment.get("autoTone"),
         ),
     )
+
+
+def get_assessment(connection: sqlite3.Connection, article_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM article_assessments WHERE article_id = ?", (article_id,)
+    ).fetchone()
+
+
+def patch_final_assessment(
+    connection: sqlite3.Connection, article_id: str, patch: dict[str, str | None]
+) -> sqlite3.Row:
+    column_by_field = {
+        "finalCategory": "final_category",
+        "finalEventType": "final_event_type",
+        "finalPriority": "final_priority",
+        "finalTone": "final_tone",
+    }
+    assignments = [f"{column_by_field[field]} = ?" for field in patch]
+    values = [patch[field] for field in patch]
+    if assignments:
+        connection.execute(
+            f"UPDATE article_assessments SET {', '.join(assignments)}, updated_at = ? WHERE article_id = ?",  # noqa: S608 - columns are fixed above
+            (*values, now_iso(), article_id),
+        )
+    connection.execute(
+        """
+        UPDATE article_assessments
+        SET manual_override = CASE
+            WHEN final_category IS NOT NULL OR final_event_type IS NOT NULL
+              OR final_priority IS NOT NULL OR final_tone IS NOT NULL THEN 1 ELSE 0 END,
+            updated_at = ?
+        WHERE article_id = ?
+        """,
+        (now_iso(), article_id),
+    )
+    return get_assessment(connection, article_id)
+
+
+def assessment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    reasons = json.loads(row["auto_reasons_json"]) if row["auto_reasons_json"] else {}
+    auto_priority = row["auto_priority"]
+    auto_tone = row["auto_tone"] or row["auto_sentiment"]
+    auto_category = row["auto_category"]
+    auto_event_type = row["auto_event_type"]
+    return {
+        "autoCategory": auto_category,
+        "autoEventType": auto_event_type,
+        "autoRelevanceScore": row["auto_relevance_score"],
+        "autoSeverityScore": row["auto_severity_score"],
+        "autoPriorityScore": row["auto_priority_score"],
+        "autoPriority": auto_priority,
+        "autoTone": auto_tone,
+        "autoReasons": reasons,
+        "finalCategory": row["final_category"],
+        "finalEventType": row["final_event_type"],
+        "finalPriority": row["final_priority"],
+        "finalTone": row["final_tone"],
+        "manualOverride": bool(row["manual_override"]),
+        "effectiveCategory": row["final_category"] or auto_category,
+        "effectiveEventType": row["final_event_type"] or auto_event_type,
+        "effectivePriority": row["final_priority"] or auto_priority,
+        "effectiveTone": row["final_tone"] or auto_tone,
+        "classifierVersion": row["classifier_version"],
+    }
 
 
 CANDIDATE_IDS_SQL = """
@@ -275,6 +351,19 @@ SELECT
     aa.auto_risk_score AS auto_risk_score,
     aa.auto_sentiment AS auto_sentiment,
     aa.auto_reasons_json AS auto_reasons_json,
+    aa.auto_category AS auto_category,
+    aa.auto_event_type AS auto_event_type,
+    aa.auto_relevance_score AS auto_relevance_score,
+    aa.auto_severity_score AS auto_severity_score,
+    aa.auto_priority_score AS auto_priority_score,
+    aa.auto_priority AS auto_priority,
+    aa.auto_tone AS auto_tone,
+    aa.final_category AS final_category,
+    aa.final_event_type AS final_event_type,
+    aa.final_priority AS final_priority,
+    aa.final_tone AS final_tone,
+    aa.manual_override AS manual_override,
+    aa.classifier_version AS classifier_version,
     ba.selected AS selected,
     ba.starred AS starred,
     ba.note AS note,
@@ -298,6 +387,11 @@ def list_candidates(
         dismissed = bool(row["dismissed"])
         if not include_dismissed and dismissed:
             continue
+        assessment = assessment_to_dict(row) if row["classifier_version"] else None
+        effective_priority = assessment["effectivePriority"] if assessment else None
+        effective_tone = assessment["effectiveTone"] if assessment else row["auto_sentiment"]
+        effective_category = assessment["effectiveCategory"] if assessment else row["category_hint"]
+        reasons = assessment["autoReasons"] if assessment else {}
         result.append(
             {
                 "id": row["id"],
@@ -307,12 +401,18 @@ def list_candidates(
                 "url": row["url"] or "",
                 "pubDate": row["published_at"],
                 "description": row["description"] or "",
-                "category": row["category_hint"],
+                "category": effective_category,
                 "manual": bool(row["manual"]),
-                "risk": row["auto_risk"],
-                "riskScore": row["auto_risk_score"],
-                "sentiment": row["auto_sentiment"],
-                "matchedKeywords": json.loads(row["auto_reasons_json"]) if row["auto_reasons_json"] else [],
+                "risk": {"required": "critical", "review": "watch", "reference": "routine"}.get(effective_priority, row["auto_risk"]),
+                "riskScore": row["auto_severity_score"] if row["auto_severity_score"] is not None else row["auto_risk_score"],
+                "sentiment": effective_tone,
+                "eventType": assessment["effectiveEventType"] if assessment else None,
+                "priority": effective_priority,
+                "relevanceScore": row["auto_relevance_score"],
+                "severityScore": row["auto_severity_score"],
+                "priorityScore": row["auto_priority_score"],
+                "assessment": assessment,
+                "matchedKeywords": reasons.get("matchedTerms", []) if isinstance(reasons, dict) else reasons,
                 "included": bool(row["selected"]) if row["selected"] is not None else False,
                 "starred": bool(row["starred"]) if row["starred"] is not None else False,
                 "note": row["note"] or "",

@@ -7,7 +7,7 @@ from backend.app.core.clock import now_iso
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories.database import backup_database
-from backend.app.services.classification.service import CLASSIFIER_VERSION
+from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 
 SCHEMA_VERSION = 1
@@ -113,16 +113,27 @@ def import_export(
                 dedup_score=None,
             )
 
+        classified = classify_article(
+            {
+                "title": article.get("title") or "",
+                "description": article.get("description") or "",
+                "category": article.get("category"),
+            }
+        )
         article_repo.upsert_assessment(
             connection,
             article_id=article_id,
-            auto_category=article.get("category"),
-            auto_risk=article.get("risk"),
-            auto_risk_score=article.get("riskScore"),
-            auto_sentiment=article.get("sentiment"),
-            auto_reasons=article.get("matchedKeywords"),
+            assessment=(article.get("assessment") or classified["assessment"]),
             classifier_version=CLASSIFIER_VERSION,
         )
+        imported_assessment = article.get("assessment") or {}
+        final_patch = {
+            key: imported_assessment[key]
+            for key in ("finalCategory", "finalEventType", "finalPriority", "finalTone")
+            if key in imported_assessment
+        }
+        if final_patch:
+            article_repo.patch_final_assessment(connection, article_id, final_patch)
         briefing_repo.set_article_state(
             connection,
             briefing["id"],

@@ -1,69 +1,64 @@
-# Phase 4 완료 보고 및 다음 작업 지시 — Phase 5
+# Phase 5 완료 보고 및 다음 작업 지시 — Phase 6
 
-## Phase 4 완료 보고
+## Phase 5 완료 보고
 
-Phase 0(`82a69a3`)·Phase 1(`bc08306`)·Phase 2(`7acb1c2`)·Phase 3(`177a124`)에 이어 Phase 4(SQLite 이전)를 4개 체크포인트 모두 완료했다.
+Phase 4의 SQLite 기반 위에 판정 로직 재구축을 완료했다.
 
 ### 변경·신규 파일
 
-- DB 골격: `backend/app/db/migrator.py`, `backend/app/db/migrations/0001_initial.sql`, `backend/app/repositories/database.py`
-- 작업본·기사 API: `backend/app/repositories/{article_repository,briefing_repository,briefing_version_repository}.py`, `backend/app/api/{articles,briefings,envelope}.py`
-- 수집 영속화: `backend/app/repositories/run_repository.py`, `backend/app/services/collection/collector.py`(재작성), `backend/app/api/collections.py`(재작성), `backend/app/services/normalization/{content_key,dates}.py`
-- exports: `backend/app/services/exports/{json_export,csv_export}.py`, `backend/app/api/exports.py`
-- 프런트엔드: `frontend/js/api/client.js`(신규), `frontend/js/state/store.js`·`features/{articles,collection,data-io}.js`·`ui/dialogs.js` 재작성. `frontend/js/utils/csv.js` 삭제, `strings.js`의 `uid`/`csvCell` 삭제(죽은 코드 정리)
-- 테스트: `tests/integration/{test_database_migrations,test_api,test_exports}.py`(신규), `test_collection_pipeline.py`(갱신)
+- migration: `backend/app/db/migrations/0002_article_assessment_phase5.sql`
+- 판정: `backend/app/services/classification/{rule_engine,service}.py`
+- 저장·API: `backend/app/repositories/{database,article_repository}.py`, `backend/app/api/articles.py`
+- 수집·가져오기 연결: `backend/app/services/collection/collector.py`, `backend/app/services/exports/{json_export,csv_export}.py`
+- 프런트 API client: `frontend/js/api/client.js`
+- 테스트: `tests/unit/test_classification.py`, `tests/integration/{test_database_migrations,test_api}.py`
 
-### 새 테이블 스키마 요약
+### 구현 내용
 
-`schema_migrations`, `articles`, `article_observations`, `article_assessments`(최소 컬럼: auto_category/auto_risk/auto_risk_score/auto_sentiment/auto_reasons_json/classifier_version — final_*/manual_override 없음), `briefings`, `briefing_versions`(Phase 8 대비 최소 조회만), `briefing_articles`, `collection_runs`, `collection_run_providers`, `settings`(테이블만, 미사용). migration: `backend/app/db/migrations/0001_initial.sql`.
-
-### API 변경 목록
-
-- `GET/PUT /api/briefings/{date}`, `PATCH /api/briefings/{date}/articles/{article_id}`, `PUT /api/briefings/{date}/article-order`
-- `GET/POST /api/articles`, `DELETE /api/articles/{id}?confirm=true`
-- `POST /api/collections`(요청에서 `existingArticles` 제거), `GET /api/collections/latest?report_date=`, `GET /api/collections/{id}`
-- `GET/POST /api/exports/{date}.json`, `GET/POST /api/exports/{date}.csv`
-- `GET /api/health`에 `dbConnected` 필드 추가
-
-### 핵심 설계 결정
-
-수집 실행(`POST /api/collections`)은 더 이상 `briefing_articles`(선택/중요/메모)를 건드리지 않는다. 그 상태는 DB에 독립적으로 저장되므로 재수집 시 `existingArticles` 병합이 불필요해졌다(P3-001/002 해소). UI의 "삭제"는 물리 삭제가 아니라 `dismissed=true` PATCH로 매핑해 메모·중요 표시를 보존한다(LEG-007 해소).
+- `article_assessments`에 `auto_event_type`, 관련도·심각도·우선도 점수, `auto_priority`, `auto_tone`, `final_*`, `manual_override`를 추가했다.
+- 앱 시작 시 migration 전 DB를 백업하고, 기존 Phase 4 판정행 중 새 우선도 값이 없는 행만 `rules-v2`로 backfill한다.
+- 기사 우선도는 `0.55 × relevance + 0.45 × severity`로 계산하고 required/review/reference 임계값, event cap, low relevance cap, hard floor 순서로 적용한다.
+- `auto_reasons_json`에 rule ID, 매칭 문자열, relevance tier, 점수 breakdown, 적용 cap·floor를 구조화해 저장한다.
+- 예방 문구와 실제 사고를 문장 단위로 구분하고, 실제 발생이 있으면 accident/mixed를 유지한다. `감사패`·`감사 인사`의 모호한 감사 토큰만 억제한다.
+- `PATCH /api/articles/{article_id}/assessment`는 `final_*`만 수정한다. 하나라도 있으면 `manual_override=true`, 모두 `null`이면 false로 돌아간다.
+- 자동 재분류 upsert는 `final_*`를 갱신하지 않는다. 목록 응답은 auto/final/effective 판정을 함께 제공하고 기존 화면 호환 risk/sentiment 필드도 effective 값에 맞춰 유지한다.
+- JSON 백업은 assessment 객체를 함께 왕복한다. CSV는 손실형 포맷 특성상 가져온 분류·위험도·정서를 담당자 최종값으로 보존한다.
 
 ### 검증 결과
 
-- 자동: `python -m pytest -q` 56건 통과, `ruff check .` 통과
-- 수동(Playwright 헤드리스 브라우저로 실제 구동): 수동 기사 추가 → 중요 표시 → 메모 작성 → `localStorage.clear()` → 새로고침 후 선택·중요·메모 상태 보존 확인, 선택 해제 후 휴지통 이동(기본 목록에서 숨김) 확인, JSON/CSV 내보내기 다운로드 확인. 브라우저 console 오류 없음
-- 수행하지 못한 검증: `docs/MANUAL_REGRESSION_CHECKLIST.md`의 전체 항목(인쇄 미리보기, AI 분석 흐름 등)은 사람이 직접 눈으로 보는 회귀까지는 완료하지 못했다. Ollama 연동 자체(AI 분석 생성)는 이번 Phase 범위가 아니라 별도로 확인하지 않았다
+- 자동: `.venv/bin/python -m pytest -q` 66건 통과, `.venv/bin/ruff check .` 통과, `git diff --check` 통과
+- 실제 임시 서버: `/` 200, 수동 기사 추가, mixed/required 자동 판정, final priority/tone override, 목록 재조회 시 effective 값 반영, 모든 final 값 초기화 후 자동값 복귀 확인
+- 프런트엔드: 변경 API client와 관련 ES module `node --check` 통과
+- 브라우저 자동화 도구가 세션에 없어 실제 클릭 UI, Console, 인쇄 미리보기는 수행하지 못했다. Phase 5는 화면 구조를 변경하지 않았고 관련 API·정적 로드는 확인했다.
+- `legacy/kesco_media_briefing_original.html`은 수정하지 않았다.
 
-### 남긴 후속 항목
+### 범위에서 제외한 항목
 
-`docs/KNOWN_RISKS.md`의 "Phase 4 이후 후속 항목"(P4-001~006) 참고. 요약: 검색 설정은 여전히 요청 바디 유지(`/api/settings` 도입 시 재검토), AI 분석 구조화 결과는 `ai_runs`가 없어 미영속(Phase 7), `article_assessments`는 최소 컬럼만(Phase 5에서 확장), CSV의 category 컬럼은 라벨 변환 없이 원시값 왕복.
-
-### Git commit
-
-`7fc1f71`(체크포인트1) → `a4dd02f`(체크포인트2) → `f8b079f`(체크포인트3) → `4743471`(체크포인트4 백엔드) → `e17708e`(체크포인트4 프런트엔드)
+- 이슈 군집화·재군집화와 editor membership override: Phase 6
+- AI 근거 schema와 `ai_runs`: Phase 7
+- `/api/settings`와 검색 요청 바디 축소: 기존 P4-001 후속 유지
 
 ---
 
-## 다음 작업 — Phase 5: 판정 로직 재구축
+## 다음 작업 — Phase 6: 이슈 군집화
 
-## 사전 확인
+### 사전 확인
 
-작업 시작 전 반드시 읽는다: `AGENTS.md`, `docs/ARCHITECTURE.md`(19장 Phase 5 정의, 7.2 ArticleAssessment 전체 필드), `docs/API_DATA_CONTRACTS.md`(4장 판정 점수·임계값·규칙 충돌 전체), `docs/KNOWN_RISKS.md`(LEG-008, P4-003).
+작업 시작 전 `docs/API_DATA_CONTRACTS.md` 6장, `docs/ARCHITECTURE.md` 7.3·7.4장과 Phase 6 정의, `docs/KNOWN_RISKS.md` LEG-010을 읽는다.
 
-## 작업 범위
+### 작업 범위
 
-Phase 4는 `article_assessments`에 자동 판정 최소 컬럼(`auto_category`/`auto_risk`/`auto_risk_score`/`auto_sentiment`/`auto_reasons_json`)만 두었다. Phase 5는 다음을 도입한다.
+- `issues`, `issue_auto_articles`, `issue_membership_overrides`, `cluster_runs`와 필요한 proposal 저장 구조를 migration으로 추가한다.
+- 동일 사건의 여러 기사를 원본 보존 상태로 묶되 deduplication과 clustering을 분리한다.
+- 자동 `auto_*`와 담당자 `editor_*`를 분리하고 effective 값을 editor 우선으로 계산한다.
+- 재군집화는 `POST /api/cluster-runs` proposal/diff 생성 후 `POST /api/cluster-runs/{id}/apply`로 적용한다.
+- apply 시 editor 제목·상태·우선도와 수동 add/remove membership을 덮어쓰지 않는다.
+- 신규·지속·확산 상태와 spread score는 계약의 초기 산식을 따른다.
+- Phase 7의 AI schema나 Phase 8의 보고 화면은 미리 만들지 않는다.
 
-- `final_category`/`final_event_type`/`final_priority`/`final_tone`/`manual_override`/`classifier_version` 등 담당자 최종값 컬럼 추가(migration `0002_*.sql`)
-- 관련도·심각도·우선도 점수를 분리(API_DATA_CONTRACTS.md 4.1~4.2장)하고 `auto_relevance_score`/`auto_severity_score`/`auto_priority_score`/`auto_priority` 도입
-- required/review 임계값과 hard floor·cap(4.3장), 문맥 판정 순서(예방/사고/감사 충돌, 4.4장)
-- `PATCH /api/articles/{article_id}/assessment` 구현(Phase 4에서 의도적으로 보류)
-- 담당자 수동 등급 수정 시 이후 자동 재분석이 덮어쓰지 않는 보호 규칙(4.5장, `manual_override`)
-- LEG-008(제목 키워드 점수 충돌) 실제 수정과 관련 fixture
+### 검증
 
-이슈 군집화·재군집화(`issues`/`cluster_runs` 등)와 AI 근거 schema는 Phase 6·7 범위이며 Phase 5에서 손대지 않는다(REFACTORING_MAP "한 Phase에서 다음 Phase의 구조를 미리 만들지 않는다" 원칙 유지).
-
-## 검증
-
-`python -m pytest -q`, `ruff check .`, 새 migration에 대한 `test_database_migrations.py` 확장, `PATCH .../assessment` API 테스트, MANUAL_REGRESSION_CHECKLIST.md 관련 항목 확인.
+- migration·repository·proposal/apply API 테스트
+- 같은 사건 fixture의 군집과 별개 기사 비군집 테스트
+- 재군집화 후 editor 필드와 membership override 보존 테스트
+- `python -m pytest -q`, `ruff check .`, 관련 수동 회귀

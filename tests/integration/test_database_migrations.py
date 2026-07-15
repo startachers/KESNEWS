@@ -1,7 +1,8 @@
 import sqlite3
+from pathlib import Path
 
 from backend.app.db.migrator import apply_migrations, pending_migrations
-from backend.app.repositories.database import get_connection
+from backend.app.repositories.database import get_connection, init_db
 
 EXPECTED_TABLES = {
     "schema_migrations",
@@ -16,6 +17,8 @@ EXPECTED_TABLES = {
     "settings",
 }
 
+EXPECTED_MIGRATIONS = ["0001_initial.sql", "0002_article_assessment_phase5.sql"]
+
 
 def _table_names(connection: sqlite3.Connection) -> set[str]:
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -27,7 +30,7 @@ def test_apply_migrations_creates_expected_tables(tmp_path):
     connection = get_connection(db_path)
     try:
         applied = apply_migrations(connection)
-        assert applied == ["0001_initial.sql"]
+        assert applied == EXPECTED_MIGRATIONS
         assert EXPECTED_TABLES.issubset(_table_names(connection))
         assert pending_migrations(connection) == []
     finally:
@@ -40,11 +43,87 @@ def test_apply_migrations_is_idempotent(tmp_path):
     try:
         first = apply_migrations(connection)
         second = apply_migrations(connection)
-        assert first == ["0001_initial.sql"]
+        assert first == EXPECTED_MIGRATIONS
         assert second == []
         assert EXPECTED_TABLES.issubset(_table_names(connection))
     finally:
         connection.close()
+
+
+def test_phase5_migration_adds_full_assessment_columns(tmp_path):
+    connection = get_connection(tmp_path / "phase5.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(article_assessments)")}
+        assert {
+            "auto_event_type",
+            "auto_relevance_score",
+            "auto_severity_score",
+            "auto_priority_score",
+            "auto_priority",
+            "auto_tone",
+            "final_category",
+            "final_event_type",
+            "final_priority",
+            "final_tone",
+            "manual_override",
+        }.issubset(columns)
+    finally:
+        connection.close()
+
+
+def test_init_db_backfills_phase4_assessment(tmp_path):
+    db_path = tmp_path / "upgrade.db"
+    connection = get_connection(db_path)
+    try:
+        initial_sql = (Path(__file__).parents[2] / "backend/app/db/migrations/0001_initial.sql").read_text(
+            encoding="utf-8"
+        )
+        connection.executescript(initial_sql)
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations VALUES ('0001_initial.sql', '2026-01-01T00:00:00Z')"
+        )
+        article_values = (
+            "legacy-1", "key-1", "한국전기안전공사 전기화재 예방 점검", "", 0,
+            "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z",
+        )
+        connection.execute(
+            """
+            INSERT INTO articles (
+                id, content_key, title, description, manual,
+                first_observed_at, last_observed_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (*article_values, "2026-01-01T00:00:00Z"),
+        )
+        connection.execute(
+            """
+            INSERT INTO article_assessments (
+                article_id, auto_category, auto_risk, auto_risk_score,
+                auto_sentiment, auto_reasons_json, classifier_version, updated_at
+            ) VALUES ('legacy-1', 'safety', 'watch', 4, 'negative', '[]',
+                      'phase3-rules-v1', '2026-01-01T00:00:00Z')
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert init_db(db_path) == ["0002_article_assessment_phase5.sql"]
+    upgraded = get_connection(db_path)
+    try:
+        row = upgraded.execute(
+            "SELECT * FROM article_assessments WHERE article_id = 'legacy-1'"
+        ).fetchone()
+        assert row["auto_priority"] == "review"
+        assert row["auto_relevance_score"] == 100
+        assert row["classifier_version"] == "rules-v2"
+        assert row["manual_override"] == 0
+    finally:
+        upgraded.close()
 
 
 def test_foreign_key_constraints_are_enforced(tmp_path):

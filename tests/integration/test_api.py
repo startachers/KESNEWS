@@ -172,3 +172,100 @@ def test_article_order_reassigns_sort_order_for_listed_ids_only():
     assert order_by_id[ids[2]] == 0
     assert order_by_id[ids[0]] == 1
     assert order_by_id[ids[1]] == 2
+
+
+def test_patch_assessment_final_values_and_clear_manual_override():
+    _create_briefing("2026-07-21")
+    created = client.post(
+        "/api/articles",
+        json={
+            "reportDate": "2026-07-21",
+            "title": "한국전기안전공사 전기화재 예방 점검",
+            "source": "테스트일보",
+            "url": "https://example.com/assessment/1",
+            "category": "safety",
+        },
+    )
+    article_id = created.json()["data"]["id"]
+
+    patched = client.patch(
+        f"/api/articles/{article_id}/assessment",
+        json={"finalPriority": "required", "finalEventType": "management_risk"},
+    )
+    assert patched.status_code == 200
+    assessment = patched.json()["data"]
+    assert assessment["manualOverride"] is True
+    assert assessment["effectivePriority"] == "required"
+    assert assessment["effectiveEventType"] == "management_risk"
+
+    reclassified = client.post(
+        "/api/articles",
+        json={
+            "reportDate": "2026-07-21",
+            "title": "한국전기안전공사 전기화재 예방 점검",
+            "source": "테스트일보",
+            "url": "https://example.com/assessment/1",
+            "category": "safety",
+        },
+    )
+    assert reclassified.status_code == 200
+    after_reclassification = client.patch(
+        f"/api/articles/{article_id}/assessment", json={}
+    ).json()["data"]
+    assert after_reclassification["finalPriority"] == "required"
+    assert after_reclassification["finalEventType"] == "management_risk"
+    assert after_reclassification["manualOverride"] is True
+
+    listed = client.get("/api/articles", params={"report_date": "2026-07-21"}).json()["data"]["articles"]
+    article = next(item for item in listed if item["id"] == article_id)
+    assert article["priority"] == "required"
+    assert article["risk"] == "critical"
+
+    cleared = client.patch(
+        f"/api/articles/{article_id}/assessment",
+        json={"finalCategory": None, "finalEventType": None, "finalPriority": None, "finalTone": None},
+    )
+    assert cleared.status_code == 200
+    cleared_assessment = cleared.json()["data"]
+    assert cleared_assessment["manualOverride"] is False
+    assert cleared_assessment["effectivePriority"] == cleared_assessment["autoPriority"]
+
+
+def test_patch_assessment_rejects_invalid_enum_and_missing_article():
+    invalid = client.patch(
+        "/api/articles/missing/assessment", json={"finalPriority": "urgent"}
+    )
+    assert invalid.status_code == 422
+
+    missing = client.patch(
+        "/api/articles/missing/assessment", json={"finalPriority": "review"}
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "ARTICLE_NOT_FOUND"
+
+
+def test_manual_article_forced_risk_is_stored_as_final_priority():
+    _create_briefing("2026-07-22")
+    created = client.post(
+        "/api/articles",
+        json={
+            "reportDate": "2026-07-22",
+            "title": "일상 안전교육 안내",
+            "source": "테스트일보",
+            "url": "https://example.com/assessment/forced",
+            "forcedRisk": "critical",
+        },
+    )
+    assert created.status_code == 200
+    article_id = created.json()["data"]["id"]
+    article = next(
+        item
+        for item in client.get(
+            "/api/articles", params={"report_date": "2026-07-22"}
+        ).json()["data"]["articles"]
+        if item["id"] == article_id
+    )
+    assert article["assessment"]["manualOverride"] is True
+    assert article["assessment"]["finalPriority"] == "required"
+    assert article["priority"] == "required"
+    assert article["risk"] == "critical"

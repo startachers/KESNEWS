@@ -52,6 +52,13 @@ export function deleteArticle(articleId) {
   return request(`/articles/${articleId}?confirm=true`, { method: "DELETE" });
 }
 
+export function patchArticleAssessment(articleId, fields) {
+  return request(`/articles/${articleId}/assessment`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+
 export function runCollection(payload) {
   return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 45000);
 }

@@ -1,5 +1,5 @@
 from backend.app.services.classification.rule_engine import infer_category, should_exclude
-from backend.app.services.classification.service import classify_article, get_relevance
+from backend.app.services.classification.service import assess_article, classify_article, get_relevance
 
 RISK_KEYWORDS = ["사망", "화재", "감전", "국정감사", "감사"]
 POSITIVE_KEYWORDS = ["캠페인", "수상"]
@@ -8,7 +8,10 @@ POSITIVE_KEYWORDS = ["캠페인", "수상"]
 def test_classify_article_critical_risk_from_heavy_keyword():
     raw = {"title": "공장 화재로 1명 사망", "description": "야간 화재로 근로자 1명이 사망했다."}
     result = classify_article(raw, RISK_KEYWORDS, POSITIVE_KEYWORDS)
-    assert result["risk"] == "critical"
+    # 공사·전기안전 관련성이 낮으므로 심각도는 높아도 자동 우선도는 cap 된다.
+    assert result["risk"] == "routine"
+    assert result["assessment"]["autoSeverityScore"] == 100
+    assert "low_relevance_cap" in result["assessment"]["autoReasons"]["appliedCaps"]
     assert result["sentiment"] == "negative"
     assert "사망" in result["matchedKeywords"]
 
@@ -62,4 +65,59 @@ def test_get_relevance_ranks_agency_mention_highest():
 def test_get_relevance_no_match_returns_rank_99():
     result = get_relevance({"title": "오늘의 날씨", "description": "전국 대체로 맑음"})
     assert result["rank"] == 99
-    assert result["score"] == 0
+    assert result["score"] == 15
+
+
+def test_prevention_phrase_does_not_become_accident():
+    result = assess_article(
+        {"title": "한국전기안전공사, 전기화재 예방 캠페인", "description": "안전점검 교육을 실시했다."}
+    )
+    assert result["autoEventType"] == "prevention"
+    assert result["autoPriority"] != "required"
+    assert "positive_context_cap" in result["autoReasons"]["appliedCaps"]
+
+
+def test_actual_accident_is_not_suppressed_by_prevention_sentence():
+    result = assess_article(
+        {
+            "title": "한국전기안전공사 전기화재 예방 당부",
+            "description": "공장 전기화재가 발생해 1명이 사망했다.",
+        }
+    )
+    assert result["autoEventType"] == "mixed"
+    assert result["autoSeverityScore"] == 100
+    assert result["autoPriority"] == "required"
+    assert "direct_serious_adverse" in result["autoReasons"]["appliedFloors"]
+
+
+def test_badge_audit_token_is_suppressed_but_audit_office_phrase_survives():
+    badge = assess_article({"title": "한국전기안전공사 감사패 전달", "description": "감사 인사를 전했다."})
+    assert badge["autoEventType"] == "general"
+    assert badge["autoCategory"] != "management"
+
+    audit = assess_article(
+        {"title": "한국전기안전공사 감사패 전달 뒤 감사원 감사 착수", "description": "감사가 시작됐다."}
+    )
+    assert audit["autoEventType"] == "management_risk"
+    assert audit["autoCategory"] == "management"
+    assert audit["autoPriority"] == "required"
+    assert "direct_audit_or_legal" in audit["autoReasons"]["appliedFloors"]
+
+
+def test_electrical_casualty_without_direct_mention_has_review_floor():
+    result = assess_article(
+        {"title": "전기화재 발생으로 사망자 발생", "description": "공장 전기 화재로 2명이 사망했다."}
+    )
+    assert result["autoRelevanceScore"] >= 40
+    assert result["autoPriority"] in {"review", "required"}
+    assert "electrical_safety_casualty" in result["autoReasons"]["appliedFloors"]
+
+
+def test_low_relevance_electrical_casualty_overrides_reference_cap():
+    result = assess_article(
+        {"title": "누전 사고 발생으로 2명 사망", "description": "지하 작업장에서 인명피해가 발생했다."}
+    )
+    assert result["autoRelevanceScore"] < 40
+    assert "low_relevance_cap" in result["autoReasons"]["appliedCaps"]
+    assert result["autoPriority"] == "review"
+    assert "electrical_safety_casualty" in result["autoReasons"]["appliedFloors"]

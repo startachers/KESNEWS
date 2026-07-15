@@ -302,11 +302,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                 article_repo.upsert_assessment(
                     connection,
                     article_id=article_id,
-                    auto_category=item.get("category"),
-                    auto_risk=item.get("risk"),
-                    auto_risk_score=item.get("riskScore"),
-                    auto_sentiment=item.get("sentiment"),
-                    auto_reasons=item.get("matchedKeywords"),
+                    assessment={**item["assessment"], "autoCategory": item.get("category")},
                     classifier_version=CLASSIFIER_VERSION,
                 )
 

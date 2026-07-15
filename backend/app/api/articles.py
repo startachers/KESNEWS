@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -28,6 +28,15 @@ class ManualArticleRequest(BaseModel):
     forcedRisk: str | None = None
     riskKeywords: list[str] = Field(default_factory=list)
     positiveKeywords: list[str] = Field(default_factory=list)
+
+
+class AssessmentPatchRequest(BaseModel):
+    finalCategory: str | None = None
+    finalEventType: Literal[
+        "accident", "prevention", "management_risk", "policy", "achievement", "community", "general", "mixed"
+    ] | None = None
+    finalPriority: Literal["required", "review", "reference"] | None = None
+    finalTone: Literal["positive", "neutral", "negative"] | None = None
 
 
 @router.get("/api/articles")
@@ -120,17 +129,56 @@ async def create_manual_article(request: ManualArticleRequest) -> Any:
             articles_repo.upsert_assessment(
                 connection,
                 article_id=article_id,
-                auto_category=request.category,
-                auto_risk=classified["risk"],
-                auto_risk_score=classified["riskScore"],
-                auto_sentiment=classified["sentiment"],
-                auto_reasons=classified["matchedKeywords"],
+                assessment={**classified["assessment"], "autoCategory": request.category},
                 classifier_version=CLASSIFIER_VERSION,
             )
+            if request.forcedRisk and request.forcedRisk != "auto":
+                forced_priority = {
+                    "critical": "required",
+                    "watch": "review",
+                    "routine": "reference",
+                }.get(request.forcedRisk)
+                if forced_priority:
+                    articles_repo.patch_final_assessment(
+                        connection,
+                        article_id,
+                        {
+                            "finalPriority": forced_priority,
+                            "finalTone": "negative" if forced_priority != "reference" else None,
+                        },
+                    )
             briefings_repo.mark_selected(connection, briefing["id"], article_id)
     finally:
         connection.close()
     return ok_envelope({"id": article_id, "merged": merged})
+
+
+@router.patch("/api/articles/{article_id}/assessment")
+async def patch_article_assessment(article_id: str, request: AssessmentPatchRequest) -> Any:
+    connection = get_connection()
+    try:
+        article = articles_repo.get_article(connection, article_id)
+        if article is None:
+            return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
+        assessment = articles_repo.get_assessment(connection, article_id)
+        if assessment is None:
+            classified = classify_article(
+                {"title": article["title"], "description": article["description"] or ""}
+            )
+            with connection:
+                articles_repo.upsert_assessment(
+                    connection,
+                    article_id=article_id,
+                    assessment=classified["assessment"],
+                    classifier_version=CLASSIFIER_VERSION,
+                )
+
+        patch = request.model_dump(include=request.model_fields_set)
+        with connection:
+            updated = articles_repo.patch_final_assessment(connection, article_id, patch)
+        return ok_envelope(articles_repo.assessment_to_dict(updated))
+    finally:
+        connection.close()
 
 
 @router.delete("/api/articles/{article_id}")
