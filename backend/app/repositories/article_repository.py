@@ -262,6 +262,7 @@ latest_observation AS (
 )
 SELECT
     a.id AS id,
+    a.content_key AS content_key,
     a.title AS title,
     a.source AS source,
     a.published_at AS published_at,
@@ -300,6 +301,7 @@ def list_candidates(
         result.append(
             {
                 "id": row["id"],
+                "contentKey": row["content_key"],
                 "title": row["title"],
                 "source": row["source"],
                 "url": row["url"] or "",

@@ -189,6 +189,38 @@ def mark_selected(connection: sqlite3.Connection, briefing_id: str, article_id: 
     )
 
 
+def set_article_state(
+    connection: sqlite3.Connection,
+    briefing_id: str,
+    article_id: str,
+    *,
+    selected: bool,
+    starred: bool,
+    note: str | None,
+    dismissed: bool,
+    sort_order: int,
+) -> None:
+    """JSON/CSV import 등 대량 반영 시 revision 검증 없이 상태를 직접 설정한다."""
+    _ensure_briefing_article_row(connection, briefing_id, article_id)
+    connection.execute(
+        """
+        UPDATE briefing_articles
+        SET selected = ?, starred = ?, note = ?, dismissed = ?, sort_order = ?, updated_at = ?
+        WHERE briefing_id = ? AND article_id = ?
+        """,
+        (
+            1 if selected else 0,
+            1 if starred else 0,
+            note,
+            1 if dismissed else 0,
+            sort_order,
+            now_iso(),
+            briefing_id,
+            article_id,
+        ),
+    )
+
+
 def reorder_articles(
     connection: sqlite3.Connection,
     report_date: str,
