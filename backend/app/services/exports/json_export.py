@@ -6,12 +6,13 @@ from typing import Any
 from backend.app.core.clock import now_iso
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import briefing_repository as briefing_repo
+from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 
-SCHEMA_VERSION = 1
-SUPPORTED_SCHEMA_VERSIONS = {1}
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = {1, 2}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -47,6 +48,7 @@ def build_export(connection: sqlite3.Connection, report_date: str) -> dict[str, 
         "exportedAt": now_iso(),
         "briefing": {key: briefing[column] for key, column in _BRIEFING_EXPORT_FIELDS.items()},
         "articles": articles,
+        "issues": issue_repo.list_for_report_date(connection, report_date),
     }
 
 
@@ -70,6 +72,7 @@ def import_export(
     briefing = briefing_repo.create_or_update(connection, report_date, expected_revision, briefing_patch)
 
     imported_articles = payload.get("articles") or []
+    article_id_map: dict[str, str] = {}
     for index, article in enumerate(imported_articles):
         content_key = article.get("contentKey")
         match = article_repo.find_by_content_key(connection, content_key) if content_key else None
@@ -144,6 +147,20 @@ def import_export(
             dismissed=bool(article.get("dismissed")),
             sort_order=article.get("sortOrder") if article.get("sortOrder") is not None else index,
         )
+        if article.get("id"):
+            article_id_map[article["id"]] = article_id
+
+    issues_imported = issue_repo.import_snapshots(
+        connection,
+        report_date,
+        payload.get("issues") or [],
+        article_id_map,
+    )
 
     refreshed = briefing_repo.get_by_id(connection, briefing["id"])
-    return {"reportDate": report_date, "articlesImported": len(imported_articles), "revision": refreshed["revision"]}
+    return {
+        "reportDate": report_date,
+        "articlesImported": len(imported_articles),
+        "issuesImported": issues_imported,
+        "revision": refreshed["revision"],
+    }

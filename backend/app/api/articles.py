@@ -196,6 +196,8 @@ async def delete_article(article_id: str, confirm: bool = Query(False)) -> Any:
             return error_response("ARTICLE_IN_USE", "최종 확정 보고에 포함된 기사는 삭제할 수 없습니다.")
         if articles_repo.count_briefing_references(connection, article_id) > 1:
             return error_response("ARTICLE_IN_USE", "다른 보고일에서도 참조 중인 기사는 삭제할 수 없습니다.")
+        if articles_repo.count_issue_references(connection, article_id) > 0:
+            return error_response("ARTICLE_IN_USE", "이슈에 연결된 기사는 삭제할 수 없습니다.")
         with connection:
             articles_repo.delete_article(connection, article_id)
     finally:

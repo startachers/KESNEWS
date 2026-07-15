@@ -244,3 +244,45 @@ def reorder_articles(
         )
 
     return _bump_revision(connection, briefing["id"], expected_revision)
+
+
+def patch_issue_state(
+    connection: sqlite3.Connection,
+    report_date: str,
+    issue_id: str,
+    expected_revision: int,
+    fields: dict[str, Any],
+) -> sqlite3.Row:
+    briefing = get_by_date(connection, report_date)
+    if briefing is None:
+        raise BriefingNotFound()
+    if briefing["status"] == "final":
+        raise BriefingFinalized()
+    if briefing["revision"] != expected_revision:
+        raise RevisionConflict()
+    now = now_iso()
+    connection.execute(
+        """
+        INSERT INTO briefing_issues (
+            briefing_id, issue_id, selected, starred, note, sort_order, created_at, updated_at
+        )
+        SELECT ?, ?, 0, 0, NULL,
+               COALESCE((SELECT MAX(sort_order) + 1 FROM briefing_issues WHERE briefing_id = ?), 0),
+               ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM briefing_issues WHERE briefing_id = ? AND issue_id = ?
+        )
+        """,
+        (briefing["id"], issue_id, briefing["id"], now, now, briefing["id"], issue_id),
+    )
+    column_map = {"selected": "selected", "starred": "starred", "note": "note", "sortOrder": "sort_order"}
+    patch = {key: value for key, value in fields.items() if key in column_map}
+    if patch:
+        assignments = ", ".join(f"{column_map[key]} = ?" for key in patch)
+        values = [1 if value is True else 0 if value is False else value for value in patch.values()]
+        connection.execute(
+            f"UPDATE briefing_issues SET {assignments}, updated_at = ? "  # noqa: S608
+            "WHERE briefing_id = ? AND issue_id = ?",
+            (*values, now, briefing["id"], issue_id),
+        )
+    return _bump_revision(connection, briefing["id"], expected_revision)

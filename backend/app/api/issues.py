@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel
+
+from backend.app.api.envelope import error_response, ok_envelope
+from backend.app.repositories import article_repository as articles_repo
+from backend.app.repositories import briefing_repository as briefings_repo
+from backend.app.repositories import cluster_run_repository as runs_repo
+from backend.app.repositories import issue_repository as issues_repo
+from backend.app.repositories.database import get_connection
+from backend.app.services.clustering.service import (
+    ALGORITHM_VERSION,
+    build_clusters,
+    build_proposal,
+    input_signature,
+)
+
+router = APIRouter()
+
+
+class IssuePatchRequest(BaseModel):
+    editorTitle: str | None = None
+    editorStatus: Literal["new", "ongoing", "expanding", "cooling", "closed"] | None = None
+    editorPriority: Literal["required", "review", "reference"] | None = None
+    articleId: str | None = None
+    membershipAction: Literal["add", "remove"] | None = None
+
+
+class ClusterRunRequest(BaseModel):
+    reportDate: str
+    asOf: datetime | None = None
+
+
+@router.get("/api/issues")
+async def list_issues(report_date: str = Query(...)) -> Any:
+    connection = get_connection()
+    try:
+        issues = issues_repo.list_for_report_date(connection, report_date)
+    finally:
+        connection.close()
+    return ok_envelope({"issues": issues})
+
+
+@router.patch("/api/issues/{issue_id}")
+async def patch_issue(issue_id: str, request: IssuePatchRequest) -> Any:
+    connection = get_connection()
+    try:
+        if issues_repo.get(connection, issue_id) is None:
+            return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
+        fields = request.model_dump(include={"editorTitle", "editorStatus", "editorPriority"})
+        fields = {key: value for key, value in fields.items() if key in request.model_fields_set}
+        if request.articleId or request.membershipAction:
+            if not request.articleId or not request.membershipAction:
+                return error_response(
+                    "ISSUE_MEMBERSHIP_INVALID", "articleId와 membershipAction을 함께 지정해야 합니다."
+                )
+            if articles_repo.get_article(connection, request.articleId) is None:
+                return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
+        with connection:
+            issues_repo.patch_editor(connection, issue_id, fields)
+            if request.articleId and request.membershipAction:
+                issues_repo.set_membership_override(
+                    connection, issue_id, request.articleId, request.membershipAction
+                )
+        return ok_envelope(issues_repo.serialize_one(connection, issue_id))
+    finally:
+        connection.close()
+
+
+@router.post("/api/cluster-runs")
+async def create_cluster_run(request: ClusterRunRequest) -> Any:
+    connection = get_connection()
+    try:
+        articles = issues_repo.clustering_input(connection, request.reportDate)
+        as_of = request.asOf or datetime.now(timezone.utc)
+        if as_of.tzinfo is None:
+            as_of = as_of.replace(tzinfo=timezone.utc)
+        else:
+            as_of = as_of.astimezone(timezone.utc)
+        clusters = build_clusters(articles, as_of)
+        proposal, diff = build_proposal(clusters, issues_repo.matching_state(connection))
+        with connection:
+            row = runs_repo.create(
+                connection,
+                report_date=request.reportDate,
+                input_signature=input_signature(articles),
+                proposal=proposal,
+                diff=diff,
+                algorithm_version=ALGORITHM_VERSION,
+            )
+        return ok_envelope(runs_repo.serialize(row))
+    finally:
+        connection.close()
+
+
+@router.get("/api/cluster-runs/{cluster_run_id}")
+async def get_cluster_run(cluster_run_id: str) -> Any:
+    connection = get_connection()
+    try:
+        row = runs_repo.get(connection, cluster_run_id)
+    finally:
+        connection.close()
+    if row is None:
+        return error_response("CLUSTER_RUN_NOT_FOUND", "군집 실행을 찾을 수 없습니다.")
+    return ok_envelope(runs_repo.serialize(row))
+
+
+@router.post("/api/cluster-runs/{cluster_run_id}/apply")
+async def apply_cluster_run(cluster_run_id: str) -> Any:
+    connection = get_connection()
+    try:
+        run = runs_repo.get(connection, cluster_run_id)
+        if run is None:
+            return error_response("CLUSTER_RUN_NOT_FOUND", "군집 실행을 찾을 수 없습니다.")
+        if run["status"] == "applied":
+            return ok_envelope(runs_repo.serialize(run))
+        briefing = briefings_repo.get_by_date(connection, run["report_date"])
+        if briefing is not None and briefing["status"] == "final":
+            return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본에는 재군집화를 적용할 수 없습니다.")
+        articles = issues_repo.clustering_input(connection, run["report_date"])
+        if input_signature(articles) != run["input_signature"]:
+            return error_response(
+                "CLUSTER_RUN_STALE", "proposal 생성 후 기사 후보가 변경됐습니다. 다시 군집화해 주세요."
+            )
+        serialized = runs_repo.serialize(run)
+        with connection:
+            issues_repo.apply_proposal(connection, cluster_run_id, serialized["proposal"])
+            runs_repo.mark_applied(connection, cluster_run_id)
+        applied = runs_repo.get(connection, cluster_run_id)
+        return ok_envelope(runs_repo.serialize(applied))
+    finally:
+        connection.close()

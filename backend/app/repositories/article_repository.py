@@ -439,6 +439,19 @@ def count_final_snapshot_references(connection: sqlite3.Connection, article_id: 
     return int(row["count"])
 
 
+def count_issue_references(connection: sqlite3.Connection, article_id: str) -> int:
+    row = connection.execute(
+        """
+        SELECT (
+            (SELECT COUNT(*) FROM issue_auto_articles WHERE article_id = ?)
+          + (SELECT COUNT(*) FROM issue_membership_overrides WHERE article_id = ?)
+        ) AS count
+        """,
+        (article_id, article_id),
+    ).fetchone()
+    return int(row["count"])
+
+
 def delete_article(connection: sqlite3.Connection, article_id: str) -> None:
     connection.execute("DELETE FROM article_observations WHERE article_id = ?", (article_id,))
     connection.execute("DELETE FROM article_assessments WHERE article_id = ?", (article_id,))

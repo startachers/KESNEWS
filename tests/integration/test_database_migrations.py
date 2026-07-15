@@ -14,10 +14,19 @@ EXPECTED_TABLES = {
     "briefing_articles",
     "collection_runs",
     "collection_run_providers",
+    "issues",
+    "issue_auto_articles",
+    "issue_membership_overrides",
+    "cluster_runs",
+    "briefing_issues",
     "settings",
 }
 
-EXPECTED_MIGRATIONS = ["0001_initial.sql", "0002_article_assessment_phase5.sql"]
+EXPECTED_MIGRATIONS = [
+    "0001_initial.sql",
+    "0002_article_assessment_phase5.sql",
+    "0003_issue_clustering_phase6.sql",
+]
 
 
 def _table_names(connection: sqlite3.Connection) -> set[str]:
@@ -72,6 +81,24 @@ def test_phase5_migration_adds_full_assessment_columns(tmp_path):
         connection.close()
 
 
+def test_phase6_migration_adds_issue_override_and_proposal_columns(tmp_path):
+    connection = get_connection(tmp_path / "phase6.db")
+    try:
+        apply_migrations(connection)
+        issue_columns = {row[1] for row in connection.execute("PRAGMA table_info(issues)")}
+        cluster_columns = {row[1] for row in connection.execute("PRAGMA table_info(cluster_runs)")}
+        assert {
+            "auto_title", "editor_title", "auto_status", "editor_status",
+            "auto_priority", "editor_priority", "spread_score", "needs_review",
+            "last_cluster_run_id",
+        }.issubset(issue_columns)
+        assert {"status", "input_signature", "proposal_json", "diff_json", "applied_at"}.issubset(
+            cluster_columns
+        )
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -112,7 +139,10 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
     finally:
         connection.close()
 
-    assert init_db(db_path) == ["0002_article_assessment_phase5.sql"]
+    assert init_db(db_path) == [
+        "0002_article_assessment_phase5.sql",
+        "0003_issue_clustering_phase6.sql",
+    ]
     upgraded = get_connection(db_path)
     try:
         row = upgraded.execute(

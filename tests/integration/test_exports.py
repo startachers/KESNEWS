@@ -40,7 +40,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 1
+    assert payload["schemaVersion"] == 2
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -77,6 +77,50 @@ def test_json_import_rejects_unsupported_schema_version():
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "IMPORT_SCHEMA_UNSUPPORTED"
+
+
+def test_json_round_trip_preserves_issue_editor_and_membership_override():
+    report_date = "2025-02-09"
+    first = _setup_briefing_with_article(report_date)
+    second_response = client.post(
+        "/api/articles",
+        json={
+            "reportDate": report_date,
+            "title": "수출입 테스트 기사 후속 보도",
+            "source": "다른일보",
+            "url": "https://example.com/exports/issue-second",
+            "description": "설명",
+            "category": "safety",
+        },
+    )
+    second = second_response.json()["data"]["id"]
+    run = client.post(
+        "/api/cluster-runs", json={"reportDate": report_date, "asOf": "2025-02-09T12:00:00Z"}
+    ).json()["data"]
+    client.post(f"/api/cluster-runs/{run['id']}/apply")
+    issues = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"]
+    issue = next(item for item in issues if first in item["articleIds"])
+    client.patch(
+        f"/api/issues/{issue['id']}",
+        json={
+            "editorTitle": "백업할 담당자 제목",
+            "editorPriority": "required",
+            "articleId": second,
+            "membershipAction": "add",
+        },
+    )
+    payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
+    assert payload["schemaVersion"] == 2
+
+    target_date = "2025-02-10"
+    imported = client.post(f"/api/exports/{target_date}.json", json=payload)
+    assert imported.status_code == 200
+    assert imported.json()["data"]["issuesImported"] >= 1
+    restored = client.get("/api/issues", params={"report_date": target_date}).json()["data"]["issues"]
+    restored_issue = next(item for item in restored if item["effectiveTitle"] == "백업할 담당자 제목")
+    assert restored_issue["effectivePriority"] == "required"
+    assert len(restored_issue["articleIds"]) == 2
+    assert restored_issue["membershipOverrides"][0]["action"] == "add"
 
 
 def test_csv_export_escapes_formula_prefixed_cells():
