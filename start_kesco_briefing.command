@@ -15,13 +15,18 @@ log() {
 }
 
 is_healthy() {
-  curl -sf --max-time 2 "$HEALTH_URL" >/dev/null 2>&1
+  curl -sf --max-time 2 "$HEALTH_URL" 2>/dev/null | grep -q '"service":"kesco-media-briefing"'
 }
 
 if is_healthy; then
   log "이미 실행 중인 서버 감지 (${HEALTH_URL}). 새 서버를 띄우지 않고 브라우저만 엽니다."
   open "$URL"
   exit 0
+fi
+
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  log "포트 ${PORT}을 다른 프로세스가 사용 중입니다. lsof -nP -iTCP:${PORT} -sTCP:LISTEN 으로 확인하세요."
+  exit 1
 fi
 
 if [ ! -x ".venv/bin/uvicorn" ]; then
@@ -36,7 +41,7 @@ else
 fi
 
 log "FastAPI 서버 시작 중 (${HOST}:${PORT})..."
-nohup ".venv/bin/uvicorn" backend.app.main:app --host "$HOST" --port "$PORT" >>"$LOG_FILE" 2>&1 &
+nohup ".venv/bin/python" scripts/run_server.py >>"$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 log "서버 PID: ${SERVER_PID}"
 

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -13,25 +15,19 @@ from backend.app.api.briefings import router as briefings_router
 from backend.app.api.collections import router as collections_router
 from backend.app.api.exports import router as exports_router
 from backend.app.api.issues import router as issues_router
+from backend.app.api.operations import router as operations_router
 from backend.app.api.reports import router as reports_router
-from backend.app.repositories.database import get_connection, init_db
+from backend.app.core.logging import configure_logging
+from backend.app.repositories.database import check_database_integrity, get_connection, init_db
 from backend.app.repositories import ai_run_repository as ai_runs_repo
 from backend.app.services.ai.ollama_client import OllamaError, default_client
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = BASE_DIR / "frontend"
-LOG_DIR = BASE_DIR / "logs"
-
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "app.log", encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
+configure_logging()
 logger = logging.getLogger("kesco.app")
+SERVICE_ID = "kesco-media-briefing"
+INSTANCE_ID = f"{os.getpid()}-{uuid4().hex[:8]}"
 
 app = FastAPI(title="KESCO Media Briefing")
 
@@ -65,6 +61,13 @@ def _check_db_connected() -> bool:
         return False
 
 
+def _check_db_health() -> tuple[bool, str]:
+    try:
+        return check_database_integrity()
+    except OSError as exc:
+        return False, str(exc)
+
+
 def _fetch_ollama_tags() -> tuple[list[dict], str, str | None]:
     """Ollama는 선택 의존성이다. 실패해도 /api/health 자체는 정상으로 응답한다."""
     try:
@@ -81,7 +84,17 @@ def _fetch_ollama_tags() -> tuple[list[dict], str, str | None]:
 async def health() -> dict:
     models, default_model, ollama_error = await asyncio.to_thread(_fetch_ollama_tags)
     db_connected = await asyncio.to_thread(_check_db_connected)
-    return {"ok": True, "models": models, "defaultModel": default_model, "dbConnected": db_connected, "error": ollama_error}
+    db_integrity, _ = await asyncio.to_thread(_check_db_health)
+    return {
+        "ok": True,
+        "service": SERVICE_ID,
+        "instanceId": INSTANCE_ID,
+        "models": models,
+        "defaultModel": default_model,
+        "dbConnected": db_connected,
+        "dbIntegrity": db_integrity,
+        "error": ollama_error,
+    }
 
 
 app.include_router(collections_router)
@@ -91,4 +104,5 @@ app.include_router(briefings_router)
 app.include_router(exports_router)
 app.include_router(issues_router)
 app.include_router(reports_router)
+app.include_router(operations_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

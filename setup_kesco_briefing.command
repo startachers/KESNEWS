@@ -32,7 +32,14 @@ echo "의존성 설치 중..."
 ".venv/bin/pip" install -e . >/dev/null
 
 mkdir -p logs data backups reports
+if [ ! -f "config/automated_collection.json" ]; then
+  cp "config/automated_collection.json.example" "config/automated_collection.json"
+fi
 
-chmod +x setup_kesco_briefing.command start_kesco_briefing.command
+echo "DB migration·무결성 확인 중..."
+".venv/bin/python" -c 'from backend.app.repositories.database import init_db; init_db()'
+
+chmod +x setup_kesco_briefing.command start_kesco_briefing.command install_launchd.command
+chmod +x scripts/*.py
 
 echo "설정 완료. start_kesco_briefing.command로 앱을 실행하세요."

@@ -102,6 +102,33 @@ def get_latest_run(connection: sqlite3.Connection, report_date: str) -> sqlite3.
     ).fetchone()
 
 
+def get_latest_run_any_date(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM collection_runs ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def get_latest_successful_run(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM collection_runs WHERE status IN ('success', 'partial') "
+        "ORDER BY finished_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def serialize_status(row: sqlite3.Row | None) -> dict | None:
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "reportDate": row["report_date"],
+        "status": row["status"],
+        "startedAt": row["started_at"],
+        "finishedAt": row["finished_at"],
+        "warningCount": row["warning_count"],
+        "errorCount": row["error_count"],
+    }
+
+
 def get_run(connection: sqlite3.Connection, run_id: str) -> sqlite3.Row | None:
     return connection.execute("SELECT * FROM collection_runs WHERE id = ?", (run_id,)).fetchone()
 

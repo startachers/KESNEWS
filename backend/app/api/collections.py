@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -14,6 +15,7 @@ from backend.app.services.collection.collector import run_collection
 logger = logging.getLogger("kesco.collections")
 
 router = APIRouter()
+_collection_lock = asyncio.Lock()
 
 
 class CollectionQuery(BaseModel):
@@ -93,8 +95,13 @@ async def create_collection(request: CollectionRequest) -> dict[str, Any]:
         "endpoint": request.endpoint,
     }
 
+    if _collection_lock.locked():
+        return error_response(
+            "COLLECTION_ALREADY_RUNNING", "다른 기사 수집이 실행 중입니다. 완료 후 다시 시도해 주세요."
+        )
     try:
-        data = await run_collection(payload)
+        async with _collection_lock:
+            data = await run_collection(payload)
     except Exception:
         logger.exception("수집 실행 중 처리되지 않은 오류")
         return error_response("COLLECTION_INTERNAL_ERROR", "수집 처리 중 서버 오류가 발생했습니다.")
