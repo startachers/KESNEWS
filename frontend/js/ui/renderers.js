@@ -29,6 +29,7 @@ export function renderHeader() {
   els.summaryEditor.disabled = finalized;
   els.actionNote.disabled = finalized;
   els.refreshBtn.disabled = finalized;
+  els.reclusterBtn.disabled = finalized || state.demo || !state.articles.length;
   $("addArticleBtn").disabled = finalized;
   $("importBtn").disabled = finalized;
   els.finalizeBtn.hidden = finalized;

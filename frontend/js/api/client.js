@@ -97,6 +97,17 @@ export function runCollection(payload) {
   return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 45000);
 }
 
+export function createClusterRun(reportDate, similarityThreshold = 0.40) {
+  return request(`/cluster-runs`, {
+    method: "POST",
+    body: JSON.stringify({ reportDate, similarityThreshold }),
+  });
+}
+
+export function applyClusterRun(clusterRunId) {
+  return request(`/cluster-runs/${encodeURIComponent(clusterRunId)}/apply`, { method: "POST" });
+}
+
 export function getJsonExport(date) {
   return request(`/exports/${date}.json`);
 }

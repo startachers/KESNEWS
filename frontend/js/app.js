@@ -9,11 +9,12 @@ import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, r
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles } from "./features/articles.js";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
+import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
 async function init() {
-  ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState"].forEach(id => els[id] = $(id));
+  ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState"].forEach(id => els[id] = $(id));
 
   setState(await loadDailyState(localDateKey()));
   bindEvents();
@@ -44,6 +45,10 @@ function bindEvents() {
   $("addArticleBtn").addEventListener("click", openArticleModal);
   $("articleForm").addEventListener("submit", addManualArticle);
   els.refreshBtn.addEventListener("click", () => runSearch(false));
+  els.reclusterBtn.addEventListener("click", openClusterProposal);
+  els.clusterThreshold.addEventListener("input", handleClusterThresholdInput);
+  els.clusterRecalculateBtn.addEventListener("click", recalculateClusterProposal);
+  els.clusterApplyBtn.addEventListener("click", applyClusterProposal);
   els.ruleSummaryBtn.addEventListener("click", () => { setRuleSummary(true); persistAndRender(); showToast("선정 기사 기준 기본 요약을 만들었습니다.", "success"); });
   els.generateAiSummaryBtn.addEventListener("click", handleAiAnalysisAction);
   els.aiModelSelect.addEventListener("change", () => {

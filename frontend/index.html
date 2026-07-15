@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
-  <link rel="stylesheet" href="css/app.css?v=20260716-2">
+  <link rel="stylesheet" href="css/app.css?v=20260716-4">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -42,6 +42,7 @@
     <div class="phase-actions-inner">
       <p class="briefing-state" id="briefingState">작성 중 · 아직 최종 확정되지 않았습니다.</p>
       <button class="btn btn-subtle" id="historyBtn">지난 브리핑</button>
+      <button class="btn btn-subtle" id="reclusterBtn" data-testid="recluster-issues" disabled>이슈 재군집화</button>
       <button class="btn btn-subtle" id="previewBtn">CEO 미리보기</button>
       <button class="btn btn-primary" id="finalizeBtn">최종 확정</button>
       <button class="btn btn-subtle" id="finalReportBtn" hidden>최종본 보기</button>
@@ -292,8 +293,27 @@
     </div>
   </div>
 
+  <div class="overlay" id="clusterOverlay" role="dialog" aria-modal="true" aria-labelledby="clusterModalTitle">
+    <div class="modal cluster-modal">
+      <div class="modal-header"><h2 id="clusterModalTitle">이슈 재군집화 제안</h2><button class="close-btn" data-close="clusterOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <p class="cluster-helper">제안 생성만으로 작업본은 바뀌지 않습니다. 기사 묶음을 검토한 뒤 아래의 ‘제안 적용’을 눌러야 반영됩니다.</p>
+        <div class="cluster-threshold">
+          <div class="cluster-threshold-head"><label for="clusterThreshold">기사 유사도 기준</label><strong id="clusterThresholdValue">40%</strong></div>
+          <input id="clusterThreshold" type="range" min="30" max="70" step="5" value="40" aria-describedby="clusterThresholdHint">
+          <div class="cluster-threshold-scale"><span>30% · 넓게 묶기</span><span>70% · 엄격하게 묶기</span></div>
+          <div class="cluster-threshold-actions"><p id="clusterThresholdHint">40%는 비슷한 제목과 사건 단서를 균형 있게 반영합니다.</p><button class="btn btn-subtle" id="clusterRecalculateBtn" type="button">이 기준으로 다시 계산</button></div>
+        </div>
+        <div class="cluster-meta" id="clusterProposalMeta"></div>
+        <div class="cluster-diff" id="clusterDiffSummary"></div>
+        <div class="cluster-proposals" id="clusterProposalList"></div>
+      </div>
+      <div class="modal-footer"><button class="btn" data-close="clusterOverlay">취소</button><button class="btn btn-primary" id="clusterApplyBtn">제안 적용</button></div>
+    </div>
+  </div>
+
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-1"></script>
+  <script type="module" src="js/app.js?v=20260716-3"></script>
 </body>
 </html>

@@ -6,6 +6,22 @@ from backend.app.repositories.database import get_connection
 client = TestClient(app)
 
 
+def test_frontend_exposes_reclustering_proposal_and_apply_controls():
+    page = client.get("/")
+    assert page.status_code == 200
+    assert 'id="reclusterBtn"' in page.text
+    assert 'id="clusterOverlay"' in page.text
+    assert 'id="clusterApplyBtn"' in page.text
+    assert 'id="clusterThreshold"' in page.text
+    assert 'id="clusterRecalculateBtn"' in page.text
+
+    feature = client.get("/js/features/clustering.js")
+    assert feature.status_code == 200
+    assert "createClusterRun(state.date, thresholdValue())" in feature.text
+    assert "thresholdDirty" in feature.text
+    assert "applyClusterRun(activeRun.id)" in feature.text
+
+
 def _create_briefing(report_date: str) -> None:
     response = client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
     assert response.status_code == 200
@@ -64,6 +80,33 @@ def test_cluster_proposal_apply_and_issue_list_keep_distinct_articles():
     }
     articles = client.get("/api/articles", params={"report_date": report_date}).json()["data"]["articles"]
     assert {item["id"] for item in articles} == {first, second, unrelated}
+
+
+def test_cluster_run_accepts_similarity_threshold_and_rejects_out_of_range():
+    report_date = "2026-08-05"
+    _create_briefing(report_date)
+    _create_article(
+        report_date, "threshold-1", "전주 아파트 대규모 정전 발생", "연합뉴스",
+        "2026-08-05T05:00:00Z",
+    )
+
+    proposed = client.post(
+        "/api/cluster-runs",
+        json={
+            "reportDate": report_date,
+            "asOf": "2026-08-05T12:00:00Z",
+            "similarityThreshold": 0.55,
+        },
+    )
+    assert proposed.status_code == 200
+    reasons = proposed.json()["data"]["proposal"][0]["autoReasons"]["clustering"]
+    assert reasons == {"pairThreshold": 0.55, "minimumCrossScore": 0.40}
+
+    invalid = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "similarityThreshold": 0.20},
+    )
+    assert invalid.status_code == 422
 
 
 def test_recluster_preserves_editor_fields_and_membership_remove_override():

@@ -11,13 +11,26 @@ from typing import Any
 from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.normalization.dates import date_value
 
-ALGORITHM_VERSION = "title-tfidf-v1"
+ALGORITHM_VERSION = "event-aware-title-tfidf-v2"
+PAIR_THRESHOLD = 0.40
 MAJOR_OUTLETS = {
     "연합뉴스", "KBS", "MBC", "SBS", "조선일보", "중앙일보", "동아일보", "한겨레", "경향신문"
 }
 GENERIC_TERMS = {
     "한국전기안전공사", "전기안전공사", "kesco", "전기", "안전", "관련", "대해", "위한", "실시",
-    "밝혔다", "기자", "뉴스", "공사",
+    "밝혔다", "기자", "뉴스", "공사", "정전", "화재", "감전", "점검", "캠페인", "협약", "수사",
+    "고발",
+}
+EVENT_PATTERNS = {
+    "outage": re.compile(
+        r"정전|전력\s*(?:공급(?:이|을)?\s*)?(?:중단|차단|끊)|전기(?:가|를)?\s*(?:끊|나가)"
+    ),
+    "fire": re.compile(r"화재|불(?:이)?\s*(?:나|났|붙)|불길"),
+    "electric_shock": re.compile(r"감전"),
+    "inspection": re.compile(r"안전\s*(?:점검|검사|진단)|특별\s*점검"),
+    "campaign": re.compile(r"캠페인|예방\s*홍보"),
+    "agreement": re.compile(r"업무\s*협약|협약\s*(?:체결|식)"),
+    "investigation": re.compile(r"압수\s*수색|수사|고발"),
 }
 
 
@@ -86,6 +99,16 @@ def _distinctive_tokens(article: dict[str, Any]) -> set[str]:
     }
 
 
+def _numbers(article: dict[str, Any]) -> set[str]:
+    text = f"{article.get('title', '')} {article.get('description', '')}"
+    return {value.replace(",", "") for value in re.findall(r"\d[\d,]*(?:\.\d+)?", text)}
+
+
+def _event_anchors(article: dict[str, Any]) -> set[str]:
+    text = _normalized(f"{article.get('title', '')} {article.get('description', '')}")
+    return {name for name, pattern in EVENT_PATTERNS.items() if pattern.search(text)}
+
+
 def pair_score(
     left: dict[str, Any], right: dict[str, Any], left_vector: dict[str, float], right_vector: dict[str, float]
 ) -> float:
@@ -95,6 +118,9 @@ def pair_score(
         return 0.0
     cosine = _cosine(left_vector, right_vector)
     overlap = _distinctive_tokens(left) & _distinctive_tokens(right)
+    left_events, right_events = _event_anchors(left), _event_anchors(right)
+    if left_events and right_events and left_events.isdisjoint(right_events):
+        return 0.0
     left_title = _normalized(left.get("title"))
     right_title = _normalized(right.get("title"))
     title_tokens = {
@@ -104,13 +130,57 @@ def pair_score(
         token for token in right_title.split()
         if (len(token) >= 3 or token.isdigit()) and token not in GENERIC_TERMS
     }
-    shared_number = any(token.isdigit() for token in overlap)
-    bonus = min(0.18, len(overlap) * 0.045) + (0.08 if shared_number else 0)
+    title_similarity = bigram_similarity(left_title, right_title)
+    shared_numbers = _numbers(left) & _numbers(right)
+    number_bonus = 0.10 if shared_numbers and (left_events & right_events or title_tokens) else 0.0
+    title_bonus = max(0.0, min(0.16, (title_similarity - 0.35) * 0.32))
+    event_bonus = 0.08 if left_events & right_events else 0.0
+    bonus = min(0.18, len(overlap) * 0.045) + number_bonus + title_bonus + event_bonus
     time_weight = 1.0 if hours <= 24 else 0.92 if hours <= 48 else 0.84
     score = min(1.0, cosine * time_weight + bonus)
-    if not title_tokens and bigram_similarity(left_title, right_title) < 0.25:
+    if not title_tokens and title_similarity < 0.25 and not (left_events & right_events and shared_numbers):
         return min(score, 0.39)
     return score
+
+
+def _cluster_indexes(
+    scores: dict[tuple[int, int], float],
+    article_count: int,
+    pair_threshold: float,
+    minimum_cross_score: float,
+) -> list[list[int]]:
+    """강한 연결 하나만으로 서로 다른 사건이 연쇄 병합되지 않도록 군집 간 점수도 확인한다."""
+    groups = {index: [index] for index in range(article_count)}
+    cross_stats = {pair: (score, 1, score) for pair, score in scores.items()}
+    while True:
+        best: tuple[float, float, int, int] | None = None
+        for (left, right), (total, count, minimum) in cross_stats.items():
+            average = total / count
+            if average < pair_threshold or minimum < minimum_cross_score:
+                continue
+            candidate = (average, minimum, left, right)
+            if best is None or candidate > best:
+                best = candidate
+        if best is None:
+            return sorted(groups.values(), key=lambda indexes: indexes[0])
+        _, _, left, right = best
+
+        combined_stats: dict[tuple[int, int], tuple[float, int, float]] = {}
+        for other in groups.keys() - {left, right}:
+            left_stats = cross_stats[tuple(sorted((left, other)))]
+            right_stats = cross_stats[tuple(sorted((right, other)))]
+            combined_stats[tuple(sorted((left, other)))] = (
+                left_stats[0] + right_stats[0],
+                left_stats[1] + right_stats[1],
+                min(left_stats[2], right_stats[2]),
+            )
+        cross_stats = {
+            pair: stats
+            for pair, stats in cross_stats.items()
+            if left not in pair and right not in pair
+        }
+        cross_stats.update(combined_stats)
+        groups[left] = sorted(groups[left] + groups.pop(right))
 
 
 def _priority(score: int) -> str:
@@ -144,34 +214,24 @@ def issue_status(published_times: list[str], as_of: datetime, first_seen: str | 
     return "cooling" if since_last < 72 else "closed"
 
 
-def build_clusters(articles: list[dict[str, Any]], as_of: datetime) -> list[dict[str, Any]]:
+def build_clusters(
+    articles: list[dict[str, Any]],
+    as_of: datetime,
+    pair_threshold: float = PAIR_THRESHOLD,
+) -> list[dict[str, Any]]:
     if not articles:
         return []
     vectors = _tfidf_vectors(articles)
-    parent = list(range(len(articles)))
-
-    def find(index: int) -> int:
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
     scores: dict[tuple[int, int], float] = {}
     for left in range(len(articles)):
         for right in range(left + 1, len(articles)):
             score = pair_score(articles[left], articles[right], vectors[left], vectors[right])
             scores[(left, right)] = score
-            if score >= 0.40:
-                left_root, right_root = find(left), find(right)
-                if left_root != right_root:
-                    parent[right_root] = left_root
-
-    groups: dict[int, list[int]] = {}
-    for index in range(len(articles)):
-        groups.setdefault(find(index), []).append(index)
+    minimum_cross_score = max(0.15, round(pair_threshold - 0.15, 2))
+    groups = _cluster_indexes(scores, len(articles), pair_threshold, minimum_cross_score)
 
     clusters = []
-    for indexes in groups.values():
+    for indexes in groups:
         members = [articles[index] for index in indexes]
         representative = max(
             members,
@@ -193,12 +253,12 @@ def build_clusters(articles: list[dict[str, Any]], as_of: datetime) -> list[dict
         severity = max((item.get("severityScore") or 0) for item in members)
         priority_score = round(0.4 * relevance + 0.4 * severity + 0.2 * spread)
         member_ids = [item["id"] for item in members]
-        member_scores = {
-            article_id: scores.get(
-                tuple(sorted((index, indexes[0]))), 1.0 if index == indexes[0] else 0.0
-            )
-            for index, article_id in ((index, articles[index]["id"]) for index in indexes)
-        }
+        member_scores = {}
+        for index in indexes:
+            related_scores = [
+                scores[tuple(sorted((index, other)))] for other in indexes if other != index
+            ]
+            member_scores[articles[index]["id"]] = max(related_scores, default=1.0)
         published_times = [item.get("publishedAt") for item in members if item.get("publishedAt")]
         clusters.append(
             {
@@ -215,6 +275,10 @@ def build_clusters(articles: list[dict[str, Any]], as_of: datetime) -> list[dict
                 "membershipScores": member_scores,
                 "autoReasons": {
                     "algorithmVersion": ALGORITHM_VERSION,
+                    "clustering": {
+                        "pairThreshold": pair_threshold,
+                        "minimumCrossScore": minimum_cross_score,
+                    },
                     "spread": {
                         "distinctSourceCount": len(sources),
                         "majorOutletIncluded": major,

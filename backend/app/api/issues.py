@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import article_repository as articles_repo
@@ -33,6 +33,7 @@ class IssuePatchRequest(BaseModel):
 class ClusterRunRequest(BaseModel):
     reportDate: str
     asOf: datetime | None = None
+    similarityThreshold: float = Field(default=0.40, ge=0.30, le=0.70)
 
 
 @router.get("/api/issues")
@@ -81,7 +82,7 @@ async def create_cluster_run(request: ClusterRunRequest) -> Any:
             as_of = as_of.replace(tzinfo=timezone.utc)
         else:
             as_of = as_of.astimezone(timezone.utc)
-        clusters = build_clusters(articles, as_of)
+        clusters = build_clusters(articles, as_of, request.similarityThreshold)
         proposal, diff = build_proposal(clusters, issues_repo.matching_state(connection))
         with connection:
             row = runs_repo.create(
