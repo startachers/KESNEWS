@@ -31,7 +31,7 @@ export function renderArticles() {
   if (!state.articles.length) {
     els.articleList.innerHTML = `<div class="empty-state">
       <div class="empty-icon">${ICONS.search}</div><h3>아직 수집된 기사가 없습니다</h3>
-      <p>‘오늘 기사 검색’을 누르면 설정된 키워드로 최근 보도를 모읍니다. 자동 수집이 제한될 때는 기사 추가나 JSON·CSV 가져오기를 이용하세요.</p>
+      <p>‘오늘 기사 검색’으로 최근 보도를 모읍니다. 검색에서 빠진 기사 1건은 직접 등록하고, 이전 브리핑은 JSON 백업 또는 CSV 기사목록으로 불러올 수 있습니다.</p>
       <div class="empty-actions"><button class="btn btn-primary" data-action="search">오늘 기사 검색</button><button class="btn" data-action="sample">샘플 화면 보기</button></div>
     </div>`;
     return;

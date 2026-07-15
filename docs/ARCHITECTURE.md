@@ -940,6 +940,7 @@ POST  /api/cluster-runs/{cluster_run_id}/apply
 ### 11.6 브리핑 작업본·최종본
 
 ```text
+GET  /api/briefings
 GET  /api/briefings/{date}
 PUT  /api/briefings/{date}
 GET  /api/briefings/{date}/versions
@@ -950,6 +951,7 @@ POST /api/briefings/{date}/finalize
 POST /api/briefings/{date}/reopen
 ```
 
+- `/api/briefings`는 과거 작업본과 최종 version 존재 여부를 찾기 위한 보고일 내림차순 목록이다.
 - 날짜 조회는 해당 날짜의 유일한 작업본을 반환한다.
 - 모든 mutation은 `expectedRevision`을 요구한다.
 - final 상태에서는 일반 수정이 거부된다.

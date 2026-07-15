@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
@@ -73,6 +73,16 @@ def _serialize(row: sqlite3.Row) -> dict[str, Any]:
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
+
+
+@router.get("/api/briefings")
+async def list_briefings(limit: int = Query(default=100, ge=1, le=365)) -> Any:
+    connection = get_connection()
+    try:
+        rows = repo.list_recent(connection, limit)
+    finally:
+        connection.close()
+    return ok_envelope({"briefings": [_serialize(row) for row in rows]})
 
 
 @router.get("/api/briefings/{report_date}")

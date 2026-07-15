@@ -43,6 +43,19 @@ def test_get_briefing_not_found_returns_404():
     assert response.json()["error"]["code"] == "BRIEFING_NOT_FOUND"
 
 
+def test_list_briefings_returns_saved_dates_in_descending_order():
+    _create_briefing("2098-07-12")
+    _create_briefing("2098-07-14")
+    _create_briefing("2098-07-13")
+
+    response = client.get("/api/briefings", params={"limit": 2})
+
+    assert response.status_code == 200
+    briefings = response.json()["data"]["briefings"]
+    assert [item["reportDate"] for item in briefings] == ["2098-07-14", "2098-07-13"]
+    assert all("latestFinalVersion" in item for item in briefings)
+
+
 def test_manual_article_add_then_patch_survives_reload():
     _create_briefing("2026-07-17")
     created = client.post(

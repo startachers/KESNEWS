@@ -37,6 +37,7 @@ final      현재 작업본이 최신 최종본과 동일하며 잠긴 상태
 
 | 요청 | 선택 규칙 |
 |---|---|
+| `GET /api/briefings?limit=N` | 저장된 작업본을 보고일 내림차순으로 조회. 기본 100건, 최대 365건 |
 | `GET /api/briefings/{date}` | 해당 날짜의 유일한 현재 작업본 |
 | `GET /api/briefings/{date}/versions` | 최종 snapshot 목록 |
 | `GET /api/briefings/{date}/versions/{version}` | 지정 최종 snapshot |

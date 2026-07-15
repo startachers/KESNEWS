@@ -41,6 +41,12 @@ def get_by_id(connection: sqlite3.Connection, briefing_id: str) -> sqlite3.Row |
     return connection.execute("SELECT * FROM briefings WHERE id = ?", (briefing_id,)).fetchone()
 
 
+def list_recent(connection: sqlite3.Connection, limit: int = 100) -> list[sqlite3.Row]:
+    return connection.execute(
+        "SELECT * FROM briefings ORDER BY report_date DESC LIMIT ?", (limit,)
+    ).fetchall()
+
+
 def create_or_update(
     connection: sqlite3.Connection,
     report_date: str,

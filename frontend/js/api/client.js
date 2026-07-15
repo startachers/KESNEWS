@@ -22,6 +22,10 @@ export function getBriefing(date) {
   return request(`/briefings/${date}`);
 }
 
+export function listBriefings(limit = 100) {
+  return request(`/briefings?limit=${encodeURIComponent(limit)}`);
+}
+
 export function putBriefing(date, expectedRevision, patch) {
   return request(`/briefings/${date}`, { method: "PUT", body: JSON.stringify({ expectedRevision, patch }) });
 }

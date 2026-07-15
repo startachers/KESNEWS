@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=20260716-2">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -13,10 +13,7 @@
     <div class="appbar-inner">
       <div class="brand" aria-label="한국전기안전공사 언론브리핑">
         <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="25" height="25" fill="none">
-            <path d="M16 3.5 27 8v7.5c0 6.5-4.5 10.8-11 13-6.5-2.2-11-6.5-11-13V8l11-4.5Z" fill="white" fill-opacity=".98"/>
-            <path d="m17.4 7-7 10.1h5l-1 7.9 7.2-11h-5.1l.9-7Z" fill="#087f76"/>
-          </svg>
+          <img src="assets/kesco-symbol.png" alt="" width="38" height="30">
         </div>
         <div><strong>한국전기안전공사 언론브리핑</strong><small>KESCO MEDIA INTELLIGENCE</small></div>
       </div>
@@ -28,11 +25,11 @@
         <button class="btn btn-ghost btn-icon" id="settingsBtn" title="검색 설정" aria-label="검색 설정">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V21h-4v-.08a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
         </button>
-        <button class="btn btn-ghost hide-mobile" id="addArticleBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>기사 추가
+        <button class="btn btn-ghost hide-mobile" id="addArticleBtn" title="자동 검색에서 빠진 기사 1건을 직접 등록합니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>누락 기사 등록
         </button>
-        <button class="btn btn-ghost hide-mobile" id="importBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>가져오기
+        <button class="btn btn-ghost hide-mobile" id="importBtn" title="이전에 내보낸 브리핑 JSON 백업 또는 CSV 기사목록을 불러옵니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>JSON·CSV 불러오기
         </button>
         <button class="btn btn-primary" id="refreshBtn" data-testid="refresh-news">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>
@@ -44,6 +41,7 @@
   <section class="phase-actions no-print" aria-label="CEO 보고 작업">
     <div class="phase-actions-inner">
       <p class="briefing-state" id="briefingState">작성 중 · 아직 최종 확정되지 않았습니다.</p>
+      <button class="btn btn-subtle" id="historyBtn">지난 브리핑</button>
       <button class="btn btn-subtle" id="previewBtn">CEO 미리보기</button>
       <button class="btn btn-primary" id="finalizeBtn">최종 확정</button>
       <button class="btn btn-subtle" id="finalReportBtn" hidden>최종본 보기</button>
@@ -222,6 +220,16 @@
 
   <input id="fileInput" type="file" accept=".json,.csv,application/json,text/csv" hidden>
 
+  <div class="overlay" id="historyOverlay" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+    <div class="modal">
+      <div class="modal-header"><h2 id="historyTitle">지난 언론브리핑·CEO 보고서</h2><button class="close-btn" data-close="historyOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <p class="history-helper">저장된 작업본을 다시 열거나, 날짜별로 확정된 CEO 보고서를 읽기 전용 문서로 조회할 수 있습니다.</p>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="modal">
       <div class="modal-header"><h2 id="settingsTitle">검색 및 자동화 설정</h2><button class="close-btn" data-close="settingsOverlay" aria-label="닫기">×</button></div>
@@ -268,7 +276,7 @@
 
   <div class="overlay" id="articleOverlay" role="dialog" aria-modal="true" aria-labelledby="articleModalTitle">
     <div class="modal small">
-      <div class="modal-header"><h2 id="articleModalTitle">기사 직접 추가</h2><button class="close-btn" data-close="articleOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-header"><h2 id="articleModalTitle">누락 기사 직접 등록</h2><button class="close-btn" data-close="articleOverlay" aria-label="닫기">×</button></div>
       <form id="articleForm">
         <div class="modal-body form-grid">
           <div class="field full"><label class="required" for="manualTitle">기사 제목</label><input id="manualTitle" required type="text"></div>
@@ -286,6 +294,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=20260716-1"></script>
 </body>
 </html>
