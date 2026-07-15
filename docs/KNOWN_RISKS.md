@@ -4,13 +4,13 @@
 
 | ID | 현행 위험 | 영향 | 회귀 기준 | 수정 Phase |
 |---|---|---|---|---|
-| LEG-001 | 일부 provider만 성공하면 기존 자동 수집 기사가 새 성공 결과로 교체돼 빠질 수 있음 | 부분 장애 시 후보 기사 소실 | 부분 성공 시 현재 동작을 기록하고 데이터 손실 가능성을 문서화 | Phase 3에서 backend로 위치만 이전(동작 미수정, P3-003 참조), 실제 수정은 후속 Phase |
+| LEG-001 | 일부 provider만 성공하면 기존 자동 수집 기사가 새 성공 결과로 교체돼 빠질 수 있음 | 부분 장애 시 후보 기사 소실 | 부분 성공 시 현재 동작을 기록하고 데이터 손실 가능성을 문서화 | **Phase 4에서 해소.** 수집은 append-only(articles/article_observations upsert)로 바뀌어 실패 provider의 과거 기사를 삭제하지 않는다. `GET /api/articles`가 `stale=true, staleReason=provider_failed`와 `meta.failedProviders`를 반환한다. `tests/integration/test_collection_pipeline.py::test_partial_failure_preserves_previously_collected_articles` |
 | LEG-002 | AI 응답의 `articleIds`가 실제 입력 ID인지 검증하지 않음 | 존재하지 않는 근거가 보고문에 표시될 수 있음 | 잘못된 A99 응답 fixture를 준비 | Phase 7 |
 | LEG-003 | `decisionPoints`, `riskOutlook`, management message 등에 근거 ID 구조가 없음 | 분석·전망의 근거 추적 불완전 | 현행 출력 구조 보존 | Phase 7 |
-| LEG-004 | JSON import가 action note, 일부 상태·설정·오류 이력 등을 완전 복원하지 않음 | 백업이라고 믿고 복구하면 내용 누락 | 현행 export→import 차이를 기록 | Phase 4 |
-| LEG-005 | CSV export/import가 category·risk 등의 한글 label과 내부 enum을 완전 왕복하지 못함 | 재가져오기 시 분류 왜곡 | export→import 결과 비교 | Phase 4 |
-| LEG-006 | CSV 셀의 spreadsheet formula 시작문자 escape가 없음 | Excel·Numbers에서 의도치 않은 수식 실행 가능 | `=1+1`, `@SUM(...)` fixture | Phase 4 |
-| LEG-007 | 기사 선택 해제와 휴지통 삭제의 장기 보존 의미가 명확하지 않음 | 메모·중요 표시 손실 가능 | 현행 UI 동작 캡처 | Phase 4 |
+| LEG-004 | JSON import가 action note, 일부 상태·설정·오류 이력 등을 완전 복원하지 않음 | 백업이라고 믿고 복구하면 내용 누락 | 현행 export→import 차이를 기록 | **Phase 4에서 해소.** `GET/POST /api/exports/{date}.json`이 schemaVersion 포함 정식 백업이며 briefing 스칼라 필드·기사 선택/중요/메모를 왕복한다. AI 분석 원본 객체는 `ai_runs`가 없는 Phase 4 범위 밖(P4-002 참조). `tests/integration/test_exports.py::test_json_export_import_round_trip_preserves_selection_and_notes` |
+| LEG-005 | CSV export/import가 category·risk 등의 한글 label과 내부 enum을 완전 왕복하지 못함 | 재가져오기 시 분류 왜곡 | export→import 결과 비교 | **Phase 4에서 해소.** `backend/app/services/exports/csv_export.py`의 `RISK_LABELS`/`SENTIMENT_LABELS` 양방향 매핑으로 위험도·정서는 완전 왕복한다. 분류(category)는 설정이 아직 서버에 없어(P4-001) 원시 값을 그대로 왕복(라벨 변환 없음). `tests/integration/test_exports.py::test_csv_export_import_round_trip_preserves_risk_and_selection` |
+| LEG-006 | CSV 셀의 spreadsheet formula 시작문자 escape가 없음 | Excel·Numbers에서 의도치 않은 수식 실행 가능 | `=1+1`, `@SUM(...)` fixture | **Phase 4에서 해소.** `csv_export._escape_cell`이 `=`/`+`/`-`/`@` 시작 셀에 `'` 접두를 붙이고, import 시 `_unescape_cell`이 이를 되돌린다. `tests/integration/test_exports.py::test_csv_export_escapes_formula_prefixed_cells` |
+| LEG-007 | 기사 선택 해제와 휴지통 삭제의 장기 보존 의미가 명확하지 않음 | 메모·중요 표시 손실 가능 | 현행 UI 동작 캡처 | **Phase 4에서 해소.** `briefing_articles`가 `selected`/`starred`/`note`/`dismissed`를 독립적으로 저장하고, UI의 "삭제" 버튼은 물리 삭제 대신 `dismissed=true` PATCH로 매핑돼 메모·중요 표시를 보존한다(`DELETE /api/briefings/{date}/articles/{id}` 자체를 두지 않음, API_DATA_CONTRACTS.md 2.3장). `tests/integration/test_api.py::test_patch_dismissed_normalizes_selected_to_false_and_preserves_note` |
 | LEG-008 | 제목 키워드 점수로 예방·사고, 감사·감사패가 충돌할 수 있음 | 위험도·긍부정 오분류 | 필수 한국어 fixture | Phase 5 |
 | LEG-009 | 유사 제목 병합 시 provider별 관측·실행 이력이 단일 article 객체에 축약됨 | 수집 경로 감사·장애 추적 불가 | duplicateSources 현행 값 기록 | Phase 3~4 |
 | LEG-010 | 재군집화 모델이 아직 없어 향후 수동 이슈 편집 보호 계약이 필요함 | 자동 재분석이 담당자 편집을 덮을 위험 | API·DB 계약 선확정 | Phase 6 |
@@ -29,7 +29,7 @@
 | ID | 후속 필요 사항 | 배경 | 처리 Phase |
 |---|---|---|---|
 | P2-001 | `/api/health`가 아직 공통 envelope(`{ok, data, error, meta}`)가 아니라 flat 응답이다 | `frontend/js/features/ai-analysis.js`의 `checkAiServer()`가 Phase 1에서 로직 변경 없이 그대로 이전됐으므로 flat 계약을 유지함(ARCHITECTURE.md 11장 vs 실제 프런트엔드 기대치 불일치) | envelope 전환은 `frontend/js/api/client.js` 도입 시점(Phase 3 이후)에 프런트엔드 호출부와 함께 변경 |
-| P2-002 | `/api/health`에 DB 연결 상태 필드가 없다 | SQLite가 아직 없음(Phase 4). 존재하지 않는 값을 항상 `true`로 고정 보고하지 않기 위해 필드 자체를 생략함 | Phase 4에서 DB 연결 필드 추가 |
+| P2-002 | `/api/health`에 DB 연결 상태 필드가 없다 | SQLite가 아직 없음(Phase 4). 존재하지 않는 값을 항상 `true`로 고정 보고하지 않기 위해 필드 자체를 생략함 | **Phase 4에서 해소.** `dbConnected` 필드 추가(`backend/app/main.py`) |
 | P2-003 | `logs/app.log`에 크기 기반 로테이션이 없다 | Phase 2는 최소 로그만 요구. 장기 실행 시 로그 파일이 무한히 커질 수 있음 | Phase 9(운영 안정화)에서 회전 정책 추가 |
 | P2-004 | `start_kesco_briefing.command`의 "이미 실행 중" 판정이 `GET /api/health` 200 응답 여부만 확인한다 | 동일 포트에 다른 프로세스가 우연히 떠 있어도 health 응답이 오면 우리 서버로 오인할 수 있음(가능성은 낮음) | 필요성이 확인되면 이후 Phase에서 프로세스 식별자 등 추가 검증 검토 |
 | P2-005 | Ollama 조회 실패 사유가 `/api/health` 응답에 노출되지 않고 서버 로그에만 남는다(`error: null` 고정) | 앱 자체 상태와 Ollama 상태를 분리하라는 지침에 따름. 상세 실패 사유는 Phase 7(AI 분석 안정화)에서 필요성 재검토 | Phase 7 |
@@ -40,8 +40,22 @@ Phase 3에서 RSS/GDELT/기관 API 수집·정규화·중복 제거·분류를 `
 
 | ID | 후속 필요 사항 | 배경 | 처리 Phase |
 |---|---|---|---|
-| P3-001 | `POST /api/collections` 요청 바디가 최종 계약(`API_DATA_CONTRACTS.md` §3.5, `{report_date, lookback_hours}`만 받음)과 달리 검색식·키워드·lookback 등 현재 localStorage 설정 전체와 `existingArticles`를 그대로 실어 보낸다 | 설정이 아직 서버에 없다(Phase 4 `/api/settings` 대상). Phase 3 범위를 "localStorage 유지 가능"으로 한정한 REFACTORING_MAP §5에 따른 임시 절충 | Phase 4에서 설정이 서버로 이동하면 요청 바디를 최종 계약대로 축소 |
-| P3-002 | `classifyArticle`/`getRelevance`/`relevanceSort`/`prioritySort`/`deduplicateDetailed` 로직이 backend(`POST /api/collections` 경로)와 frontend(`frontend/js/features/collection.js`, 수동 기사 추가·JSON 임포트·UI 정렬 경로)에 이중으로 존재한다 | 수동 기사 추가(`ui/dialogs.js`)와 JSON 임포트(`features/data-io.js`)는 네트워크 없이 즉시 동작해야 해서 이번 Phase 범위(RSS/GDELT 수집 이전)에 포함하지 않았다 | Phase 4에서 `/api/articles`·JSON 임포트가 서버로 옮겨질 때 통합하고 frontend 사본을 제거 |
-| P3-003 | LEG-001(부분 provider 실패 시 기존 정상 기사가 이번 실행 결과로 통째 교체되어 소실될 수 있음)을 이번에 고치지 않고 현재 동작 그대로 backend로 이전했다 | 이번 작업 범위를 "RSS/GDELT 이전 + CORS 제거"로 최소화하기로 결정 | 후속 작업에서 stale 후보 보존·표시(UI 배지 포함)를 별도로 설계 |
+| P3-001 | `POST /api/collections` 요청 바디가 최종 계약(`API_DATA_CONTRACTS.md` §3.5, `{report_date, lookback_hours}`만 받음)과 달리 검색식·키워드·lookback 등 현재 localStorage 설정 전체와 `existingArticles`를 그대로 실어 보낸다 | 설정이 아직 서버에 없다(Phase 4 `/api/settings` 대상). Phase 3 범위를 "localStorage 유지 가능"으로 한정한 REFACTORING_MAP §5에 따른 임시 절충 | **부분 해소(Phase 4).** `existingArticles`는 제거했다 — 수집이 이제 DB에서 직접 매칭하므로 프런트가 병합용 상태를 보낼 필요가 없다(핵심 설계 변경, P3-002도 함께 해소). 검색식·키워드는 `/api/settings`가 아직 없어 요청 바디 유지를 그대로 결정(P4-001로 계승) |
+| P3-002 | `classifyArticle`/`getRelevance`/`relevanceSort`/`prioritySort`/`deduplicateDetailed` 로직이 backend(`POST /api/collections` 경로)와 frontend(`frontend/js/features/collection.js`, 수동 기사 추가·JSON 임포트·UI 정렬 경로)에 이중으로 존재한다 | 수동 기사 추가(`ui/dialogs.js`)와 JSON 임포트(`features/data-io.js`)는 네트워크 없이 즉시 동작해야 해서 이번 Phase 범위(RSS/GDELT 수집 이전)에 포함하지 않았다 | **Phase 4에서 해소.** `POST /api/articles`(수동 추가)와 exports import가 서버로 이전되면서 frontend의 `classifyArticle`/`deduplicate*`/`sameArticle`/`mergeDuplicateArticles`/`articlePreference`/`bigramSimilarity`를 완전히 삭제했다. UI 정렬에 필요한 `getRelevance`/`relevanceSort`/`prioritySort`/`isYonhapArticle`/`normalizedArticleTitle`/`canonicalArticleUrl`(AI 입력 signature용)만 `collection.js`에 남겼다 |
+| P3-003 | LEG-001(부분 provider 실패 시 기존 정상 기사가 이번 실행 결과로 통째 교체되어 소실될 수 있음)을 이번에 고치지 않고 현재 동작 그대로 backend로 이전했다 | 이번 작업 범위를 "RSS/GDELT 이전 + CORS 제거"로 최소화하기로 결정 | **Phase 4에서 해소.** LEG-001 항목 참조 |
 | P3-004 | LEG-011(Google 뉴스 중계 URL은 canonical URL을 알 수 없어 제목 기반 fuzzy dedup에 의존)과 LEG-012(연합뉴스 `news.xml`이 최신 120건만 제공)는 여전히 미해결이며 동작을 그대로 이전했다 | 로직 변경 없이 언어만 이동하는 것이 이번 Phase의 원칙 | LEG-011/LEG-012에 기록된 처리 Phase(Phase 3 후속·Phase 9) 유지 |
 | P3-005 | `settings.endpoint`(기관용 뉴스 API)는 사용자가 임의 URL을 입력할 수 있고 이제 서버가 그 URL을 직접 호출한다(SSRF 유사 위험) | 로컬 앱이고 세션 토큰 인증은 아직 어떤 API에도 실제로 연결돼 있지 않아(P2 이후 미구현) 이번 Phase에서 새 인증 계층을 추가하지 않았다 | Phase 7에서 세션 토큰 검증이 실제로 붙을 때 `/api/collections`도 함께 보호할지 재검토 |
+
+## Phase 4 이후 후속 항목
+
+Phase 4에서 SQLite migration(`backend/app/db/`), 작업본·기사 API(`briefings.py`/`articles.py`), 수집 결과 영속화(LEG-001 실제 수정), JSON/CSV exports(LEG-004~007 실제 수정), 프런트엔드 localStorage 제거를 완료했다. `article_assessments`/`briefing_versions`는 최소 컬럼·최소 조회만 구현했다(REFACTORING_MAP "다음 Phase 구조를 미리 만들지 않는다" 원칙).
+
+| ID | 후속 필요 사항 | 배경 | 처리 Phase |
+|---|---|---|---|
+| P4-001 | 검색식·키워드(`queries`/`coreKeywords`/`riskKeywords`/`positiveKeywords`/`excludeKeywords`/`endpoint`)가 여전히 `POST /api/collections` 요청 바디로 전달되고 `settings` 테이블은 스키마만 있고 읽고 쓰는 코드가 없다 | `/api/settings` API 도입 자체가 Phase 4 체크포인트 3 지시서에서 범위 밖으로 명시됨. 채워줄 API 없이 빈 테이블을 읽게 만드는 것은 다음 Phase 구조를 미리 만드는 것과 같다고 판단 | `/api/settings` 도입 Phase에서 요청 바디를 최종 계약(API_DATA_CONTRACTS.md §3.5)대로 축소 |
+| P4-002 | AI 분석 결과(`managementMessage`/`keyIssues`/`decisionPoints`/`riskOutlook` 등 구조화 객체와 `summaryEvidenceMap`/`summaryCoverage`)는 서버에 저장되지 않는다. `briefings.situation_summary`(최종 텍스트)와 `ai_model`/`ai_generated_at`/`ai_input_signature`만 영속화되므로, 브라우저를 새로고침하면 텍스트 요약은 남지만 구조화 근거 데이터는 사라진다 | `ai_runs` 테이블이 아직 없다(Phase 7 대상). Phase 4 범위는 briefing/기사 편집 상태 영속화이지 AI 근거 schema가 아니다 | Phase 7에서 `ai_runs.response_json`/`evidence_json` 도입 시 함께 해결 |
+| P4-003 | `article_assessments`에는 `auto_category`/`auto_risk`/`auto_risk_score`/`auto_sentiment`/`auto_reasons_json`만 있고 `final_*`/`manual_override`/`auto_relevance_score`/`auto_severity_score`/`auto_priority_score`는 없다 | Phase 4 지시서가 명시적으로 권장한 최소 범위. 담당자 수동 등급이 아직 없으므로 보호할 대상 자체가 없음 | Phase 5(판정 로직 재구축)에서 컬럼 추가와 함께 점수식·hard floor·cap 구현 |
+| P4-004 | JSON/CSV import(`briefing_repository.set_article_state`)는 대량 반영 시 `expectedRevision` 검증 없이 직접 `briefing_articles`를 덮어쓴다 | import 자체가 "가져오기 대상으로 전체 교체"라는 명시적 배타 동작이라(JSON은 `mode=replace` 확인 후, CSV는 손실형 병합) 단건 PATCH의 동시성 계약과는 성격이 다르다고 판단 | 다중 사용자·다중 탭 동시 import 시나리오가 실제로 필요해지면 재검토 |
+| P4-005 | `DELETE /api/articles/{id}`의 "다른 보고일 참조 없음" 조건을 `briefing_articles`에 연결된 서로 다른 `briefing_id` 개수(1개 이하만 허용)로 근사 구현했다 | Issue 모델(Phase 6)이 아직 없어 참조 관계를 더 정교하게 판단할 근거가 없다 | Phase 6 이후 이슈·재군집화 참조가 생기면 삭제 조건에 포함할지 재검토 |
+| P4-006 | CSV export/import의 "분류(category)" 컬럼은 한글 라벨 변환 없이 내부 `category_hint` 원시값(`direct`/`safety` 등)을 그대로 왕복한다 | 카테고리 한글 라벨은 `settings.queries`(현재 요청 바디/미래 `/api/settings`)에서 오는데, CSV export/import는 그 설정을 참조하지 않기로 결정(P4-001과 연동) | `/api/settings` 도입 후 category label 매핑을 CSV export/import에도 반영할지 재검토 |
+
