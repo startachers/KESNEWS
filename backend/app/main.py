@@ -10,6 +10,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from backend.app.api.articles import router as articles_router
+from backend.app.api.briefings import router as briefings_router
 from backend.app.api.collections import router as collections_router
 from backend.app.repositories.database import get_connection, init_db
 
@@ -74,4 +76,6 @@ async def health() -> dict:
 
 
 app.include_router(collections_router)
+app.include_router(articles_router)
+app.include_router(briefings_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

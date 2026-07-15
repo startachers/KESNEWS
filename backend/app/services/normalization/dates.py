@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 _GDELT_DATE = re.compile(r"^\d{8}T\d{6}Z$")
@@ -37,6 +37,19 @@ def parse_gdelt_date(value: str | None) -> str:
         iso = f"{value[0:4]}-{value[4:6]}-{value[6:8]}T{value[9:11]}:{value[11:13]}:{value[13:15]}Z"
         return parse_date(iso)
     return parse_date(value)
+
+
+def since_bound_iso(reference_iso: str | None, hours: int) -> str:
+    """reference_iso로부터 hours시간 이전 시각을 ISO로 반환한다. 기사 매칭 후보 범위를 좁히는 데 쓴다."""
+    reference = reference_iso or _now_iso()
+    try:
+        dt = datetime.fromisoformat(str(reference).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        dt = datetime.now(timezone.utc)
+    bound = dt.astimezone(timezone.utc) - timedelta(hours=hours)
+    return bound.isoformat().replace("+00:00", "Z")
 
 
 def date_value(value: str | None) -> float:

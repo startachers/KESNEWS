@@ -12,6 +12,13 @@ import tempfile
 _TEST_DB_DIR = tempfile.mkdtemp(prefix="kesco-test-db-")
 os.environ["KESCO_DB_PATH"] = os.path.join(_TEST_DB_DIR, "test.db")
 
+# `TestClient(app)`를 `with` 없이 쓰는 기존 테스트들은 FastAPI startup 이벤트를 트리거하지
+# 않으므로, 여기서 미리 migration을 적용해 API 테스트가 실제 서버 기동 여부와 무관하게
+# 항상 스키마가 준비된 상태에서 실행되도록 한다.
+from backend.app.repositories.database import init_db  # noqa: E402
+
+init_db()
+
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_TEST_DB_DIR, ignore_errors=True)
