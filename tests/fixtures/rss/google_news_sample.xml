@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Google 뉴스 검색 결과</title>
+    <item>
+      <title>한국전기안전공사, 전기화재 예방 캠페인 실시 - 연합뉴스</title>
+      <link>https://news.google.com/rss/articles/CBMiXXRlc3QtYXJ0aWNsZS1pZA?oc=5</link>
+      <pubDate>Wed, 15 Jul 2026 09:00:00 GMT</pubDate>
+      <description>한국전기안전공사가 여름철 전기화재 예방을 위한 캠페인을 실시한다고 밝혔다.</description>
+      <source url="https://www.yna.co.kr">연합뉴스</source>
+    </item>
+    <item>
+      <title>감전사고 잇따라 발생, 안전 점검 강화 필요 - 조선일보</title>
+      <link>https://www.chosun.com/national/2026/07/15/example/</link>
+      <pubDate>Wed, 15 Jul 2026 08:30:00 GMT</pubDate>
+      <description>최근 감전사고가 잇따라 발생하면서 안전 점검 강화가 필요하다는 지적이 나온다.</description>
+    </item>
+  </channel>
+</rss>

@@ -9,7 +9,6 @@ export const DEFAULT_SETTINGS = {
   maxRecords: 50,
   collectionLimit: 200,
   aiModel: "gemma4:26b",
-  proxy: "https://syndicate.fallible.net/feed_cors_proxy/{url}",
   endpoint: "",
   coreKeywords: ["한국전기안전공사", "전기안전공사", "KESCO"],
   riskKeywords: ["사망", "중대재해", "압수수색", "감사", "국정감사", "화재", "감전", "사고", "논란", "위반", "고발", "부실", "해킹", "정전", "피해", "징계"],
@@ -57,7 +56,7 @@ export function loadSettings() {
       merged.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
     }
-    if (!merged.proxy || merged.proxy.includes("api.allorigins.win")) merged.proxy = DEFAULT_SETTINGS.proxy;
+    delete merged.proxy;
     const direct = merged.queries.find(q => q.id === "direct");
     if (direct && !direct.query.trim().startsWith("(")) direct.query = `(${direct.query})`;
     return merged;

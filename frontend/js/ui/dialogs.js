@@ -22,7 +22,6 @@ export function openSettings() {
   $("settingLookback").value = String(settings.lookback);
   $("settingMaxRecords").value = String(settings.maxRecords);
   $("settingCollectionLimit").value = String(settings.collectionLimit || 200);
-  $("settingProxy").value = settings.proxy;
   $("settingEndpoint").value = settings.endpoint;
   $("settingCoreKeywords").value = settings.coreKeywords.join(", ");
   $("settingRiskKeywords").value = settings.riskKeywords.join(", ");
@@ -44,7 +43,6 @@ export function saveSettingsFromForm() {
     lookback: Number($("settingLookback").value),
     maxRecords: Number($("settingMaxRecords").value),
     collectionLimit: Number($("settingCollectionLimit").value),
-    proxy: $("settingProxy").value.trim(),
     endpoint: $("settingEndpoint").value.trim(),
     coreKeywords: parseKeywordList($("settingCoreKeywords").value),
     riskKeywords: parseKeywordList($("settingRiskKeywords").value),

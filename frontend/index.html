@@ -246,11 +246,10 @@
           <h3>데이터 연결</h3>
           <p>연합뉴스 공식 RSS를 먼저 읽고 Google 뉴스 RSS로 보완하며, 수집 경로가 실패하면 GDELT 공개 기사 색인을 시도합니다.</p>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingYonhap" type="checkbox"><div><strong>연합뉴스 공식 RSS 우선 수집</strong><small>최근 종합 뉴스에서 지정 관련도 기준과 일치하는 기사만 반영합니다.</small></div></div>
-          <div class="field"><label for="settingProxy">RSS 프록시 URL ({url} 위치에 원본 주소 삽입)</label><input id="settingProxy" type="url"></div>
           <div class="field"><label for="settingEndpoint">기관용 뉴스 API 프록시 URL (선택)</label><input id="settingEndpoint" type="text" placeholder="https://내부주소/news?q={query}&hours={hours}"></div>
           <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
           <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건 (권장)</option><option value="300">300건</option></select></div>
-          <div class="security-note">공개 프록시에는 검색어와 RSS 주소가 전달됩니다. 기관 내부·비공개 키워드나 API 비밀키를 이 HTML에 입력하지 마세요. 네이버 뉴스 API를 사용하려면 비밀키를 서버에 보관한 기관용 프록시 URL을 연결하는 방식을 권장합니다.</div>
+          <div class="security-note">RSS·GDELT 수집은 이 컴퓨터의 로컬 서버(127.0.0.1:8787)가 직접 호출하며 외부 공개 프록시를 거치지 않습니다. 기관용 뉴스 API를 연결할 경우 비밀키는 서버 쪽 프록시 URL에 보관하고 이 화면에는 입력하지 마세요.</div>
         </section>
       </div>
       <div class="modal-footer"><button class="btn btn-subtle" id="resetSettingsBtn">기본값 복원</button><button class="btn" data-close="settingsOverlay">취소</button><button class="btn btn-primary" id="saveSettingsBtn">저장</button></div>
