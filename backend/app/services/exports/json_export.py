@@ -251,6 +251,7 @@ def import_export(
             article_id,
             selected=bool(article.get("included")),
             starred=bool(article.get("starred")),
+            top_issue=bool(article.get("topIssue")),
             note=article.get("note") or None,
             dismissed=bool(article.get("dismissed")),
             sort_order=article.get("sortOrder") if article.get("sortOrder") is not None else index,

@@ -104,6 +104,17 @@ export function createClusterRun(reportDate, similarityThreshold = 0.40) {
   });
 }
 
+export function listIssues(reportDate) {
+  return request(`/issues?report_date=${encodeURIComponent(reportDate)}`);
+}
+
+export function patchBriefingIssue(reportDate, issueId, expectedRevision, fields) {
+  return request(`/briefings/${encodeURIComponent(reportDate)}/issues/${encodeURIComponent(issueId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ expectedRevision, ...fields }),
+  });
+}
+
 export function applyClusterRun(clusterRunId) {
   return request(`/cluster-runs/${encodeURIComponent(clusterRunId)}/apply`, { method: "POST" });
 }

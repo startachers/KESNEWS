@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
-  <link rel="stylesheet" href="css/app.css?v=20260716-4">
+  <link rel="stylesheet" href="css/app.css?v=20260716-5">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -126,7 +126,7 @@
         </section>
 
         <section class="section">
-          <div class="section-heading"><div><h2>Top Issues</h2><p>위험도·최신성·중요 표시를 반영한 우선 검토 기사</p></div><div class="section-rule"></div></div>
+          <div class="section-heading"><div><h2>Top Issues</h2><p>Media Coverage에서 직접 태그한 군집·기사를 최대 3개 표시합니다.</p></div><div class="section-rule"></div></div>
           <div class="issues-grid" id="topIssues"></div>
         </section>
 
@@ -300,8 +300,8 @@
         <p class="cluster-helper">제안 생성만으로 작업본은 바뀌지 않습니다. 기사 묶음을 검토한 뒤 아래의 ‘제안 적용’을 눌러야 반영됩니다.</p>
         <div class="cluster-threshold">
           <div class="cluster-threshold-head"><label for="clusterThreshold">기사 유사도 기준</label><strong id="clusterThresholdValue">40%</strong></div>
-          <input id="clusterThreshold" type="range" min="30" max="70" step="5" value="40" aria-describedby="clusterThresholdHint">
-          <div class="cluster-threshold-scale"><span>30% · 넓게 묶기</span><span>70% · 엄격하게 묶기</span></div>
+          <input id="clusterThreshold" type="range" min="20" max="70" step="5" value="40" aria-describedby="clusterThresholdHint">
+          <div class="cluster-threshold-scale"><span>20% · 가장 넓게 묶기</span><span>70% · 엄격하게 묶기</span></div>
           <div class="cluster-threshold-actions"><p id="clusterThresholdHint">40%는 비슷한 제목과 사건 단서를 균형 있게 반영합니다.</p><button class="btn btn-subtle" id="clusterRecalculateBtn" type="button">이 기준으로 다시 계산</button></div>
         </div>
         <div class="cluster-meta" id="clusterProposalMeta"></div>
@@ -314,6 +314,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-3"></script>
+  <script type="module" src="js/app.js?v=20260716-5"></script>
 </body>
 </html>

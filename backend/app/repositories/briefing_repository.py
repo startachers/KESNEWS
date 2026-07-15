@@ -204,8 +204,8 @@ def _bump_revision(connection: sqlite3.Connection, briefing_id: str, expected_re
     return row
 
 
-_ARTICLE_STATE_COLUMNS = {"selected", "starred", "note", "dismissed", "sortOrder"}
-_ARTICLE_STATE_DB_COLUMN = {"selected": "selected", "starred": "starred", "note": "note", "dismissed": "dismissed", "sortOrder": "sort_order"}
+_ARTICLE_STATE_COLUMNS = {"selected", "starred", "topIssue", "note", "dismissed", "sortOrder"}
+_ARTICLE_STATE_DB_COLUMN = {"selected": "selected", "starred": "starred", "topIssue": "top_issue", "note": "note", "dismissed": "dismissed", "sortOrder": "sort_order"}
 
 
 def patch_article_state(
@@ -264,18 +264,20 @@ def set_article_state(
     note: str | None,
     dismissed: bool,
     sort_order: int,
+    top_issue: bool = False,
 ) -> None:
     """JSON/CSV import 등 대량 반영 시 revision 검증 없이 상태를 직접 설정한다."""
     _ensure_briefing_article_row(connection, briefing_id, article_id)
     connection.execute(
         """
         UPDATE briefing_articles
-        SET selected = ?, starred = ?, note = ?, dismissed = ?, sort_order = ?, updated_at = ?
+        SET selected = ?, starred = ?, top_issue = ?, note = ?, dismissed = ?, sort_order = ?, updated_at = ?
         WHERE briefing_id = ? AND article_id = ?
         """,
         (
             1 if selected else 0,
             1 if starred else 0,
+            1 if top_issue else 0,
             note,
             1 if dismissed else 0,
             sort_order,
@@ -351,3 +353,24 @@ def patch_issue_state(
             (*values, now, briefing["id"], issue_id),
         )
     return _bump_revision(connection, briefing["id"], expected_revision)
+
+
+def list_issue_states(connection: sqlite3.Connection, report_date: str) -> dict[str, dict[str, Any]]:
+    rows = connection.execute(
+        """
+        SELECT bi.issue_id, bi.selected, bi.starred, bi.note, bi.sort_order
+        FROM briefing_issues bi
+        JOIN briefings b ON b.id = bi.briefing_id
+        WHERE b.report_date = ?
+        """,
+        (report_date,),
+    ).fetchall()
+    return {
+        row["issue_id"]: {
+            "selected": bool(row["selected"]),
+            "starred": bool(row["starred"]),
+            "note": row["note"] or "",
+            "sortOrder": row["sort_order"],
+        }
+        for row in rows
+    }

@@ -33,7 +33,7 @@ class IssuePatchRequest(BaseModel):
 class ClusterRunRequest(BaseModel):
     reportDate: str
     asOf: datetime | None = None
-    similarityThreshold: float = Field(default=0.40, ge=0.30, le=0.70)
+    similarityThreshold: float = Field(default=0.40, ge=0.20, le=0.70)
 
 
 @router.get("/api/issues")
@@ -41,6 +41,14 @@ async def list_issues(report_date: str = Query(...)) -> Any:
     connection = get_connection()
     try:
         issues = issues_repo.list_for_report_date(connection, report_date)
+        briefing_states = briefings_repo.list_issue_states(connection, report_date)
+        for issue in issues:
+            issue.update(
+                briefing_states.get(
+                    issue["id"],
+                    {"selected": False, "starred": False, "note": "", "sortOrder": None},
+                )
+            )
     finally:
         connection.close()
     return ok_envelope({"issues": issues})

@@ -111,6 +111,7 @@ briefing_id
 article_id
 selected
 starred
+top_issue
 note
 dismissed
 sort_order
@@ -126,7 +127,8 @@ updated_at
 | 브리핑 선정 | true | false | 요약·보고 대상 |
 | 숨김 | false | true | 해당 날짜 작업목록에서 숨김, 복원 가능 |
 
-`dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
+`top_issue`는 개별 기사를 Top Issues에 직접 올리는 수동 태그다. `selected`(브리핑 선정),
+`starred`(중요 기사)와 서로 독립이다. `dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
 
 ### 2.3 DELETE 사용 제한
 
@@ -155,7 +157,7 @@ DELETE /api/articles/{article_id}
 
 수집 실행은 `briefing_articles` row를 만들지 않는다. 수집은 `articles`와 `article_observations`만 갱신한다.
 
-- row는 해당 기사에 대한 **첫 PATCH 시 upsert로 생성**한다. 생성 기본값은 `selected=false`, `starred=false`, `dismissed=false`, `note` 없음, `sort_order`는 목록 끝이다.
+- row는 해당 기사에 대한 **첫 PATCH 시 upsert로 생성**한다. 생성 기본값은 `selected=false`, `starred=false`, `top_issue=false`, `dismissed=false`, `note` 없음, `sort_order`는 목록 끝이다.
 - 해당 날짜의 작업본이 없으면 `404 BRIEFING_NOT_FOUND`다. 작업본은 1.3의 `PUT /api/briefings/{date}`로만 생성한다.
 - row가 없는 기사는 “일반 후보(미선정)”와 의미가 같다. finalize는 그 시점의 유효 상태를 snapshot에 복사하므로 row 유무가 결과에 영향을 주지 않는다.
 
@@ -167,9 +169,13 @@ DELETE /api/articles/{article_id}
 2. 해당 날짜의 `briefing_articles` row가 있는 기사
 3. 해당 날짜에 수동 추가된 기사
 
-- 각 기사에는 해당 날짜의 편집 상태(`selected`, `starred`, `note`, `dismissed`)를 join해 반환한다. row가 없으면 기본 상태를 반환한다.
+- 각 기사에는 해당 날짜의 편집 상태(`selected`, `starred`, `topIssue`, `note`, `dismissed`)를 join해 반환한다. row가 없으면 기본 상태를 반환한다.
 - `include_dismissed=false`면 `dismissed=true` 기사를 제외한다.
-- `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환한다.
+- `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환하며 `briefing_issues`의 수동 상태를 합쳐 반환한다.
+
+Top Issues는 담당자가 직접 태그한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
+개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 3개로 제한한다.
+재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
 
 ### 2.6 정렬 변경
 
@@ -547,7 +553,7 @@ POST /api/cluster-runs/{cluster_run_id}/apply
 
 첫 요청은 proposal과 diff를 만든다.
 
-요청 본문은 `reportDate`, 선택적인 `asOf`, `similarityThreshold`를 받는다. `similarityThreshold`는 `0.30` 이상 `0.70` 이하이며 생략 시 `0.40`이다. 값이 낮을수록 넓게, 높을수록 엄격하게 묶는다. proposal의 `autoReasons.clustering`에는 실제 적용한 기준값을 기록한다.
+요청 본문은 `reportDate`, 선택적인 `asOf`, `similarityThreshold`를 받는다. `similarityThreshold`는 `0.20` 이상 `0.70` 이하이며 생략 시 `0.40`이다. 값이 낮을수록 넓게, 높을수록 엄격하게 묶는다. proposal의 `autoReasons.clustering`에는 실제 적용한 기준값을 기록한다.
 
 - 생성 이슈
 - 병합 후보
@@ -599,7 +605,7 @@ spread_score = min(100,
 JSON은 정식 백업 형식이다.
 
 - `schemaVersion` 필수
-- 작업본, 기사 선정 상태, 중요 표시, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
+- 작업본, 기사 선정 상태, 중요 표시, 개별 기사 Top 이슈 태그, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
   이슈 편집값, AI run, action note를 포함한다.
 - 가져오기 전 schema 검증을 수행한다.
 - 내보내기→새 DB 가져오기→다시 내보내기의 의미상 동등성을 통합 테스트한다.

@@ -390,6 +390,7 @@ SELECT
     aa.classifier_version AS classifier_version,
     ba.selected AS selected,
     ba.starred AS starred,
+    ba.top_issue AS top_issue,
     ba.note AS note,
     ba.dismissed AS dismissed,
     ba.sort_order AS sort_order
@@ -443,6 +444,7 @@ def list_candidates(
                 "matchedKeywords": reasons.get("matchedTerms", []) if isinstance(reasons, dict) else reasons,
                 "included": bool(row["selected"]) if row["selected"] is not None else False,
                 "starred": bool(row["starred"]) if row["starred"] is not None else False,
+                "topIssue": bool(row["top_issue"]) if row["top_issue"] is not None else False,
                 "note": row["note"] or "",
                 "dismissed": dismissed,
                 "sortOrder": row["sort_order"],

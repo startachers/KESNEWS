@@ -25,7 +25,7 @@ export function loadSample() {
   state.articles = samples.map((s, i) => ({
     id: `sample-${i}`, title: s.title, source: s.source, description: s.description, category: s.category,
     pubDate: new Date(base.getTime() - s.hours * 3600000).toISOString(), url: "", isDemo: true, manual: false,
-    included: true, starred: false, note: "", risk: s.risk, riskScore: 0, sentiment: s.sentiment, matchedKeywords: []
+    included: true, starred: false, topIssue: false, note: "", risk: s.risk, riskScore: 0, sentiment: s.sentiment, matchedKeywords: []
   }));
   state.demo = true;
   state.provider = "샘플 데이터";

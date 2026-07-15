@@ -19,7 +19,21 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert feature.status_code == 200
     assert "createClusterRun(state.date, thresholdValue())" in feature.text
     assert "thresholdDirty" in feature.text
+    assert "appliedThresholdPercent()" in feature.text
+    assert "state.issues = issuesResult.data.issues" in feature.text
     assert "applyClusterRun(activeRun.id)" in feature.text
+
+    issues_feature = client.get("/js/features/issues.js")
+    assert issues_feature.status_code == 200
+    assert "issue.selected" in issues_feature.text
+    assert "article.topIssue" in issues_feature.text
+    assert "같은 사건 기사" in issues_feature.text
+
+    articles_feature = client.get("/js/features/articles.js")
+    assert articles_feature.status_code == 200
+    assert "renderMediaGroups" in articles_feature.text
+    assert 'data-action="top-issue"' in articles_feature.text
+    assert 'data-action="article-top-issue"' in articles_feature.text
 
 
 def _create_briefing(report_date: str) -> None:
@@ -95,16 +109,16 @@ def test_cluster_run_accepts_similarity_threshold_and_rejects_out_of_range():
         json={
             "reportDate": report_date,
             "asOf": "2026-08-05T12:00:00Z",
-            "similarityThreshold": 0.55,
+            "similarityThreshold": 0.20,
         },
     )
     assert proposed.status_code == 200
     reasons = proposed.json()["data"]["proposal"][0]["autoReasons"]["clustering"]
-    assert reasons == {"pairThreshold": 0.55, "minimumCrossScore": 0.40}
+    assert reasons == {"pairThreshold": 0.20, "minimumCrossScore": 0.15}
 
     invalid = client.post(
         "/api/cluster-runs",
-        json={"reportDate": report_date, "similarityThreshold": 0.20},
+        json={"reportDate": report_date, "similarityThreshold": 0.15},
     )
     assert invalid.status_code == 422
 
@@ -208,8 +222,39 @@ def test_briefing_issue_patch_checks_revision_and_persists_state():
     )
     assert patched.status_code == 200
     assert patched.json()["data"]["revision"] == briefing["revision"] + 1
+    listed_issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert listed_issue["selected"] is True
+    assert listed_issue["note"] == "이슈 메모"
     stale = client.patch(
         f"/api/briefings/{report_date}/issues/{issue_id}",
         json={"expectedRevision": briefing["revision"], "starred": True},
     )
     assert stale.status_code == 409
+
+
+def test_individual_article_top_issue_tag_persists_independently():
+    report_date = "2026-08-06"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "article-top-issue",
+        "전기안전공사 집중호우 대비 현장 점검",
+        "지역일보",
+        "2026-08-06T05:00:00Z",
+    )
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    patched = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": briefing["revision"], "topIssue": True},
+    )
+    assert patched.status_code == 200
+
+    articles = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"]
+    assert articles[0]["topIssue"] is True
+    assert articles[0]["starred"] is False
+    # 직접 추가 기사의 기존 브리핑 선정 상태와는 독립적으로 저장된다.
+    assert articles[0]["included"] is True

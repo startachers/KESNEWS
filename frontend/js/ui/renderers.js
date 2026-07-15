@@ -53,7 +53,8 @@ export function renderMetrics() {
   els.kpiSources.innerHTML = `${sources}<small>개</small>`;
   els.kpiTotalNote.textContent = state.fetchedAt ? `${settings.lookback}시간 · 원본 후보 ${state.rawCollectedCount || items.length}건` : "검색 대기";
   const selected = items.filter(a => a.included).length;
-  els.kpiSourceNote.textContent = items.length ? `${selected}건 브리핑 선정 · 중복 ${state.duplicatesRemoved || 0}건 제거` : "유사 제목·동일 URL 자동 정리";
+  const issueNote = state.issues.length ? ` · 이슈 ${state.issues.length}개` : "";
+  els.kpiSourceNote.textContent = items.length ? `${selected}건 브리핑 선정 · 중복 ${state.duplicatesRemoved || 0}건 제거${issueNote}` : "유사 제목·동일 URL 자동 정리";
   const counts = { critical: 0, watch: 0, routine: 0 };
   items.forEach(a => counts[a.risk] = (counts[a.risk] || 0) + 1);
   const max = Math.max(items.length, 1);

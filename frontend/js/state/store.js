@@ -38,7 +38,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
 }
 
 export function loadSettings() {
@@ -73,7 +73,10 @@ export async function loadDailyState(date) {
       if (error.code === "BRIEFING_NOT_FOUND") briefing = (await api.putBriefing(date, 0, {})).data;
       else throw error;
     }
-    const articlesResult = await api.listArticles(date, false);
+    const [articlesResult, issuesResult] = await Promise.all([
+      api.listArticles(date, false),
+      api.listIssues(date),
+    ]);
     const articles = articlesResult.data.articles.map(a => ({ ...a, isDemo: false }));
     const successfulRun = briefing.aiState?.lastSuccessfulRun;
     const latestRun = briefing.aiState?.latestRun;
@@ -82,6 +85,7 @@ export async function loadDailyState(date) {
     return {
       ...makeEmptyState(date),
       articles,
+      issues: issuesResult.data.issues || [],
       revision: briefing.revision,
       status: briefing.status || "draft",
       latestFinalVersion: briefing.latestFinalVersion,

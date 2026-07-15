@@ -36,6 +36,7 @@ class ArticleStatePatchRequest(BaseModel):
     expectedRevision: int
     selected: bool | None = None
     starred: bool | None = None
+    topIssue: bool | None = None
     note: str | None = None
     dismissed: bool | None = None
     sortOrder: int | None = None

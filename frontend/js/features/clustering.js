@@ -2,6 +2,7 @@ import { els, state } from "../state/store.js";
 import * as api from "../api/client.js";
 import { closeOverlay, openOverlay } from "../ui/dialogs.js";
 import { setStatus, showToast } from "../ui/notifications.js";
+import { renderAll } from "../ui/renderers.js";
 import { escapeHtml, friendlyError } from "../utils/strings.js";
 
 const STATUS_LABELS = { new: "신규", expanding: "확산", ongoing: "지속", cooling: "진정", closed: "종료" };
@@ -13,6 +14,13 @@ let thresholdDirty = true;
 
 function thresholdValue() {
   return Number(els.clusterThreshold.value) / 100;
+}
+
+function appliedThresholdPercent() {
+  const threshold = state.issues
+    .map(issue => issue.autoReasons?.clustering?.pairThreshold)
+    .find(Number.isFinite);
+  return Number.isFinite(threshold) ? Math.round(threshold * 100) : 40;
 }
 
 function thresholdHint(percent, dirty = false) {
@@ -120,9 +128,10 @@ export async function openClusterProposal() {
   }
   activeRun = null;
   thresholdDirty = true;
-  els.clusterThreshold.value = "40";
+  const initialThreshold = appliedThresholdPercent();
+  els.clusterThreshold.value = String(initialThreshold);
   renderThreshold(true);
-  els.clusterProposalMeta.textContent = "기본 유사도 40%로 제안을 계산하고 있습니다.";
+  els.clusterProposalMeta.textContent = `현재 적용 기준 ${initialThreshold}%로 제안을 계산하고 있습니다.`;
   els.clusterDiffSummary.innerHTML = "";
   els.clusterProposalList.innerHTML = '<div class="cluster-empty">기사 묶음을 계산하는 중…</div>';
   openOverlay("clusterOverlay");
@@ -135,6 +144,9 @@ export async function applyClusterProposal() {
   try {
     await api.applyClusterRun(activeRun.id);
     const issueCount = activeRun.proposal?.length || 0;
+    const issuesResult = await api.listIssues(state.date);
+    state.issues = issuesResult.data.issues || [];
+    renderAll();
     activeRun = null;
     closeOverlay("clusterOverlay");
     showToast(`${issueCount}개 이슈 구성을 적용했습니다. 기사 원문과 수동 수정은 보존됩니다.`, "success");

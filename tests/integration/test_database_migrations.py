@@ -29,6 +29,7 @@ EXPECTED_MIGRATIONS = [
     "0003_issue_clustering_phase6.sql",
     "0004_ai_analysis_phase7.sql",
     "0005_article_body_extraction.sql",
+    "0006_article_top_issue_tag.sql",
 ]
 
 
@@ -126,6 +127,16 @@ def test_article_body_migration_adds_text_status_and_failure_detail(tmp_path):
         connection.close()
 
 
+def test_article_top_issue_migration_adds_independent_tag(tmp_path):
+    connection = get_connection(tmp_path / "top-issue.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(briefing_articles)")}
+        assert "top_issue" in columns
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -171,6 +182,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0003_issue_clustering_phase6.sql",
         "0004_ai_analysis_phase7.sql",
         "0005_article_body_extraction.sql",
+        "0006_article_top_issue_tag.sql",
     ]
     upgraded = get_connection(db_path)
     try:

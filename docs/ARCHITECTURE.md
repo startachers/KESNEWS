@@ -719,6 +719,10 @@ settings
 - 최종 snapshot은 수정·삭제하지 않는다.
 - API·삭제 조건의 상세 계약은 `docs/API_DATA_CONTRACTS.md` 1~3장을 따른다.
 
+화면의 Media Coverage는 적용된 이슈 군집으로 기사를 묶어 표시한다. Top Issues는 자동 순위가
+아니며 담당자가 군집 또는 개별 기사에 지정한 태그를 합쳐 최대 3개 표시한다. 군집 태그는
+`briefing_issues.selected`, 기사 태그는 `briefing_articles.top_issue`에 서로 독립적으로 저장한다.
+
 
 ## 9. 설정 구조
 
@@ -937,7 +941,7 @@ GET   /api/cluster-runs/{cluster_run_id}
 POST  /api/cluster-runs/{cluster_run_id}/apply
 ```
 
-재군집화 첫 요청은 `0.30~0.70` 범위의 선택적 `similarityThreshold`(기본 `0.40`)로 diff proposal을 만들고, apply 시 자동 필드만 갱신한다. 화면에서 기준을 바꾼 경우 새 proposal을 계산하기 전에는 이전 proposal을 적용할 수 없다.
+재군집화 첫 요청은 `0.20~0.70` 범위의 선택적 `similarityThreshold`(기본 `0.40`)로 diff proposal을 만들고, apply 시 자동 필드만 갱신한다. 화면에서 기준을 바꾼 경우 새 proposal을 계산하기 전에는 이전 proposal을 적용할 수 없다.
 
 ### 11.6 브리핑 작업본·최종본
 

@@ -1,0 +1,1 @@
+ALTER TABLE briefing_articles ADD COLUMN top_issue INTEGER NOT NULL DEFAULT 0;
