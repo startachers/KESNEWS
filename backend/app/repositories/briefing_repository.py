@@ -51,6 +51,9 @@ def create_or_update(
     now = now_iso()
     columns = {_PATCH_COLUMNS[key]: value for key, value in patch.items() if key in _PATCH_COLUMNS}
 
+    if columns.get("status") == "final":
+        raise BriefingFinalized()
+
     if existing is None:
         if expected_revision != 0:
             raise RevisionConflict()
@@ -98,6 +101,62 @@ def create_or_update(
         RETURNING *
         """,
         values,
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise RevisionConflict()
+    return row
+
+
+def finalize(
+    connection: sqlite3.Connection,
+    briefing_id: str,
+    expected_revision: int,
+    version: int,
+    finalized_at: str,
+) -> sqlite3.Row:
+    briefing = get_by_id(connection, briefing_id)
+    if briefing is None:
+        raise BriefingNotFound()
+    if briefing["status"] == "final":
+        raise BriefingFinalized()
+    if briefing["revision"] != expected_revision:
+        raise RevisionConflict()
+    cursor = connection.execute(
+        """
+        UPDATE briefings
+        SET status = 'final', latest_final_version = ?, finalized_at = ?,
+            revision = revision + 1, updated_at = ?
+        WHERE id = ? AND revision = ? AND status != 'final'
+        RETURNING *
+        """,
+        (version, finalized_at, finalized_at, briefing_id, expected_revision),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise RevisionConflict()
+    return row
+
+
+def reopen(
+    connection: sqlite3.Connection, report_date: str, expected_revision: int
+) -> sqlite3.Row:
+    briefing = get_by_date(connection, report_date)
+    if briefing is None:
+        raise BriefingNotFound()
+    if briefing["revision"] != expected_revision:
+        raise RevisionConflict()
+    if briefing["status"] != "final":
+        return briefing
+    cursor = connection.execute(
+        """
+        UPDATE briefings
+        SET status = 'draft', finalized_at = NULL,
+            revision = revision + 1, updated_at = ?
+        WHERE id = ? AND revision = ? AND status = 'final'
+        RETURNING *
+        """,
+        (now_iso(), briefing["id"], expected_revision),
     )
     row = cursor.fetchone()
     if row is None:

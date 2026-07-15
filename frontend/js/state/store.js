@@ -38,7 +38,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
 }
 
 export function loadSettings() {
@@ -82,6 +82,9 @@ export async function loadDailyState(date) {
       ...makeEmptyState(date),
       articles,
       revision: briefing.revision,
+      status: briefing.status || "draft",
+      latestFinalVersion: briefing.latestFinalVersion,
+      finalizedAt: briefing.finalizedAt,
       preparedBy: briefing.preparedBy || "",
       summary: briefing.situationSummary || "",
       summaryEdited: briefing.summaryMode === "manual" || briefing.summaryMode === "ai-edited",
@@ -105,31 +108,46 @@ export async function loadDailyState(date) {
 }
 
 let saveTimer = null;
+let savePromise = Promise.resolve();
+
+async function persistScalarState() {
+  if (state.status === "final") return;
+  const result = await api.putBriefing(state.date, state.revision, {
+    preparedBy: state.preparedBy,
+    situationSummary: state.summary,
+    actionNote: state.actionNote,
+    summaryMode: state.summaryMode,
+    aiModel: state.summaryModel,
+    aiGeneratedAt: state.summaryGeneratedAt,
+    aiInputSignature: state.summaryInputSignature
+  });
+  state.revision = result.data.revision;
+}
+
+function queueScalarSave() {
+  savePromise = savePromise.catch(() => {}).then(persistScalarState).catch(error => {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      showToast("다른 화면에서 브리핑이 변경되었습니다. 새로고침 후 다시 시도해 주세요.", "error");
+    } else {
+      showToast(`저장 실패: ${friendlyError(error)}`, "error");
+    }
+    throw error;
+  });
+  return savePromise;
+}
 
 /** briefing 작업본의 스칼라 필드(요약·지시사항·담당자·AI 모델 등)만 저장한다.
  * 기사별 선택·중요·메모는 features/articles.js의 patchArticle*이 개별 PATCH로 저장한다. */
 export function saveDailyState() {
+  if (state.status === "final") return;
   if (saveTimer) window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(async () => {
-    try {
-      const result = await api.putBriefing(state.date, state.revision, {
-        preparedBy: state.preparedBy,
-        situationSummary: state.summary,
-        actionNote: state.actionNote,
-        summaryMode: state.summaryMode,
-        aiModel: state.summaryModel,
-        aiGeneratedAt: state.summaryGeneratedAt,
-        aiInputSignature: state.summaryInputSignature
-      });
-      state.revision = result.data.revision;
-    } catch (error) {
-      if (error.code === "BRIEFING_REVISION_CONFLICT") {
-        showToast("다른 화면에서 브리핑이 변경되었습니다. 새로고침 후 다시 시도해 주세요.", "error");
-      } else {
-        showToast(`저장 실패: ${friendlyError(error)}`, "error");
-      }
-    }
-  }, 500);
+  saveTimer = window.setTimeout(() => { saveTimer = null; queueScalarSave().catch(() => {}); }, 500);
+}
+
+export function flushDailyState() {
+  if (saveTimer) window.clearTimeout(saveTimer);
+  saveTimer = null;
+  return queueScalarSave();
 }
 
 export let settings = loadSettings();

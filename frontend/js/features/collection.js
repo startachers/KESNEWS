@@ -17,6 +17,10 @@ export async function refreshArticles() {
 }
 
 export async function runSearch(auto = false) {
+  if (state.status === "final") {
+    if (!auto) showToast("최종 확정된 작업본입니다. 수정 재개 후 기사를 검색해 주세요.", "error");
+    return;
+  }
   if (isSearching) return;
   if (state.date !== localDateKey() && auto) return;
   const enabled = settings.queries.filter(q => q.enabled && q.query.trim());

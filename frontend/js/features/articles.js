@@ -54,34 +54,36 @@ export function renderArticles() {
     if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
     if (a.stale) badges.push('<span class="badge badge-watch" title="이전 수집 실패로 최신 상태를 확인하지 못했습니다">최신 미확인</span>');
     return `<article class="article-card ${a.included ? "included" : ""}" data-id="${escapeAttr(a.id)}">
-      <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""}>
+      <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
       <div class="article-main">
         <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
         ${titleEl}
         <div class="article-meta"><strong>${escapeHtml(a.source || "출처 미상")}</strong><span>${formatDateTime(a.pubDate)}</span><span>${escapeHtml(relevance.reasons.join(" · "))}</span><span>${escapeHtml((a.matchedKeywords || []).slice(0,4).join(" · ") || "키워드 자동 분류")}</span></div>
         ${a.description ? `<p class="article-desc">${escapeHtml(a.description)}</p>` : ""}
-        <input class="article-note" data-action="note" value="${escapeAttr(a.note || "")}" aria-label="기사 메모" placeholder="보고 메모 추가 (인쇄에는 포함되지 않음)">
+        <input class="article-note" data-action="note" value="${escapeAttr(a.note || "")}" aria-label="기사 메모" placeholder="보고 메모 추가 (인쇄에는 포함되지 않음)" ${state.status === "final" ? "disabled" : ""}>
       </div>
       <div class="article-actions">
-        <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사">${ICONS.star}</button>
-        <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제">${ICONS.trash}</button>
+        <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
+        <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제" ${state.status === "final" ? "disabled" : ""}>${ICONS.trash}</button>
       </div>
     </article>`;
   }).join("");
 }
 
 export function handleArticleChange(e) {
+  if (state.status === "final") return;
   const card = e.target.closest(".article-card"); if (!card) return;
   const article = state.articles.find(a => a.id === card.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
     article.included = e.target.checked;
     afterArticleMutation();
-    patchArticle(article.id, { selected: article.included });
+    trackArticlePatch(article.id, { selected: article.included });
     showToast(article.included ? "브리핑 기사로 선정했습니다." : "브리핑 선정을 해제했습니다.", article.included ? "success" : "");
   }
 }
 
 export function handleArticleInput(e) {
+  if (state.status === "final") return;
   if (e.target.dataset.action !== "note") return;
   const card = e.target.closest(".article-card");
   const article = state.articles.find(a => a.id === card?.dataset.id);
@@ -103,13 +105,14 @@ export function handleArticleClick(e) {
     els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "relevance"; renderArticles(); return;
   }
   if (!action) return;
+  if (state.status === "final") return;
   const card = e.target.closest(".article-card");
   const article = state.articles.find(a => a.id === card?.dataset.id); if (!article) return;
-  if (action === "star") { article.starred = !article.starred; afterArticleMutation(); patchArticle(article.id, { starred: article.starred }); }
+  if (action === "star") { article.starred = !article.starred; afterArticleMutation(); trackArticlePatch(article.id, { starred: article.starred }); }
   if (action === "delete") {
     state.articles = state.articles.filter(a => a.id !== article.id);
     afterArticleMutation();
-    patchArticle(article.id, { dismissed: true });
+    trackArticlePatch(article.id, { dismissed: true });
     showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
   }
 }
@@ -130,6 +133,7 @@ export async function patchArticle(articleId, fields) {
   try {
     const result = await api.patchBriefingArticle(state.date, articleId, state.revision, fields);
     state.revision = result.data.revision;
+    return true;
   } catch (error) {
     if (error.code === "BRIEFING_REVISION_CONFLICT") {
       showToast("다른 화면에서 변경 사항이 있어 최신 내용을 다시 불러옵니다.", "error");
@@ -138,10 +142,35 @@ export async function patchArticle(articleId, fields) {
     } else {
       showToast(`저장 실패: ${friendlyError(error)}`, "error");
     }
+    return false;
   }
 }
 
 export function patchArticleDebounced(articleId, fields) {
-  window.clearTimeout(noteDebounceTimers.get(articleId));
-  noteDebounceTimers.set(articleId, window.setTimeout(() => patchArticle(articleId, fields), 500));
+  const pending = noteDebounceTimers.get(articleId);
+  window.clearTimeout(pending?.timer);
+  const timer = window.setTimeout(() => {
+    noteDebounceTimers.delete(articleId);
+    trackArticlePatch(articleId, fields);
+  }, 500);
+  noteDebounceTimers.set(articleId, { timer, fields });
+}
+
+const pendingArticleSaves = new Set();
+
+function trackArticlePatch(articleId, fields) {
+  const promise = patchArticle(articleId, fields);
+  pendingArticleSaves.add(promise);
+  promise.finally(() => pendingArticleSaves.delete(promise));
+  return promise;
+}
+
+export async function flushArticleChanges() {
+  for (const [articleId, pending] of noteDebounceTimers) {
+    window.clearTimeout(pending.timer);
+    noteDebounceTimers.delete(articleId);
+    trackArticlePatch(articleId, pending.fields);
+  }
+  const results = await Promise.all([...pendingArticleSaves]);
+  if (results.some(result => !result)) throw new Error("기사 변경사항을 저장하지 못했습니다.");
 }

@@ -1,7 +1,7 @@
 import {
   state, setState, settings, filters, setFilters, els,
   aiAbortController, setAiAbortController, nextAiRequestSerial, setAnalyzingSummary,
-  saveDailyState, loadDailyState
+  saveDailyState, flushDailyState, loadDailyState
 } from "../state/store.js";
 import { getRelevance, relevanceSort } from "./collection.js";
 import * as api from "../api/client.js";
@@ -11,6 +11,7 @@ import { formatDateTime } from "../utils/dates.js";
 import { showToast, setStatus } from "../ui/notifications.js";
 import { renderAll } from "../ui/renderers.js";
 import { setRuleSummary, refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
+import { flushArticleChanges } from "./articles.js";
 
 /** 실제 검색 전 화면 시연용 샘플이다. 운영 데이터(articles/briefings)와 분리된 순수 프런트엔드 픽스처이며 서버에 저장되지 않는다. */
 export function loadSample() {
@@ -83,6 +84,46 @@ export async function copySummary() {
   try { await navigator.clipboard.writeText(text); showToast("브리핑 요약을 복사했습니다.", "success"); }
   catch {
     const area = document.createElement("textarea"); area.value = text; document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove(); showToast("브리핑 요약을 복사했습니다.", "success");
+  }
+}
+
+export function openPreview() {
+  window.open(`/preview/${encodeURIComponent(state.date)}`, "_blank", "noopener");
+}
+
+export function openFinalReport() {
+  window.open(`/report/${encodeURIComponent(state.date)}`, "_blank", "noopener");
+}
+
+export async function finalizeCurrentBriefing() {
+  if (state.demo) {
+    showToast("샘플 화면은 최종 확정할 수 없습니다.", "error");
+    return;
+  }
+  if (!window.confirm(`${state.date} 작업본을 최종 확정하시겠습니까? 확정 후에는 수정할 수 없습니다.`)) return;
+  try {
+    await flushArticleChanges();
+    await flushDailyState();
+    const result = await api.finalizeBriefing(state.date, state.revision);
+    setState(await loadDailyState(state.date));
+    renderAll();
+    showToast(`최종본 v${result.data.version}을 확정했습니다.`, "success");
+    setStatus("live", `최종 확정 v${result.data.version}`);
+  } catch (error) {
+    showToast(`최종 확정 실패: ${friendlyError(error)}`, "error");
+  }
+}
+
+export async function reopenCurrentBriefing() {
+  if (!window.confirm(`최종본 v${state.latestFinalVersion}을 보존하고 작업본 수정을 재개하시겠습니까?`)) return;
+  try {
+    await api.reopenBriefing(state.date, state.revision);
+    setState(await loadDailyState(state.date));
+    renderAll();
+    showToast("최종본을 보존한 채 작업본을 다시 열었습니다.", "success");
+    setStatus("idle", `수정 중 · 최종본 v${state.latestFinalVersion} 보존`);
+  } catch (error) {
+    showToast(`수정 재개 실패: ${friendlyError(error)}`, "error");
   }
 }
 

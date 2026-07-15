@@ -1,4 +1,4 @@
-import { state, settings, els, isSearching } from "../state/store.js";
+import { $, state, settings, els, isSearching } from "../state/store.js";
 import { escapeHtml, shortText } from "../utils/strings.js";
 import { formatDateTime, formatTime } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
@@ -23,6 +23,22 @@ export function renderHeader() {
   els.reportDate.value = state.date;
   els.preparedBy.value = state.preparedBy || "";
   els.report.classList.toggle("demo-mode", !!state.demo);
+  const finalized = state.status === "final";
+  document.body.classList.toggle("finalized", finalized);
+  els.preparedBy.disabled = finalized;
+  els.summaryEditor.disabled = finalized;
+  els.actionNote.disabled = finalized;
+  els.refreshBtn.disabled = finalized;
+  $("addArticleBtn").disabled = finalized;
+  $("importBtn").disabled = finalized;
+  els.finalizeBtn.hidden = finalized;
+  els.reopenBtn.hidden = !finalized;
+  els.finalReportBtn.hidden = !state.latestFinalVersion;
+  els.briefingState.textContent = finalized
+    ? `최종 확정 v${state.latestFinalVersion} · 수정하려면 작업본을 다시 여세요.`
+    : state.latestFinalVersion
+      ? `수정 중 · 최종본 v${state.latestFinalVersion}은 보존됩니다.`
+      : "작성 중 · 아직 최종 확정되지 않았습니다.";
 }
 
 export function renderMetrics() {

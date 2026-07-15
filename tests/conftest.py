@@ -12,6 +12,7 @@ import tempfile
 _TEST_DB_DIR = tempfile.mkdtemp(prefix="kesco-test-db-")
 os.environ["KESCO_DB_PATH"] = os.path.join(_TEST_DB_DIR, "test.db")
 os.environ["KESCO_BACKUPS_DIR"] = os.path.join(_TEST_DB_DIR, "backups")
+os.environ["KESCO_REPORTS_DIR"] = os.path.join(_TEST_DB_DIR, "reports")
 
 # `TestClient(app)`를 `with` 없이 쓰는 기존 테스트들은 FastAPI startup 이벤트를 트리거하지
 # 않으므로, 여기서 미리 migration을 적용해 API 테스트가 실제 서버 기동 여부와 무관하게

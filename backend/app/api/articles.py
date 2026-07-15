@@ -72,6 +72,10 @@ async def create_manual_article(request: ManualArticleRequest) -> Any:
         briefing = briefings_repo.get_by_date(connection, request.reportDate)
         if briefing is None:
             return error_response("BRIEFING_NOT_FOUND", f"{request.reportDate} 작업본이 없습니다.")
+        if briefing["status"] == "final":
+            return error_response(
+                "BRIEFING_FINALIZED", "최종 확정된 작업본에는 기사를 추가할 수 없습니다."
+            )
 
         pub_date = request.pubDate or now_iso()
         raw = {

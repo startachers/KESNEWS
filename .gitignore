@@ -15,7 +15,7 @@ __pycache__/
 data/
 logs/
 backups/
-reports/
+/reports/
 
 # 편집기
 .idea/

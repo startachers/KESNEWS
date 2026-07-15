@@ -40,7 +40,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 3
+    assert payload["schemaVersion"] == 4
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -110,7 +110,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 3
+    assert payload["schemaVersion"] == 4
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -123,7 +123,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
     assert restored_issue["membershipOverrides"][0]["action"] == "add"
 
 
-def test_json_schema_v3_round_trip_preserves_ai_run():
+def test_json_schema_v4_round_trip_preserves_ai_run():
     import json
 
     from backend.app.main import app
@@ -153,7 +153,7 @@ def test_json_schema_v3_round_trip_preserves_ai_run():
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 3
+    assert payload["schemaVersion"] == 4
     assert payload["aiRuns"][0]["evidence"]
 
     target_date = "2025-02-12"

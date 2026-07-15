@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ class BriefingPatch(BaseModel):
     situationSummary: str | None = None
     actionNote: str | None = None
     summaryMode: str | None = None
-    status: str | None = None
+    status: Literal["draft", "reviewed"] | None = None
     aiModel: str | None = None
     aiPromptVersion: str | None = None
     aiGeneratedAt: str | None = None

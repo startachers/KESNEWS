@@ -26,6 +26,24 @@ export function putBriefing(date, expectedRevision, patch) {
   return request(`/briefings/${date}`, { method: "PUT", body: JSON.stringify({ expectedRevision, patch }) });
 }
 
+export function finalizeBriefing(date, expectedRevision) {
+  return request(`/briefings/${date}/finalize`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision }),
+  });
+}
+
+export function reopenBriefing(date, expectedRevision) {
+  return request(`/briefings/${date}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision }),
+  });
+}
+
+export function listBriefingVersions(date) {
+  return request(`/briefings/${date}/versions`);
+}
+
 export function analyzeBriefing(date, expectedRevision, model, signal) {
   return request(`/briefings/${date}/analyze`, {
     method: "POST",

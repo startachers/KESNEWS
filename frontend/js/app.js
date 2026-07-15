@@ -7,12 +7,12 @@ import { openSettings, saveSettingsFromForm, resetSettingsForm, openArticleModal
 import { runSearch } from "./features/collection.js";
 import { setRuleSummary, generateAiManagementSummary, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles } from "./features/articles.js";
-import { importFile, exportJson, exportCsv, copySummary, changeReportDate } from "./features/data-io.js";
+import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
 async function init() {
-  ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "querySettings", "toastRegion", "fileInput"].forEach(id => els[id] = $(id));
+  ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "querySettings", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState"].forEach(id => els[id] = $(id));
 
   setState(await loadDailyState(localDateKey()));
   bindEvents();
@@ -23,7 +23,7 @@ async function init() {
 
   const today = localDateKey();
   const skipAutoRun = new URLSearchParams(location.search).has("noauto");
-  const shouldAutoRun = !skipAutoRun && settings.autoRun && !state.articles.length && localStorage.getItem(LAST_AUTO_KEY) !== today;
+  const shouldAutoRun = state.status !== "final" && !skipAutoRun && settings.autoRun && !state.articles.length && localStorage.getItem(LAST_AUTO_KEY) !== today;
   if (shouldAutoRun) {
     window.setTimeout(() => runSearch(true), 450);
   } else if (state.articles.length) {
@@ -87,6 +87,10 @@ function bindEvents() {
   $("csvBtn").addEventListener("click", exportCsv);
   $("copySummaryBtn").addEventListener("click", copySummary);
   $("printBtn").addEventListener("click", () => window.print());
+  els.previewBtn.addEventListener("click", openPreview);
+  els.finalizeBtn.addEventListener("click", finalizeCurrentBriefing);
+  els.finalReportBtn.addEventListener("click", openFinalReport);
+  els.reopenBtn.addEventListener("click", reopenCurrentBriefing);
   document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", () => closeOverlay(btn.dataset.close)));
   document.querySelectorAll(".overlay").forEach(overlay => overlay.addEventListener("click", e => { if (e.target === overlay) closeOverlay(overlay.id); }));
   document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.open").forEach(o => closeOverlay(o.id)); });

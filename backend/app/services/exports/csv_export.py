@@ -50,6 +50,10 @@ def _unescape_cell(value: str) -> str:
 
 def build_csv(connection: sqlite3.Connection, report_date: str) -> str:
     articles = article_repo.list_candidates(connection, report_date, include_dismissed=True)
+    return build_csv_from_articles(articles)
+
+
+def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
     writer.writerow(HEADERS)

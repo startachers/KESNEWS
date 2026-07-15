@@ -13,6 +13,7 @@ from backend.app.api.briefings import router as briefings_router
 from backend.app.api.collections import router as collections_router
 from backend.app.api.exports import router as exports_router
 from backend.app.api.issues import router as issues_router
+from backend.app.api.reports import router as reports_router
 from backend.app.repositories.database import get_connection, init_db
 from backend.app.services.ai.ollama_client import OllamaError, default_client
 
@@ -78,4 +79,5 @@ app.include_router(articles_router)
 app.include_router(briefings_router)
 app.include_router(exports_router)
 app.include_router(issues_router)
+app.include_router(reports_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

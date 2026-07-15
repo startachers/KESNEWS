@@ -13,7 +13,7 @@ import { showToast } from "../ui/notifications.js";
 import * as api from "../api/client.js";
 
 export function renderSummary() {
-  if (!state.summary && state.articles.length) refreshRuleSummaryIfNeeded();
+  if (state.status !== "final" && !state.summary && state.articles.length) refreshRuleSummaryIfNeeded();
   if (els.summaryEditor.value !== (state.summary || "")) els.summaryEditor.value = state.summary || "";
   if (els.actionNote.value !== (state.actionNote || "")) els.actionNote.value = state.actionNote || "";
   els.printSummary.textContent = state.summary || "수집 기사 없음";
@@ -98,7 +98,7 @@ export function renderAiSummaryStatus() {
   const coverage = state.summaryCoverage;
 
   els.aiModelSelect.value = [...els.aiModelSelect.options].some(option => option.value === settings.aiModel) ? settings.aiModel : els.aiModelSelect.value;
-  els.aiModelSelect.disabled = isAnalyzingSummary || !aiServerState.online;
+  els.aiModelSelect.disabled = state.status === "final" || isAnalyzingSummary || !aiServerState.online;
   if (coverage && ["ai", "ai-edited"].includes(state.summaryMode)) {
     const analyzed = coverage.selected ?? state.summarySelectedCount ?? 0;
     const rssCount = coverage.rssOnlyCount ?? coverage.summaryCount ?? 0;
@@ -147,8 +147,8 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.textContent = `선정 기사 ${selected.length}건이 준비됐습니다. Gemma 4 경영메시지 생성을 실행하세요.`;
   }
 
-  els.generateAiSummaryBtn.disabled = isAnalyzingSummary || !selected.length || !aiServerState.online;
-  els.ruleSummaryBtn.disabled = isAnalyzingSummary;
+  els.generateAiSummaryBtn.disabled = state.status === "final" || isAnalyzingSummary || !selected.length || !aiServerState.online;
+  els.ruleSummaryBtn.disabled = state.status === "final" || isAnalyzingSummary;
   els.generateAiSummaryBtn.innerHTML = isAnalyzingSummary ? '<span class="spinner"></span><span>Gemma 4 분석 중</span>' : "Gemma 4 경영메시지 생성";
   els.generateAiSummaryBtn.title = !selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.";
 }

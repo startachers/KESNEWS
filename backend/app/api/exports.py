@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import briefing_repository as briefing_repo
+from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.exports import csv_export, json_export
 
@@ -14,10 +15,19 @@ router = APIRouter()
 
 
 @router.get("/api/exports/{report_date}.json")
-async def export_json(report_date: str) -> Any:
+async def export_json(report_date: str, scope: str = Query("working")) -> Any:
     connection = get_connection()
     try:
-        data = json_export.build_export(connection, report_date)
+        briefing = briefing_repo.get_by_date(connection, report_date)
+        if briefing is None:
+            data = None
+        elif scope == "working":
+            data = json_export.build_export(connection, report_date)
+        else:
+            row = _version_for_scope(connection, briefing["id"], scope)
+            if row is None:
+                return error_response("BRIEFING_VERSION_NOT_FOUND", "요청한 최종본이 없습니다.")
+            data = json_export.build_version_export(row, report_date)
     finally:
         connection.close()
     if data is None:
@@ -46,13 +56,20 @@ async def import_json(report_date: str, request: Request, mode: str | None = Que
 
 
 @router.get("/api/exports/{report_date}.csv")
-async def export_csv(report_date: str) -> Any:
+async def export_csv(report_date: str, scope: str = Query("working")) -> Any:
     connection = get_connection()
     try:
         briefing = briefing_repo.get_by_date(connection, report_date)
         if briefing is None:
             return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
-        csv_text = csv_export.build_csv(connection, report_date)
+        if scope == "working":
+            csv_text = csv_export.build_csv(connection, report_date)
+        else:
+            row = _version_for_scope(connection, briefing["id"], scope)
+            if row is None:
+                return error_response("BRIEFING_VERSION_NOT_FOUND", "요청한 최종본이 없습니다.")
+            snapshot = version_repo.serialize(row)["snapshot"]
+            csv_text = csv_export.build_csv_from_articles(snapshot.get("articles") or [])
     finally:
         connection.close()
     return Response(
@@ -76,3 +93,15 @@ async def import_csv(report_date: str, request: Request) -> Any:
     finally:
         connection.close()
     return ok_envelope(result)
+
+
+def _version_for_scope(connection, briefing_id: str, scope: str):
+    if scope == "latest-final":
+        return version_repo.latest_version(connection, briefing_id)
+    if scope.startswith("version:"):
+        try:
+            version = int(scope.split(":", 1)[1])
+        except ValueError:
+            return None
+        return version_repo.get_version(connection, briefing_id, version)
+    return None

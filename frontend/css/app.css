@@ -103,6 +103,28 @@ a { color: inherit; }
 .btn-subtle { background: var(--soft); }
 .btn-danger { color: var(--red); }
 
+.phase-actions {
+  position: sticky;
+  top: 68px;
+  z-index: 35;
+  border-bottom: 1px solid #d8dfe1;
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 5px 18px rgba(16,37,60,.06);
+}
+.phase-actions-inner {
+  max-width: 1500px;
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 7px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.phase-actions .briefing-state { margin: 0 auto 0 0; }
+.phase-actions .btn { min-height: 34px; padding: 6px 12px; font-size: 11px; }
+
 .workspace {
   max-width: 1500px;
   margin: 0 auto;
@@ -317,6 +339,9 @@ a { color: inherit; }
 .date-input { font-weight: 800; color: var(--navy) !important; }
 .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }
 .side-actions .btn { padding-inline: 8px; font-size: 11px; }
+.briefing-state { margin: 10px 0 0; padding: 8px 10px; border-radius: 9px; background: var(--soft); color: #657681; font-size: 9px; }
+.finalized .briefing-state { background: var(--teal-soft); color: var(--teal-dark); font-weight: 800; }
+.finalized .article-card { box-shadow: none; }
 .source-state { padding: 11px; border-radius: 10px; background: var(--soft); }
 .source-state.error { background: var(--red-soft); }
 .source-state.error .source-icon { color: var(--red); background: #fff; }
@@ -389,6 +414,10 @@ a { color: inherit; }
 }
 @media (max-width: 780px) {
   .appbar-inner { padding: 9px 14px; }
+  .phase-actions { top: 58px; }
+  .phase-actions-inner { min-height: 48px; padding: 6px 14px; overflow-x: auto; }
+  .phase-actions .briefing-state { display: none; }
+  .phase-actions .btn { flex: 0 0 auto; }
   .brand { min-width: 0; }
   .brand small, .appbar-actions .hide-mobile { display: none; }
   .workspace { padding: 12px; }
