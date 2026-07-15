@@ -20,7 +20,11 @@ from backend.app.services.ai.analyzer import (
     format_analysis,
     input_signature,
 )
-from backend.app.services.ai.ollama_client import OllamaError, default_client
+from backend.app.services.ai.ollama_client import (
+    DEFAULT_CONTEXT_LENGTH,
+    OllamaError,
+    default_client,
+)
 from backend.app.services.ai.prompt_builder import PROMPT_VERSION
 
 router = APIRouter()
@@ -44,14 +48,22 @@ def _inputs(connection, report_date: str) -> tuple[list[dict[str, Any]], dict[st
     return build_evidence_input(articles, _issue_map(connection, report_date))
 
 
-def ai_state(connection, briefing, desired_model: str | None = None) -> dict[str, Any]:
+def ai_state(
+    connection,
+    briefing,
+    desired_model: str | None = None,
+    desired_context_length: int | None = None,
+) -> dict[str, Any]:
     latest = ai_runs_repo.latest(connection, briefing["id"])
     success = ai_runs_repo.latest_success(connection, briefing["id"])
     serialized_success = None
     if success is not None:
         evidence_input, _ = _inputs(connection, briefing["report_date"])
         model = desired_model or success["model"]
-        stale = input_signature(model, evidence_input) != success["input_signature"]
+        context_length = desired_context_length or default_client.context_length
+        stale = (
+            input_signature(model, evidence_input, context_length) != success["input_signature"]
+        )
         serialized_success = ai_runs_repo.serialize(success, stale=stale)
     return {
         "lastSuccessfulRun": serialized_success,
@@ -73,6 +85,8 @@ def _error_with_preserved_result(code: str, message: str, briefing_id: str, run_
 
 @router.post("/api/briefings/{report_date}/analyze")
 async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Request) -> Any:
+    client = getattr(request.app.state, "ollama_client", default_client)
+    context_length = getattr(client, "context_length", DEFAULT_CONTEXT_LENGTH)
     connection = get_connection()
     try:
         briefing = briefings_repo.get_by_date(connection, report_date)
@@ -85,12 +99,13 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
         evidence_input, evidence = _inputs(connection, report_date)
         if not evidence:
             return error_response("AI_SCHEMA_INVALID", "분석할 선정 기사가 없습니다.")
-        signature = input_signature(body.model, evidence_input)
+        signature = input_signature(body.model, evidence_input, context_length)
         request_snapshot = {
             "reportDate": report_date,
             "preparedBy": briefing["prepared_by"] or "",
             "articles": evidence_input,
             "attemptLimit": 2,
+            "contextLength": context_length,
         }
         with connection:
             run = ai_runs_repo.create(
@@ -108,7 +123,6 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
     finally:
         connection.close()
 
-    client = getattr(request.app.state, "ollama_client", default_client)
     try:
         output = await asyncio.to_thread(
             analyze,
@@ -150,7 +164,7 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
         if (
             current is None
             or current["revision"] != body.expectedRevision
-            or input_signature(body.model, current_input) != signature
+            or input_signature(body.model, current_input, context_length) != signature
         ):
             with connection:
                 ai_runs_repo.finish_failed(
@@ -183,7 +197,7 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             updated = briefings_repo.create_or_update(
                 connection, report_date, body.expectedRevision, patch
             )
-        state = ai_state(connection, updated, body.model)
+        state = ai_state(connection, updated, body.model, context_length)
     except (briefings_repo.RevisionConflict, briefings_repo.BriefingFinalized):
         with connection:
             ai_runs_repo.finish_failed(

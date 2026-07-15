@@ -52,6 +52,7 @@ export function setRuleSummary(force = false) {
   state.summaryModel = "";
   state.summaryGeneratedAt = "";
   state.summaryInputSignature = "";
+  state.summaryContextLength = 0;
   state.summarySelectedCount = state.articles.filter(article => article.included).length;
   state.summaryEvidenceIds = [];
   state.summaryEvidenceMap = [];
@@ -138,7 +139,8 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.classList.add("ready");
     const edited = state.summaryMode === "ai-edited" ? " · 담당자 수정본" : "";
     const confidence = state.aiAnalysis?.confidence ? ` · 신뢰도 ${state.aiAnalysis.confidence}` : "";
-    els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel} · 선정 ${state.summarySelectedCount}건${confidence}${edited}`;
+    const contextLength = state.summaryContextLength ? ` · context ${Math.round(state.summaryContextLength / 1024)}K` : "";
+    els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel}${contextLength} · 선정 ${state.summarySelectedCount}건${confidence}${edited}`;
   } else if (!selected.length) {
     els.aiSummaryStatus.textContent = "먼저 브리핑에 사용할 기사를 선택해 주세요.";
   } else if (!aiServerState.online) {
@@ -192,6 +194,7 @@ export async function generateAiManagementSummary() {
     state.summaryModel = run.model || settings.aiModel;
     state.summaryGeneratedAt = run.finishedAt || new Date().toISOString();
     state.summaryInputSignature = run.inputSignature;
+    state.summaryContextLength = run.request?.contextLength || 0;
     state.summarySelectedCount = selected.length;
     state.summaryEvidenceIds = Object.keys(run.evidence || {});
     state.summaryCoverage = { selected: selected.length, summaryCount: state.summaryEvidenceMap.filter(article => article.basis !== "missing").length };

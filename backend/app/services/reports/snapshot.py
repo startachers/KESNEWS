@@ -7,6 +7,7 @@ from backend.app.repositories import ai_run_repository as ai_run_repo
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import issue_repository as issue_repo
 from backend.app.services.ai.analyzer import build_evidence_input, input_signature
+from backend.app.services.ai.ollama_client import DEFAULT_CONTEXT_LENGTH
 
 SNAPSHOT_SCHEMA_VERSION = 1
 
@@ -100,8 +101,12 @@ def build_snapshot(
             for article_id in issue.get("articleIds") or []:
                 issue_ids_by_article.setdefault(article_id, []).append(issue["id"])
         current_input, _ = build_evidence_input(all_articles, issue_ids_by_article)
+        run_context_length = (ai_run.get("request") or {}).get(
+            "contextLength", DEFAULT_CONTEXT_LENGTH
+        )
         ai_run["stale"] = (
-            input_signature(ai_run["model"], current_input) != ai_run["inputSignature"]
+            input_signature(ai_run["model"], current_input, run_context_length)
+            != ai_run["inputSignature"]
         )
     snapshot = {
         "snapshotSchemaVersion": SNAPSHOT_SCHEMA_VERSION,

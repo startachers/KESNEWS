@@ -65,3 +65,10 @@ def test_risk_outlook_requires_inference_true():
 def test_input_signature_changes_when_model_changes():
     evidence_input = [{"id": "A01", "title": "기사", "editorNote": ""}]
     assert input_signature("model-a", evidence_input) != input_signature("model-b", evidence_input)
+
+
+def test_input_signature_changes_when_context_length_changes():
+    evidence_input = [{"id": "A01", "title": "기사", "editorNote": ""}]
+    assert input_signature("model-a", evidence_input, 32_768) != input_signature(
+        "model-a", evidence_input, 65_536
+    )

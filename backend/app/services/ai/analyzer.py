@@ -74,9 +74,14 @@ def build_evidence_input(
     return inputs, evidence
 
 
-def input_signature(model: str, evidence_input: list[dict[str, Any]]) -> str:
+def input_signature(
+    model: str, evidence_input: list[dict[str, Any]], context_length: int | None = None
+) -> str:
+    signature_input: dict[str, Any] = {"model": model, "articles": evidence_input}
+    if context_length is not None:
+        signature_input["contextLength"] = context_length
     raw = json.dumps(
-        {"model": model, "articles": evidence_input},
+        signature_input,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

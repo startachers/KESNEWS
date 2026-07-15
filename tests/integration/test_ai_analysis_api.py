@@ -68,6 +68,7 @@ def test_valid_result_persists_fixed_evidence_and_structured_response():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["run"]["evidence"] == {"A01": article_id}
+    assert data["run"]["request"]["contextLength"] == 65_536
     assert data["run"]["response"]["analysis"]["decisionPoints"][0]["articleIds"] == ["A01"]
     assert data["summaryMode"] == "ai"
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]

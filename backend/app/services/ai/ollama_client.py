@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from typing import Any
@@ -10,10 +11,32 @@ class OllamaError(Exception):
     pass
 
 
+DEFAULT_CONTEXT_LENGTH = 65_536
+
+
+def configured_context_length() -> int:
+    raw = os.environ.get("KESCO_OLLAMA_NUM_CTX")
+    if raw is None:
+        return DEFAULT_CONTEXT_LENGTH
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError("KESCO_OLLAMA_NUM_CTX는 정수여야 합니다.") from exc
+    if value < 4_096:
+        raise RuntimeError("KESCO_OLLAMA_NUM_CTX는 4096 이상이어야 합니다.")
+    return value
+
+
 class OllamaClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:11434", timeout: float = 600.0):
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:11434",
+        timeout: float = 600.0,
+        context_length: int = DEFAULT_CONTEXT_LENGTH,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.context_length = context_length
 
     def _request(
         self, path: str, payload: dict[str, Any] | None = None, timeout: float | None = None
@@ -39,7 +62,13 @@ class OllamaClient:
     def generate(self, *, model: str, prompt: str) -> str:
         payload = self._request(
             "/api/generate",
-            {"model": model, "prompt": prompt, "stream": False, "format": "json"},
+            {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {"num_ctx": self.context_length},
+            },
         )
         response = payload.get("response")
         if not isinstance(response, str):
@@ -47,4 +76,4 @@ class OllamaClient:
         return response
 
 
-default_client = OllamaClient()
+default_client = OllamaClient(context_length=configured_context_length())
