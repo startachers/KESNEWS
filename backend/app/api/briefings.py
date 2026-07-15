@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
+from backend.app.api.analysis import ai_state
 from backend.app.repositories import briefing_repository as repo
 from backend.app.repositories import issue_repository as issues_repo
 from backend.app.repositories.database import get_connection
@@ -79,11 +80,14 @@ async def get_briefing(report_date: str) -> Any:
     connection = get_connection()
     try:
         row = repo.get_by_date(connection, report_date)
+        state = ai_state(connection, row) if row is not None else None
     finally:
         connection.close()
     if row is None:
         return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
-    return ok_envelope(_serialize(row), meta={"revision": row["revision"]})
+    data = _serialize(row)
+    data["aiState"] = state
+    return ok_envelope(data, meta={"revision": row["revision"]})
 
 
 @router.put("/api/briefings/{report_date}")

@@ -5,14 +5,15 @@ from typing import Any
 
 from backend.app.core.clock import now_iso
 from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import ai_run_repository as ai_run_repo
 from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 
-SCHEMA_VERSION = 2
-SUPPORTED_SCHEMA_VERSIONS = {1, 2}
+SCHEMA_VERSION = 3
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -49,6 +50,10 @@ def build_export(connection: sqlite3.Connection, report_date: str) -> dict[str, 
         "briefing": {key: briefing[column] for key, column in _BRIEFING_EXPORT_FIELDS.items()},
         "articles": articles,
         "issues": issue_repo.list_for_report_date(connection, report_date),
+        "aiRuns": [
+            ai_run_repo.serialize(row)
+            for row in ai_run_repo.list_for_briefing(connection, briefing["id"])
+        ],
     }
 
 
@@ -65,6 +70,7 @@ def import_export(
 
     if existing is not None and mode == "replace":
         backup_database()
+        connection.execute("DELETE FROM ai_runs WHERE briefing_id = ?", (existing["id"],))
         connection.execute("DELETE FROM briefing_articles WHERE briefing_id = ?", (existing["id"],))
 
     expected_revision = existing["revision"] if existing is not None else 0
@@ -156,11 +162,18 @@ def import_export(
         payload.get("issues") or [],
         article_id_map,
     )
+    ai_runs_imported = ai_run_repo.import_runs(
+        connection,
+        briefing["id"],
+        payload.get("aiRuns") or [],
+        article_id_map,
+    )
 
     refreshed = briefing_repo.get_by_id(connection, briefing["id"])
     return {
         "reportDate": report_date,
         "articlesImported": len(imported_articles),
         "issuesImported": issues_imported,
+        "aiRunsImported": ai_runs_imported,
         "revision": refreshed["revision"],
     }

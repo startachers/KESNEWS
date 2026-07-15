@@ -46,6 +46,7 @@ function bindEvents() {
   els.aiModelSelect.addEventListener("change", () => {
     settings.aiModel = els.aiModelSelect.value;
     state.summaryError = "";
+    if (["ai", "ai-edited"].includes(state.summaryMode)) state.aiStale = true;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     saveDailyState();
     renderSummary();

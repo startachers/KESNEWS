@@ -1,15 +1,16 @@
 import {
-  state, settings, els, RISK_LABELS, AI_API_BASE, AI_SESSION_TOKEN,
+  state, settings, els, RISK_LABELS, AI_API_BASE,
   isAnalyzingSummary, setAnalyzingSummary, aiRequestSerial, nextAiRequestSerial,
-  aiAbortController, setAiAbortController, aiServerState, setAiServerState, saveDailyState
+  aiAbortController, setAiAbortController, aiServerState, setAiServerState
 } from "../state/store.js";
 import { autoResize } from "../utils/dom.js";
 import { countBy, friendlyError, escapeHtml, escapeAttr } from "../utils/strings.js";
 import { formatDateTime } from "../utils/dates.js";
 import { fetchWithTimeout } from "../utils/net.js";
-import { prioritySort, relevanceSort, getRelevance, normalizedArticleTitle, canonicalArticleUrl } from "./collection.js";
+import { prioritySort, relevanceSort } from "./collection.js";
 import { renderAll } from "../ui/renderers.js";
 import { showToast } from "../ui/notifications.js";
+import * as api from "../api/client.js";
 
 export function renderSummary() {
   if (!state.summary && state.articles.length) refreshRuleSummaryIfNeeded();
@@ -56,6 +57,7 @@ export function setRuleSummary(force = false) {
   state.summaryEvidenceMap = [];
   state.summaryCoverage = null;
   state.summaryError = "";
+  state.aiStale = false;
   state.aiAnalysis = null;
 }
 
@@ -70,7 +72,8 @@ export async function checkAiServer() {
     const response = await fetchWithTimeout(`${AI_API_BASE}/health`, { headers: { Accept: "application/json" } }, 7000);
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || `AI 도우미 응답 ${response.status}`);
-    setAiServerState({ checking: false, online: true, models: data.models || [], defaultModel: data.defaultModel || "", error: "" });
+    const models = data.models || [];
+    setAiServerState({ checking: false, online: models.length > 0 && !data.error, models, defaultModel: data.defaultModel || "", error: data.error || "" });
     populateAiModelOptions();
   } catch (error) {
     setAiServerState({ checking: false, online: false, models: [], defaultModel: "", error: friendlyError(error) });
@@ -90,9 +93,8 @@ export function populateAiModelOptions() {
 export function renderAiSummaryStatus() {
   if (!els.aiSummaryStatus) return;
   const selected = state.articles.filter(article => article.included);
-  const currentSignature = getSummaryInputSignature();
   const modelChanged = !!state.summaryModel && state.summaryModel !== settings.aiModel;
-  const stale = ["ai", "ai-edited"].includes(state.summaryMode) && !!state.summaryInputSignature && (state.summaryInputSignature !== currentSignature || modelChanged);
+  const stale = ["ai", "ai-edited"].includes(state.summaryMode) && (state.aiStale || modelChanged);
   const coverage = state.summaryCoverage;
 
   els.aiModelSelect.value = [...els.aiModelSelect.options].some(option => option.value === settings.aiModel) ? settings.aiModel : els.aiModelSelect.value;
@@ -114,12 +116,12 @@ export function renderAiSummaryStatus() {
   els.aiConnectionState.classList.remove("online", "offline");
   if (aiServerState.checking) {
     els.aiConnectionState.textContent = "AI 도우미 확인 중";
-  } else if (aiServerState.online && AI_SESSION_TOKEN) {
+  } else if (aiServerState.online) {
     els.aiConnectionState.classList.add("online");
     els.aiConnectionState.textContent = "Ollama 로컬 연결";
   } else {
     els.aiConnectionState.classList.add("offline");
-    els.aiConnectionState.textContent = aiServerState.online ? "실행 인증 필요" : "AI 도우미 오프라인";
+    els.aiConnectionState.textContent = "AI 도우미 오프라인";
   }
 
   els.aiSummaryStatus.className = "ai-summary-status no-print";
@@ -139,29 +141,28 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel} · 선정 ${state.summarySelectedCount}건${confidence}${edited}`;
   } else if (!selected.length) {
     els.aiSummaryStatus.textContent = "먼저 브리핑에 사용할 기사를 선택해 주세요.";
-  } else if (!aiServerState.online || !AI_SESSION_TOKEN) {
+  } else if (!aiServerState.online) {
     els.aiSummaryStatus.textContent = "start_kesco_briefing.command를 실행해 이 화면을 다시 열면 로컬 Gemma 4 분석을 사용할 수 있습니다.";
   } else {
     els.aiSummaryStatus.textContent = `선정 기사 ${selected.length}건이 준비됐습니다. Gemma 4 경영메시지 생성을 실행하세요.`;
   }
 
-  els.generateAiSummaryBtn.disabled = isAnalyzingSummary || !selected.length || !aiServerState.online || !AI_SESSION_TOKEN;
+  els.generateAiSummaryBtn.disabled = isAnalyzingSummary || !selected.length || !aiServerState.online;
   els.ruleSummaryBtn.disabled = isAnalyzingSummary;
   els.generateAiSummaryBtn.innerHTML = isAnalyzingSummary ? '<span class="spinner"></span><span>Gemma 4 분석 중</span>' : "Gemma 4 경영메시지 생성";
-  els.generateAiSummaryBtn.title = !AI_SESSION_TOKEN ? "원클릭 실행 파일로 화면을 열어 주세요." : !selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.";
+  els.generateAiSummaryBtn.title = !selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.";
 }
 
 export async function generateAiManagementSummary() {
   const selectedAll = state.articles.filter(article => article.included).sort(relevanceSort);
   if (!selectedAll.length) { showToast("브리핑에 사용할 기사를 먼저 선택해 주세요.", "error"); return; }
-  if (!aiServerState.online || !AI_SESSION_TOKEN) { state.summaryError = "AI 도우미가 연결되지 않았습니다. 원클릭 실행 파일로 다시 열어 주세요."; renderSummary(); return; }
+  if (!aiServerState.online) { state.summaryError = "AI 도우미가 연결되지 않았습니다. Ollama 상태를 확인해 주세요."; renderSummary(); return; }
 
   const selected = selectedAll.slice(0, 20);
   const requestId = nextAiRequestSerial();
   aiAbortController?.abort();
   setAiAbortController(new AbortController());
   const requestDate = state.date;
-  const inputSignature = getSummaryInputSignature();
   const originalSummary = state.summary;
   state.summaryError = "";
   setAnalyzingSummary(true);
@@ -169,58 +170,34 @@ export async function generateAiManagementSummary() {
   if (selectedAll.length > 20) showToast("관련도순 상위 20건을 AI 분석에 사용합니다.");
 
   try {
-    const articles = selected.map((article, index) => {
-      const relevance = getRelevance(article);
-      return {
-        id: `A${String(index + 1).padStart(2, "0")}`,
-        title: article.title,
-        source: article.source,
-        url: article.url,
-        pubDate: article.pubDate,
-        description: article.description || "",
-        note: article.note || "",
-        relevance: relevance.rank < 99 ? `${relevance.rank}순위 · ${relevance.reasons.join(" · ")}` : "지정 기준 외",
-        risk: RISK_LABELS[article.risk] || article.risk,
-        starred: !!article.starred
-      };
-    });
-    const response = await fetchWithTimeout(`${AI_API_BASE}/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-KESCO-App": "kesco-media-briefing-v1",
-        "X-KESCO-Token": AI_SESSION_TOKEN
-      },
-      signal: aiAbortController.signal,
-      body: JSON.stringify({ model: settings.aiModel, date: state.date, preparedBy: state.preparedBy || "", articles })
-    }, 600_000);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.error || `AI 분석 응답 ${response.status}`);
+    const response = await api.analyzeBriefing(state.date, state.revision, settings.aiModel, aiAbortController.signal);
+    const data = response.data;
     if (requestId !== aiRequestSerial) return;
-    if (state.date !== requestDate || getSummaryInputSignature() !== inputSignature || state.summary !== originalSummary) {
+    if (state.date !== requestDate || state.summary !== originalSummary) {
       throw new Error("분석 중 선정 기사·메모 또는 메시지가 변경되어 결과를 적용하지 않았습니다. 다시 실행해 주세요.");
     }
 
-    state.aiAnalysis = data.analysis;
-    state.summaryEvidenceMap = Array.isArray(data.articles) ? data.articles.map(article => ({
+    const run = data.run;
+    state.aiAnalysis = run.response?.analysis || null;
+    state.summaryEvidenceMap = Array.isArray(run.request?.articles) ? run.request.articles.map(article => ({
       id: article.id,
       title: article.title,
       source: article.source,
-      basis: article.basis,
-      error: article.error || ""
+      basis: article.bodyStatus,
+      error: ""
     })) : [];
-    state.summary = formatAiAnalysis(data.analysis, state.summaryEvidenceMap);
-    state.summaryEdited = false;
-    state.summaryMode = "ai";
-    state.summaryModel = data.model || settings.aiModel;
-    state.summaryGeneratedAt = data.generatedAt || new Date().toISOString();
-    state.summaryInputSignature = inputSignature;
+    state.summary = data.situationSummary;
+    state.summaryEdited = data.summaryMode === "ai-edited";
+    state.summaryMode = data.summaryMode;
+    state.summaryModel = run.model || settings.aiModel;
+    state.summaryGeneratedAt = run.finishedAt || new Date().toISOString();
+    state.summaryInputSignature = run.inputSignature;
     state.summarySelectedCount = selected.length;
-    state.summaryEvidenceIds = selected.map((_, index) => `A${String(index + 1).padStart(2, "0")}`);
-    state.summaryCoverage = data.stats || null;
+    state.summaryEvidenceIds = Object.keys(run.evidence || {});
+    state.summaryCoverage = { selected: selected.length, summaryCount: state.summaryEvidenceMap.filter(article => article.basis !== "missing").length };
     state.summaryError = "";
-    saveDailyState();
+    state.aiStale = false;
+    state.revision = data.briefingRevision;
     showToast(`Gemma 4가 선정 기사 ${selected.length}건을 분석했습니다.`, "success");
   } catch (error) {
     if (requestId !== aiRequestSerial) return;
@@ -236,8 +213,8 @@ export async function generateAiManagementSummary() {
 }
 
 export function formatAiAnalysis(analysis, evidenceMap = []) {
-  const lines = [analysis.managementMessage || "핵심 경영메시지를 생성하지 못했습니다."];
-  if (analysis.situationSummary) lines.push("", "■ 핵심 상황", analysis.situationSummary);
+  const lines = [analysis.managementMessage?.text || "핵심 경영메시지를 생성하지 못했습니다."];
+  if (analysis.situationSummary?.text) lines.push("", "■ 핵심 상황", analysis.situationSummary.text);
   if (analysis.keyIssues?.length) {
     lines.push("", "■ 핵심 이슈");
     analysis.keyIssues.forEach((issue, index) => {
@@ -247,7 +224,7 @@ export function formatAiAnalysis(analysis, evidenceMap = []) {
   }
   if (analysis.decisionPoints?.length) {
     lines.push("", "■ 경영 판단 포인트");
-    analysis.decisionPoints.forEach(point => lines.push(`• ${point}`));
+    analysis.decisionPoints.forEach(point => lines.push(`• ${point.text} [근거 ${(point.articleIds || []).join(", ")}]`));
   }
   if (analysis.actionItems?.length) {
     lines.push("", "■ 확인·지시 필요사항");
@@ -256,28 +233,11 @@ export function formatAiAnalysis(analysis, evidenceMap = []) {
       lines.push(`• [${item.priority}] ${item.action}${evidence}`);
     });
   }
-  if (analysis.riskOutlook) lines.push("", "■ 위험 전망", analysis.riskOutlook);
-  if (analysis.limitations?.length) lines.push("", `※ 분석 한계: ${analysis.limitations.join(" · ")}`);
+  if (analysis.riskOutlook?.text) lines.push("", "■ 위험 전망", `${analysis.riskOutlook.text} [근거 ${(analysis.riskOutlook.articleIds || []).join(", ")}]`);
+  if (analysis.limitations?.length) lines.push("", `※ 분석 한계: ${analysis.limitations.map(item => item.text).join(" · ")}`);
   if (evidenceMap.length) {
     lines.push("", "■ 근거 기사");
     evidenceMap.forEach(article => lines.push(`${article.id}. ${article.title} (${article.source || "출처 미상"} · ${article.basis || "근거 미상"})`));
   }
   return lines.join("\n");
-}
-
-export function getSummaryInputSignature() {
-  const selected = state.articles.filter(article => article.included).sort(relevanceSort).slice(0, 20).map(article => ({
-    article,
-    stableKey: canonicalArticleUrl(article.url) || normalizedArticleTitle(article.title) || String(article.id || "")
-  })).sort((a, b) => a.stableKey.localeCompare(b.stableKey, "ko"));
-  const raw = JSON.stringify({
-    preparedBy: state.preparedBy || "",
-    articles: selected.map(({ article, stableKey }) => [stableKey, article.title, article.source, article.url, article.pubDate, article.description || "", article.note || "", article.risk, !!article.starred])
-  });
-  let hash = 2166136261;
-  for (let index = 0; index < raw.length; index += 1) {
-    hash ^= raw.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `v2-${(hash >>> 0).toString(16)}-${selected.length}`;
 }

@@ -88,6 +88,7 @@ export function handleArticleInput(e) {
   if (article) {
     article.note = e.target.value;
     state.summaryError = "";
+    if (["ai", "ai-edited"].includes(state.summaryMode)) state.aiStale = true;
     renderAiSummaryStatus();
     patchArticleDebounced(article.id, { note: article.note });
   }
@@ -115,6 +116,7 @@ export function handleArticleClick(e) {
 
 export function afterArticleMutation() {
   state.summaryError = "";
+  if (["ai", "ai-edited"].includes(state.summaryMode)) state.aiStale = true;
   refreshRuleSummaryIfNeeded();
   persistAndRender();
 }

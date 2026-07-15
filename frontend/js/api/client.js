@@ -26,6 +26,14 @@ export function putBriefing(date, expectedRevision, patch) {
   return request(`/briefings/${date}`, { method: "PUT", body: JSON.stringify({ expectedRevision, patch }) });
 }
 
+export function analyzeBriefing(date, expectedRevision, model, signal) {
+  return request(`/briefings/${date}/analyze`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision, model }),
+    signal,
+  }, 600000);
+}
+
 export function patchBriefingArticle(date, articleId, expectedRevision, fields) {
   return request(`/briefings/${date}/articles/${articleId}`, {
     method: "PATCH",

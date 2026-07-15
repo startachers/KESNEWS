@@ -38,7 +38,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+  return { date, revision: 0, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
 }
 
 export function loadSettings() {
@@ -75,6 +75,9 @@ export async function loadDailyState(date) {
     }
     const articlesResult = await api.listArticles(date, false);
     const articles = articlesResult.data.articles.map(a => ({ ...a, isDemo: false }));
+    const successfulRun = briefing.aiState?.lastSuccessfulRun;
+    const analysis = successfulRun?.response?.analysis || null;
+    const evidenceArticles = successfulRun?.request?.articles || [];
     return {
       ...makeEmptyState(date),
       articles,
@@ -86,6 +89,13 @@ export async function loadDailyState(date) {
       summaryModel: briefing.aiModel || "",
       summaryGeneratedAt: briefing.aiGeneratedAt || "",
       summaryInputSignature: briefing.aiInputSignature || "",
+      summarySelectedCount: evidenceArticles.length,
+      summaryEvidenceIds: Object.keys(successfulRun?.evidence || {}),
+      summaryEvidenceMap: evidenceArticles.map(article => ({ id: article.id, title: article.title, source: article.source, basis: article.bodyStatus, error: "" })),
+      summaryCoverage: successfulRun ? { selected: evidenceArticles.length, summaryCount: evidenceArticles.filter(article => article.content).length } : null,
+      summaryError: briefing.aiState?.currentError ? `최근 AI 실행 실패: ${briefing.aiState.currentError}. 마지막 정상 결과는 유지됩니다.` : "",
+      aiStale: !!successfulRun?.stale,
+      aiAnalysis: analysis,
       actionNote: briefing.actionNote || ""
     };
   } catch (error) {

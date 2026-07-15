@@ -20,12 +20,14 @@ EXPECTED_TABLES = {
     "cluster_runs",
     "briefing_issues",
     "settings",
+    "ai_runs",
 }
 
 EXPECTED_MIGRATIONS = [
     "0001_initial.sql",
     "0002_article_assessment_phase5.sql",
     "0003_issue_clustering_phase6.sql",
+    "0004_ai_analysis_phase7.sql",
 ]
 
 
@@ -99,6 +101,20 @@ def test_phase6_migration_adds_issue_override_and_proposal_columns(tmp_path):
         connection.close()
 
 
+def test_phase7_migration_adds_ai_run_evidence_and_error_columns(tmp_path):
+    connection = get_connection(tmp_path / "phase7.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(ai_runs)")}
+        assert {
+            "briefing_id", "model", "prompt_version", "input_signature", "status",
+            "request_json", "response_json", "evidence_json", "error_message",
+            "started_at", "finished_at",
+        }.issubset(columns)
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -142,6 +158,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
     assert init_db(db_path) == [
         "0002_article_assessment_phase5.sql",
         "0003_issue_clustering_phase6.sql",
+        "0004_ai_analysis_phase7.sql",
     ]
     upgraded = get_connection(db_path)
     try:

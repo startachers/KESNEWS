@@ -1,26 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.articles import router as articles_router
+from backend.app.api.analysis import router as analysis_router
 from backend.app.api.briefings import router as briefings_router
 from backend.app.api.collections import router as collections_router
 from backend.app.api.exports import router as exports_router
 from backend.app.api.issues import router as issues_router
 from backend.app.repositories.database import get_connection, init_db
+from backend.app.services.ai.ollama_client import OllamaError, default_client
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = BASE_DIR / "frontend"
 LOG_DIR = BASE_DIR / "logs"
-OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -55,29 +53,27 @@ def _check_db_connected() -> bool:
         return False
 
 
-def _fetch_ollama_tags() -> tuple[list[dict], str]:
+def _fetch_ollama_tags() -> tuple[list[dict], str, str | None]:
     """Ollama는 선택 의존성이다. 실패해도 /api/health 자체는 정상으로 응답한다."""
     try:
-        request = urllib.request.Request(OLLAMA_TAGS_URL, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(request, timeout=1.5) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
+        models = default_client.list_models()
+    except OllamaError as exc:
         logger.info("Ollama 조회 실패, models=[]로 응답: %s", exc)
-        return [], ""
+        return [], "", str(exc)
 
-    models = payload.get("models", [])
     default_model = models[0].get("name", "") if models else ""
-    return models, default_model
+    return models, default_model, None
 
 
 @app.get("/api/health")
 async def health() -> dict:
-    models, default_model = await asyncio.to_thread(_fetch_ollama_tags)
+    models, default_model, ollama_error = await asyncio.to_thread(_fetch_ollama_tags)
     db_connected = await asyncio.to_thread(_check_db_connected)
-    return {"ok": True, "models": models, "defaultModel": default_model, "dbConnected": db_connected, "error": None}
+    return {"ok": True, "models": models, "defaultModel": default_model, "dbConnected": db_connected, "error": ollama_error}
 
 
 app.include_router(collections_router)
+app.include_router(analysis_router)
 app.include_router(articles_router)
 app.include_router(briefings_router)
 app.include_router(exports_router)

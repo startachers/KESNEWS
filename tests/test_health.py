@@ -12,7 +12,7 @@ def test_health_returns_flat_ok_shape():
     assert body["ok"] is True
     assert isinstance(body["models"], list)
     assert isinstance(body["defaultModel"], str)
-    assert body["error"] is None
+    assert body["error"] is None or isinstance(body["error"], str)
 
 
 def test_index_html_is_served_at_root():
