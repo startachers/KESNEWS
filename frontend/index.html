@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>한국전기안전공사 CEO 언론브리핑</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/print.css">
+</head>
+<body>
+  <header class="appbar no-print">
+    <div class="appbar-inner">
+      <div class="brand" aria-label="한국전기안전공사 언론브리핑">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="25" height="25" fill="none">
+            <path d="M16 3.5 27 8v7.5c0 6.5-4.5 10.8-11 13-6.5-2.2-11-6.5-11-13V8l11-4.5Z" fill="white" fill-opacity=".98"/>
+            <path d="m17.4 7-7 10.1h5l-1 7.9 7.2-11h-5.1l.9-7Z" fill="#087f76"/>
+          </svg>
+        </div>
+        <div><strong>한국전기안전공사 언론브리핑</strong><small>KESCO MEDIA INTELLIGENCE</small></div>
+      </div>
+      <div class="appbar-status" aria-live="polite">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="globalStatus">오늘 브리핑을 준비하고 있습니다</span>
+      </div>
+      <nav class="appbar-actions" aria-label="주요 작업">
+        <button class="btn btn-ghost btn-icon" id="settingsBtn" title="검색 설정" aria-label="검색 설정">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V21h-4v-.08a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        </button>
+        <button class="btn btn-ghost hide-mobile" id="addArticleBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>기사 추가
+        </button>
+        <button class="btn btn-ghost hide-mobile" id="importBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>가져오기
+        </button>
+        <button class="btn btn-primary" id="refreshBtn" data-testid="refresh-news">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <article class="report" id="report">
+      <section class="report-masthead">
+        <div class="masthead-top">
+          <div>
+            <p class="eyebrow">CEO Morning Intelligence</p>
+            <h1>일일 언론브리핑<span>DAILY MEDIA BRIEFING</span></h1>
+          </div>
+          <div class="report-date-box">
+            <strong id="mastheadDate">2026. 07. 15</strong>
+            <span id="mastheadDay">WEDNESDAY · 08:00 KST</span>
+          </div>
+        </div>
+        <div class="masthead-bottom">
+          <div class="scope-line"><strong>한국전기안전공사</strong> 관련 온라인 보도 및 주요 이슈 모니터링</div>
+          <div class="confidential">CEO BRIEF · INTERNAL USE</div>
+        </div>
+      </section>
+      <div class="demo-banner">샘플 화면입니다. 실제 보고에 사용하기 전에 ‘오늘 기사 검색’을 실행하거나 실제 기사를 가져오세요.</div>
+
+      <div class="report-body">
+        <section class="kpis" aria-label="핵심 지표">
+          <div class="kpi">
+            <div class="kpi-label">수집 보도</div><div class="kpi-value" id="kpiTotal">0<small>건</small></div><div class="kpi-note" id="kpiTotalNote">검색 대기</div>
+          </div>
+          <div class="kpi risk">
+            <div class="kpi-label">주의 이상</div><div class="kpi-value" id="kpiRisk">0<small>건</small></div><div class="kpi-note">키워드 기반 위험 신호</div>
+          </div>
+          <div class="kpi positive">
+            <div class="kpi-label">긍정 보도</div><div class="kpi-value" id="kpiPositive">0<small>건</small></div><div class="kpi-note">성과·협력·예방 활동</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">보도 매체</div><div class="kpi-value" id="kpiSources">0<small>개</small></div><div class="kpi-note" id="kpiSourceNote">중복 제목 자동 정리</div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div><h2>오늘의 핵심 경영 메시지</h2><p>브리핑 선정 기사의 본문·RSS 요약을 Gemma 4가 분석합니다. 보고 전 담당자가 근거를 확인·수정하세요.</p></div>
+            <div class="section-rule"></div>
+            <div class="summary-heading-actions no-print">
+              <button class="mini-action" id="ruleSummaryBtn">기본 요약</button>
+              <button class="btn btn-primary ai-generate-btn" id="generateAiSummaryBtn">Gemma 4 경영메시지 생성</button>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-main">
+              <div class="summary-label">오늘의 핵심 경영메시지</div>
+              <div class="ai-summary-tools no-print">
+                <span class="ai-pill" id="aiConnectionState">AI 도우미 확인 중</span>
+                <label class="ai-model-wrap" for="aiModelSelect">모델
+                  <select class="ai-model-select" id="aiModelSelect"><option value="gemma4:26b">gemma4:26b</option><option value="gemma4:e4b">gemma4:e4b</option><option value="gemma4:e2b">gemma4:e2b</option></select>
+                </label>
+                <span class="ai-pill" id="aiCoverageState">선정 0건</span>
+              </div>
+              <div class="ai-summary-status no-print" id="aiSummaryStatus">원클릭 실행 파일로 AI 도우미를 시작하면 선정 기사 분석을 사용할 수 있습니다.</div>
+              <textarea id="summaryEditor" class="summary-editor" aria-label="CEO 핵심 경영메시지" placeholder="기사를 선정한 뒤 ‘Gemma 4 경영메시지 생성’을 누르세요. 생성 결과는 직접 수정할 수 있습니다."></textarea>
+              <div id="printSummary" class="print-summary"></div>
+            </div>
+            <aside class="summary-side">
+              <h3>위험 신호 구성</h3>
+              <div class="risk-stack">
+                <div class="risk-row"><span>긴급</span><div class="risk-track"><div id="criticalBar" class="risk-fill critical" style="width:0"></div></div><strong id="criticalCount">0</strong></div>
+                <div class="risk-row"><span>주의</span><div class="risk-track"><div id="watchBar" class="risk-fill watch" style="width:0"></div></div><strong id="watchCount">0</strong></div>
+                <div class="risk-row"><span>일상</span><div class="risk-track"><div id="routineBar" class="risk-fill routine" style="width:0"></div></div><strong id="routineCount">0</strong></div>
+              </div>
+              <div class="action-note">
+                <label for="actionNote">CEO 참고·지시사항</label>
+                <textarea id="actionNote" placeholder="예: 사실관계 확인 후 10시까지 보고"></textarea>
+                <div id="printActionNote" class="print-action-note"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading"><div><h2>Top Issues</h2><p>위험도·최신성·중요 표시를 반영한 우선 검토 기사</p></div><div class="section-rule"></div></div>
+          <div class="issues-grid" id="topIssues"></div>
+        </section>
+
+        <section class="section" id="articlesSection">
+          <div class="section-heading"><div><h2>Media Coverage</h2><p>필요한 기사에 체크하면 ‘브리핑 선정’ 태그로 저장되고 종합 요약·인쇄에 반영됩니다.</p></div><div class="section-rule"></div></div>
+          <div class="article-toolbar no-print">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <label class="sr-only" for="articleSearch">기사 내 검색</label>
+              <input id="articleSearch" type="search" placeholder="제목·매체·키워드 검색">
+            </div>
+            <label class="sr-only" for="categoryFilter">분류 필터</label>
+            <select id="categoryFilter" class="control-select"><option value="all">전체 분류</option></select>
+            <label class="sr-only" for="riskFilter">위험도 필터</label>
+            <select id="riskFilter" class="control-select">
+              <option value="all">모든 위험도</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option>
+            </select>
+            <label class="sr-only" for="selectionFilter">선정 상태 필터</label>
+            <select id="selectionFilter" class="control-select"><option value="all">전체 기사</option><option value="selected">브리핑 선정만</option><option value="starred">중요 표시만</option><option value="unselected">미선정만</option></select>
+            <button type="button" id="selectedOnlyBtn" class="selection-toggle" aria-pressed="false">✓ 선택 기사만 보기 <strong id="selectedOnlyCount">0</strong></button>
+            <label class="sr-only" for="sortOrder">정렬</label>
+            <select id="sortOrder" class="control-select"><option value="relevance">공사 관련도순</option><option value="priority">위험·중요도순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
+            <span class="count-label" id="visibleCount">0건 표시</span>
+          </div>
+          <div class="relevance-guide no-print"><strong>관련도 기준</strong><span>① 공사 직접 거론 〉 ② 전기화재 〉 ③ 감전사고 〉 ④ 기후에너지환경부+(에너지/전기) 〉 ⑤ 재생에너지 · 같은 기준에서는 연합뉴스를 먼저 표시합니다.</span></div>
+          <div class="articles" id="articleList" data-testid="article-list"></div>
+        </section>
+
+        <footer class="report-footer">
+          <div><strong>자료 기준</strong> <span id="footerTimestamp">수집 전</span> · 공개 온라인 기사 제목·요약</div>
+          <div>자동 위험도는 키워드 기반 참고 지표이며 최종 판단은 담당자 검토를 따릅니다.</div>
+        </footer>
+      </div>
+    </article>
+
+    <aside class="side-panel no-print">
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+          브리핑 기준일
+        </h2>
+        <div class="field"><label for="reportDate">보고 날짜</label><input id="reportDate" class="date-input" type="date"></div>
+        <div class="field"><label for="preparedBy">작성 부서·담당</label><input id="preparedBy" type="text" placeholder="예: 홍보실 / 홍길동"></div>
+        <div class="side-actions">
+          <button class="btn btn-subtle" id="exportBtn">JSON 백업</button>
+          <button class="btn btn-subtle" id="csvBtn">CSV 내보내기</button>
+          <button class="btn btn-subtle" id="copySummaryBtn">요약 복사</button>
+          <button class="btn btn-primary" id="printBtn">인쇄·PDF</button>
+        </div>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          수집 상태
+        </h2>
+        <div class="source-state" id="sourceStateBox">
+          <div class="source-line">
+            <div class="source-icon">●</div>
+            <div><strong id="sourceStateTitle">검색 대기</strong><span id="sourceStateDetail">연합뉴스 RSS 우선 · Google 뉴스 보완</span></div>
+          </div>
+        </div>
+        <details class="collection-errors" id="collectionErrors" hidden>
+          <summary id="collectionErrorsSummary">수집 오류 상세</summary>
+          <ul id="collectionErrorsList"></ul>
+        </details>
+        <p class="helper">페이지를 열어 둔 상태에서만 자동 검색됩니다. 결과는 이 브라우저에 날짜별로 저장됩니다.</p>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 13c0 5-3.5 8-8 8s-8-3-8-8 3.5-10 8-10 8 5 8 10Z"/><path d="M8 13h8M12 9v8"/></svg>
+          핵심 모니터링어
+        </h2>
+        <div class="keyword-cloud" id="keywordCloud"></div>
+        <button class="mini-action" id="editKeywordsBtn" style="margin-top:12px">검색식 편집 →</button>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h4"/></svg>
+          매일 보고 흐름
+        </h2>
+        <div class="workflow">
+          <div class="workflow-step"><span>1</span><div><strong>자동 수집</strong><small>열 때 당일 기사 검색·중복 제거</small></div></div>
+          <div class="workflow-step"><span>2</span><div><strong>담당자 선별</strong><small>브리핑 선정·중요 표시·메모 작성</small></div></div>
+          <div class="workflow-step"><span>3</span><div><strong>CEO 보고</strong><small>요약 확인 후 PDF 인쇄 또는 복사</small></div></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <input id="fileInput" type="file" accept=".json,.csv,application/json,text/csv" hidden>
+
+  <div class="overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal">
+      <div class="modal-header"><h2 id="settingsTitle">검색 및 자동화 설정</h2><button class="close-btn" data-close="settingsOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <section class="settings-section">
+          <h3>매일 실행</h3>
+          <p>HTML을 열었을 때 당일 저장본이 없으면 자동으로 새 기사를 검색합니다.</p>
+          <div class="settings-grid">
+            <div class="setting-box toggle-line"><input id="settingAutoRun" type="checkbox"><div><strong>하루 한 번 자동 검색</strong><small>브라우저가 닫혀 있으면 실행되지 않습니다.</small></div></div>
+            <div class="setting-box"><div class="field"><label for="settingLookback">검색 기간</label><select id="settingLookback"><option value="24">최근 24시간</option><option value="48">최근 48시간</option><option value="72">최근 72시간</option><option value="168">최근 7일</option></select></div></div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>기사 검색식</h3>
+          <p>분류별 검색식입니다. 체크를 해제하면 해당 검색은 실행하지 않습니다.</p>
+          <div class="query-list" id="querySettings"></div>
+        </section>
+
+        <section class="settings-section">
+          <h3>판별 키워드</h3>
+          <p>쉼표로 구분합니다. 위험도·긍부정 분류는 제목과 기사 요약의 단어 일치에 기반합니다.</p>
+          <div class="settings-grid">
+            <div class="field"><label for="settingCoreKeywords">기관 핵심어</label><textarea id="settingCoreKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingRiskKeywords">위기·주의어</label><textarea id="settingRiskKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingPositiveKeywords">긍정어</label><textarea id="settingPositiveKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingExcludeKeywords">제외어</label><textarea id="settingExcludeKeywords" rows="3" placeholder="예: 동명이인, 채용공고"></textarea></div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>데이터 연결</h3>
+          <p>연합뉴스 공식 RSS를 먼저 읽고 Google 뉴스 RSS로 보완하며, 수집 경로가 실패하면 GDELT 공개 기사 색인을 시도합니다.</p>
+          <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingYonhap" type="checkbox"><div><strong>연합뉴스 공식 RSS 우선 수집</strong><small>최근 종합 뉴스에서 지정 관련도 기준과 일치하는 기사만 반영합니다.</small></div></div>
+          <div class="field"><label for="settingProxy">RSS 프록시 URL ({url} 위치에 원본 주소 삽입)</label><input id="settingProxy" type="url"></div>
+          <div class="field"><label for="settingEndpoint">기관용 뉴스 API 프록시 URL (선택)</label><input id="settingEndpoint" type="text" placeholder="https://내부주소/news?q={query}&hours={hours}"></div>
+          <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
+          <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건 (권장)</option><option value="300">300건</option></select></div>
+          <div class="security-note">공개 프록시에는 검색어와 RSS 주소가 전달됩니다. 기관 내부·비공개 키워드나 API 비밀키를 이 HTML에 입력하지 마세요. 네이버 뉴스 API를 사용하려면 비밀키를 서버에 보관한 기관용 프록시 URL을 연결하는 방식을 권장합니다.</div>
+        </section>
+      </div>
+      <div class="modal-footer"><button class="btn btn-subtle" id="resetSettingsBtn">기본값 복원</button><button class="btn" data-close="settingsOverlay">취소</button><button class="btn btn-primary" id="saveSettingsBtn">저장</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="articleOverlay" role="dialog" aria-modal="true" aria-labelledby="articleModalTitle">
+    <div class="modal small">
+      <div class="modal-header"><h2 id="articleModalTitle">기사 직접 추가</h2><button class="close-btn" data-close="articleOverlay" aria-label="닫기">×</button></div>
+      <form id="articleForm">
+        <div class="modal-body form-grid">
+          <div class="field full"><label class="required" for="manualTitle">기사 제목</label><input id="manualTitle" required type="text"></div>
+          <div class="field"><label class="required" for="manualSource">매체명</label><input id="manualSource" required type="text"></div>
+          <div class="field"><label for="manualDate">보도 일시</label><input id="manualDate" type="datetime-local"></div>
+          <div class="field full"><label for="manualUrl">기사 URL</label><input id="manualUrl" type="url" placeholder="https://"></div>
+          <div class="field"><label for="manualCategory">분류</label><select id="manualCategory"></select></div>
+          <div class="field"><label for="manualRisk">위험도</label><select id="manualRisk"><option value="auto">자동 판별</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option></select></div>
+          <div class="field full"><label for="manualDescription">기사 요약</label><textarea id="manualDescription" rows="4"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn" data-close="articleOverlay">취소</button><button type="submit" class="btn btn-primary">브리핑에 추가</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

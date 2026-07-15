@@ -1,0 +1,35 @@
+@page { size: A4; margin: 12mm 12mm 13mm; }
+@media print {
+  :root { --line: #d5dadd; }
+  body { background: #fff !important; color: #161d24; font-size: 10pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print, .appbar, .side-panel, .overlay, .toast-region, .article-toolbar, .article-actions, .include-check, .mini-action, .article-note { display: none !important; }
+  .workspace { display: block; max-width: none; padding: 0; }
+  .report { border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+  .report-masthead { min-height: 48mm; padding: 13mm 12mm 11mm; border-radius: 0; }
+  .report-masthead h1 { font-size: 26pt; }
+  .report-masthead h1 span { font-size: 10pt; }
+  .report-date-box strong { font-size: 16pt; }
+  .masthead-bottom { margin-top: 9mm; }
+  .demo-banner { padding: 3mm 10mm; }
+  .report-body { padding: 7mm 7mm 0; }
+  .kpis { grid-template-columns: repeat(4, 1fr); margin-top: -13mm; gap: 2mm; }
+  .kpi { min-height: 24mm; padding: 3.2mm; border-radius: 2mm; box-shadow: 0 2mm 6mm rgba(16,37,60,.08); }
+  .kpi-value { font-size: 18pt; }
+  .section { margin-top: 6mm; }
+  .section-heading { margin-bottom: 2.5mm; }
+  .section-heading h2 { font-size: 12pt; }
+  .summary-card { grid-template-columns: 1.55fr .75fr; border-radius: 2mm; break-inside: avoid; }
+  .summary-main, .summary-side { padding: 4mm; }
+  .summary-editor, .action-note textarea { display: none !important; }
+  .print-summary, .print-action-note { display: block; }
+  .issues-grid { grid-template-columns: repeat(3, 1fr); gap: 2mm; }
+  .issue-card { min-height: 33mm; padding: 3mm; border-radius: 2mm; break-inside: avoid; }
+  .issue-card h3 { font-size: 9.5pt; }
+  .article-card { grid-template-columns: minmax(0, 1fr); padding: 3mm 3.5mm; border-radius: 2mm; break-inside: avoid; }
+  .article-card:not(.included) { display: none !important; }
+  .article-title { font-size: 9.5pt; }
+  .article-desc { font-size: 7.5pt; -webkit-line-clamp: 2; }
+  .article-meta { font-size: 7.5pt; }
+  .articles { gap: 2mm; }
+  .report-footer { font-size: 7pt; }
+}
