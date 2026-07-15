@@ -23,3 +23,13 @@
 - 원본과 분리본이 동일하게 동작하는지 확인한다.
 - 차이를 발견하면 회귀 버그로 기록하고 Phase 1 안에서 원본 동작에 맞춘다.
 - 명백한 데이터 손상 가능성도 Phase 1에서는 별도 승인 없이 로직 변경하지 않는다.
+
+## Phase 2 이후 후속 항목
+
+| ID | 후속 필요 사항 | 배경 | 처리 Phase |
+|---|---|---|---|
+| P2-001 | `/api/health`가 아직 공통 envelope(`{ok, data, error, meta}`)가 아니라 flat 응답이다 | `frontend/js/features/ai-analysis.js`의 `checkAiServer()`가 Phase 1에서 로직 변경 없이 그대로 이전됐으므로 flat 계약을 유지함(ARCHITECTURE.md 11장 vs 실제 프런트엔드 기대치 불일치) | envelope 전환은 `frontend/js/api/client.js` 도입 시점(Phase 3 이후)에 프런트엔드 호출부와 함께 변경 |
+| P2-002 | `/api/health`에 DB 연결 상태 필드가 없다 | SQLite가 아직 없음(Phase 4). 존재하지 않는 값을 항상 `true`로 고정 보고하지 않기 위해 필드 자체를 생략함 | Phase 4에서 DB 연결 필드 추가 |
+| P2-003 | `logs/app.log`에 크기 기반 로테이션이 없다 | Phase 2는 최소 로그만 요구. 장기 실행 시 로그 파일이 무한히 커질 수 있음 | Phase 9(운영 안정화)에서 회전 정책 추가 |
+| P2-004 | `start_kesco_briefing.command`의 "이미 실행 중" 판정이 `GET /api/health` 200 응답 여부만 확인한다 | 동일 포트에 다른 프로세스가 우연히 떠 있어도 health 응답이 오면 우리 서버로 오인할 수 있음(가능성은 낮음) | 필요성이 확인되면 이후 Phase에서 프로세스 식별자 등 추가 검증 검토 |
+| P2-005 | Ollama 조회 실패 사유가 `/api/health` 응답에 노출되지 않고 서버 로그에만 남는다(`error: null` 고정) | 앱 자체 상태와 Ollama 상태를 분리하라는 지침에 따름. 상세 실패 사유는 Phase 7(AI 분석 안정화)에서 필요성 재검토 | Phase 7 |
