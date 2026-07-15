@@ -1,7 +1,8 @@
 import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, SETTINGS_KEY } from "../state/store.js";
-import { escapeHtml, escapeAttr, parseKeywordList, uid } from "../utils/strings.js";
+import { escapeHtml, escapeAttr, parseKeywordList, friendlyError } from "../utils/strings.js";
 import { parseDate } from "../utils/dates.js";
-import { classifyArticle, deduplicateDetailed } from "../features/collection.js";
+import { refreshArticles } from "../features/collection.js";
+import * as api from "../api/client.js";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
 import { persistAndRender } from "../features/articles.js";
 import { renderAll } from "./renderers.js";
@@ -75,20 +76,29 @@ export function openArticleModal() {
   window.setTimeout(() => $("manualTitle").focus(), 30);
 }
 
-export function addManualArticle(e) {
+export async function addManualArticle(e) {
   e.preventDefault();
-  const raw = {
-    id: uid(), title: $("manualTitle").value.trim(), source: $("manualSource").value.trim(),
-    url: $("manualUrl").value.trim(), pubDate: parseDate($("manualDate").value), description: $("manualDescription").value.trim(),
-    category: $("manualCategory").value || "direct", manual: true
+  const payload = {
+    reportDate: state.date,
+    title: $("manualTitle").value.trim(),
+    source: $("manualSource").value.trim(),
+    url: $("manualUrl").value.trim(),
+    pubDate: parseDate($("manualDate").value),
+    description: $("manualDescription").value.trim(),
+    category: $("manualCategory").value || "direct",
+    forcedRisk: $("manualRisk").value,
+    riskKeywords: settings.riskKeywords,
+    positiveKeywords: settings.positiveKeywords
   };
-  let article = classifyArticle(raw);
-  const forcedRisk = $("manualRisk").value;
-  if (forcedRisk !== "auto") { article.risk = forcedRisk; article.sentiment = forcedRisk === "routine" ? article.sentiment : "negative"; }
-  const result = deduplicateDetailed([article, ...state.articles.filter(item => !item.isDemo)]);
-  state.articles = result.items; state.demo = false;
-  state.duplicatesRemoved = (state.duplicatesRemoved || 0) + result.removed;
-  refreshRuleSummaryIfNeeded();
-  closeOverlay("articleOverlay"); persistAndRender();
-  showToast(result.removed ? "중복 기사를 기존 항목과 합쳤습니다." : "기사를 브리핑에 추가했습니다.", "success");
+  try {
+    const result = await api.createManualArticle(payload);
+    state.demo = false;
+    await refreshArticles();
+    refreshRuleSummaryIfNeeded();
+    closeOverlay("articleOverlay");
+    persistAndRender();
+    showToast(result.data.merged ? "중복 기사를 기존 항목과 합쳤습니다." : "기사를 브리핑에 추가했습니다.", "success");
+  } catch (error) {
+    showToast(`기사 추가 실패: ${friendlyError(error)}`, "error");
+  }
 }

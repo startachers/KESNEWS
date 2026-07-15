@@ -9,12 +9,12 @@ import { setRuleSummary, generateAiManagementSummary, checkAiServer, renderSumma
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles } from "./features/articles.js";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate } from "./features/data-io.js";
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => { init(); });
 
-function init() {
+async function init() {
   ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "querySettings", "toastRegion", "fileInput"].forEach(id => els[id] = $(id));
 
-  setState(loadDailyState(localDateKey()));
+  setState(await loadDailyState(localDateKey()));
   bindEvents();
   populateStaticControls();
   renderAll();

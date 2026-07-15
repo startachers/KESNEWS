@@ -1,7 +1,8 @@
-import { state, settings, els, filters, setFilters, CATEGORY_COLORS, RISK_LABELS, SENTIMENT_LABELS, saveDailyState } from "../state/store.js";
-import { escapeHtml, escapeAttr, safeUrl } from "../utils/strings.js";
+import { state, setState, settings, els, filters, setFilters, CATEGORY_COLORS, RISK_LABELS, SENTIMENT_LABELS, saveDailyState, loadDailyState } from "../state/store.js";
+import { escapeHtml, escapeAttr, safeUrl, friendlyError } from "../utils/strings.js";
 import { dateValue, formatDateTime } from "../utils/dates.js";
 import { getRelevance, isYonhapArticle, relevanceSort, prioritySort } from "./collection.js";
+import * as api from "../api/client.js";
 import { ICONS } from "../ui/icons.js";
 import { renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis.js";
@@ -51,6 +52,7 @@ export function renderArticles() {
     if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
     if (a.manual) badges.push('<span class="badge badge-manual">직접 추가</span>');
     if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
+    if (a.stale) badges.push('<span class="badge badge-watch" title="이전 수집 실패로 최신 상태를 확인하지 못했습니다">최신 미확인</span>');
     return `<article class="article-card ${a.included ? "included" : ""}" data-id="${escapeAttr(a.id)}">
       <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""}>
       <div class="article-main">
@@ -74,6 +76,7 @@ export function handleArticleChange(e) {
   if (e.target.dataset.action === "include") {
     article.included = e.target.checked;
     afterArticleMutation();
+    patchArticle(article.id, { selected: article.included });
     showToast(article.included ? "브리핑 기사로 선정했습니다." : "브리핑 선정을 해제했습니다.", article.included ? "success" : "");
   }
 }
@@ -85,8 +88,8 @@ export function handleArticleInput(e) {
   if (article) {
     article.note = e.target.value;
     state.summaryError = "";
-    saveDailyState();
     renderAiSummaryStatus();
+    patchArticleDebounced(article.id, { note: article.note });
   }
 }
 
@@ -101,8 +104,13 @@ export function handleArticleClick(e) {
   if (!action) return;
   const card = e.target.closest(".article-card");
   const article = state.articles.find(a => a.id === card?.dataset.id); if (!article) return;
-  if (action === "star") { article.starred = !article.starred; afterArticleMutation(); }
-  if (action === "delete") { state.articles = state.articles.filter(a => a.id !== article.id); afterArticleMutation(); showToast("기사를 브리핑에서 삭제했습니다."); }
+  if (action === "star") { article.starred = !article.starred; afterArticleMutation(); patchArticle(article.id, { starred: article.starred }); }
+  if (action === "delete") {
+    state.articles = state.articles.filter(a => a.id !== article.id);
+    afterArticleMutation();
+    patchArticle(article.id, { dismissed: true });
+    showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
+  }
 }
 
 export function afterArticleMutation() {
@@ -112,3 +120,26 @@ export function afterArticleMutation() {
 }
 
 export function persistAndRender() { saveDailyState(); renderAll(); }
+
+const noteDebounceTimers = new Map();
+
+/** 기사별 선택·중요·메모·휴지통 상태를 서버에 반영한다. revision 충돌 시 최신 상태를 다시 불러온다. */
+export async function patchArticle(articleId, fields) {
+  try {
+    const result = await api.patchBriefingArticle(state.date, articleId, state.revision, fields);
+    state.revision = result.data.revision;
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      showToast("다른 화면에서 변경 사항이 있어 최신 내용을 다시 불러옵니다.", "error");
+      setState(await loadDailyState(state.date));
+      renderAll();
+    } else {
+      showToast(`저장 실패: ${friendlyError(error)}`, "error");
+    }
+  }
+}
+
+export function patchArticleDebounced(articleId, fields) {
+  window.clearTimeout(noteDebounceTimers.get(articleId));
+  noteDebounceTimers.set(articleId, window.setTimeout(() => patchArticle(articleId, fields), 500));
+}

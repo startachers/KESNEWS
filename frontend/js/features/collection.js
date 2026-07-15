@@ -1,10 +1,20 @@
-import { state, settings, AI_API_BASE, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
+import { state, settings, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
 import { localDateKey, dateValue } from "../utils/dates.js";
-import { cleanText, uid, shortText, friendlyError, safeUrl } from "../utils/strings.js";
-import { fetchWithTimeout } from "../utils/net.js";
+import { cleanText, shortText, friendlyError, safeUrl } from "../utils/strings.js";
+import * as api from "../api/client.js";
 import { showToast, setStatus, setSearchButton } from "../ui/notifications.js";
 import { renderSidePanel, renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
+
+export async function refreshArticles() {
+  const result = await api.listArticles(state.date, false);
+  const { articles, meta } = result.data;
+  state.articles = articles.map(a => ({ ...a, isDemo: false }));
+  if (meta?.failedProviders?.length) {
+    const notice = `이전 수집에서 실패한 provider: ${meta.failedProviders.join(", ")}`;
+    if (!state.warnings.includes(notice)) state.warnings = [...state.warnings, notice];
+  }
+}
 
 export async function runSearch(auto = false) {
   if (isSearching) return;
@@ -19,7 +29,7 @@ export async function runSearch(auto = false) {
 
   state.lastAttemptAt = new Date().toISOString();
   try {
-    const data = await requestCollection({
+    const result = await requestCollection({
       reportDate: state.date,
       lookbackHours: Number(settings.lookback),
       maxRecordsPerQuery: Number(settings.maxRecords),
@@ -30,18 +40,17 @@ export async function runSearch(auto = false) {
       riskKeywords: settings.riskKeywords,
       positiveKeywords: settings.positiveKeywords,
       excludeKeywords: settings.excludeKeywords,
-      endpoint: settings.endpoint,
-      existingArticles: state.articles.filter(a => !a.isDemo)
+      endpoint: settings.endpoint
     });
 
-    state.fetchedAt = data.fetchedAt || state.lastAttemptAt;
-    state.provider = data.provider || "";
-    state.rawCollectedCount = data.rawCollectedCount || 0;
-    state.duplicatesRemoved = data.duplicatesRemoved || 0;
-    state.warnings = data.warnings || [];
+    state.fetchedAt = result.fetchedAt || state.lastAttemptAt;
+    state.provider = result.provider || "";
+    state.rawCollectedCount = result.rawCollectedCount || 0;
+    state.duplicatesRemoved = result.duplicatesRemoved || 0;
+    state.warnings = result.warnings || [];
 
-    if (data.status !== "failed") {
-      state.articles = data.articles || [];
+    if (result.status !== "failed") {
+      await refreshArticles();
       state.demo = false;
       state.lastRunStatus = "success";
       state.errors = [];
@@ -58,7 +67,7 @@ export async function runSearch(auto = false) {
       }
     } else {
       state.lastRunStatus = "error";
-      state.errors = data.errors?.length ? data.errors : ["데이터 제공 경로에서 응답을 받지 못했습니다."];
+      state.errors = result.errors?.length ? result.errors : ["데이터 제공 경로에서 응답을 받지 못했습니다."];
       localStorage.removeItem(LAST_AUTO_KEY);
       setStatus("error", "기사 수집 실패 · 오류 상세를 확인하세요");
       showToast(`수집 실패: ${shortText(state.errors[0], 120)}`, "error");
@@ -79,85 +88,8 @@ export async function runSearch(auto = false) {
 }
 
 async function requestCollection(payload) {
-  const response = await fetchWithTimeout(`${AI_API_BASE}/collections`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(payload)
-  }, 45000);
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body.ok) throw new Error(body?.error?.message || `수집 서버 응답 ${response.status}`);
-  return body.data;
-}
-
-export function classifyArticle(raw) {
-  const text = `${raw.title} ${raw.description || ""}`.toLowerCase();
-  const title = raw.title.toLowerCase();
-  let score = 0;
-  const matched = [];
-  const heavy = { "사망": 6, "중대재해": 6, "압수수색": 6, "고발": 5, "해킹": 5, "감전": 4, "화재": 4, "사고": 3, "논란": 3, "위반": 3, "부실": 3, "정전": 3, "피해": 3, "국정감사": 2, "감사": 2, "징계": 4 };
-  settings.riskKeywords.forEach(k => {
-    const key = k.trim(); if (!key || !text.includes(key.toLowerCase())) return;
-    matched.push(key); score += heavy[key] || 2; if (title.includes(key.toLowerCase())) score += 1;
-  });
-  const positives = settings.positiveKeywords.filter(k => k.trim() && text.includes(k.trim().toLowerCase()));
-  positives.forEach(k => { if (!matched.includes(k)) matched.push(k); });
-  const risk = score >= 6 ? "critical" : score >= 3 ? "watch" : "routine";
-  const sentiment = score >= 3 ? "negative" : positives.length ? "positive" : "neutral";
-  return { ...raw, id: raw.id || uid(), pubDate: raw.pubDate || new Date().toISOString(), description: cleanText(raw.description || ""), matchedKeywords: matched.slice(0,8), risk, riskScore: score, sentiment, included: raw.included ?? !!raw.manual, starred: !!raw.starred, note: raw.note || "", manual: !!raw.manual, isDemo: !!raw.isDemo };
-}
-
-export function deduplicate(items) {
-  return deduplicateDetailed(items).items;
-}
-
-export function deduplicateDetailed(items) {
-  const unique = [];
-  let removed = 0;
-  items.forEach(item => {
-    const classified = item.risk ? item : classifyArticle(item);
-    const index = unique.findIndex(existing => sameArticle(existing, classified));
-    if (index < 0) unique.push(classified);
-    else {
-      unique[index] = mergeDuplicateArticles(unique[index], classified);
-      removed += 1;
-    }
-  });
-  return { items: unique, removed };
-}
-
-export function sameArticle(a, b) {
-  const leftUrl = canonicalArticleUrl(a.url);
-  const rightUrl = canonicalArticleUrl(b.url);
-  if (leftUrl && rightUrl && leftUrl === rightUrl) return true;
-  const leftTitle = normalizedArticleTitle(a.title);
-  const rightTitle = normalizedArticleTitle(b.title);
-  if (!leftTitle || !rightTitle) return false;
-  if (leftTitle === rightTitle) return true;
-  if (Math.min(leftTitle.length, rightTitle.length) < 16) return false;
-  const leftDate = dateValue(a.pubDate);
-  const rightDate = dateValue(b.pubDate);
-  if (leftDate && rightDate && Math.abs(leftDate - rightDate) > 72 * 3600000) return false;
-  return bigramSimilarity(leftTitle, rightTitle) >= 0.9;
-}
-
-export function mergeDuplicateArticles(left, right) {
-  const preference = articlePreference(right) > articlePreference(left) ? right : left;
-  const other = preference === left ? right : left;
-  const longerDescription = (left.description || "").length >= (right.description || "").length ? left.description : right.description;
-  return {
-    ...other,
-    ...preference,
-    description: longerDescription || preference.description || "",
-    included: !!(left.included || right.included),
-    starred: !!(left.starred || right.starred),
-    note: left.note || right.note || "",
-    matchedKeywords: [...new Set([...(left.matchedKeywords || []), ...(right.matchedKeywords || [])])].slice(0, 8),
-    duplicateSources: [...new Set([...(left.duplicateSources || []), ...(right.duplicateSources || []), left.source, right.source].filter(Boolean))]
-  };
-}
-
-export function articlePreference(article) {
-  return (article.manual ? 1000 : 0) + (isYonhapArticle(article) ? 500 : 0) + Math.min((article.description || "").length, 300) + dateValue(article.pubDate) / 1e13;
+  const response = await api.runCollection(payload);
+  return response.data;
 }
 
 export function normalizedArticleTitle(value) {
@@ -178,22 +110,6 @@ export function canonicalArticleUrl(value) {
     ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "source"].forEach(key => url.searchParams.delete(key));
     return `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/$/, "")}${url.search}`.toLowerCase();
   } catch { return ""; }
-}
-
-export function bigramSimilarity(left, right) {
-  const grams = value => {
-    const result = new Map();
-    for (let index = 0; index < value.length - 1; index += 1) {
-      const gram = value.slice(index, index + 2);
-      result.set(gram, (result.get(gram) || 0) + 1);
-    }
-    return result;
-  };
-  const a = grams(left);
-  const b = grams(right);
-  let overlap = 0;
-  a.forEach((count, gram) => { overlap += Math.min(count, b.get(gram) || 0); });
-  return (2 * overlap) / Math.max(1, left.length + right.length - 2);
 }
 
 export function isYonhapArticle(article) {

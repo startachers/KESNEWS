@@ -10,9 +10,9 @@ from backend.app.db.migrator import apply_migrations, pending_migrations
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BASE_DIR / "data"
-BACKUPS_DIR = BASE_DIR / "backups"
-# 테스트는 KESCO_DB_PATH로 임시 파일을 지정해 실제 운영 DB(data/)를 건드리지 않는다.
+# 테스트는 KESCO_DB_PATH/KESCO_BACKUPS_DIR로 임시 경로를 지정해 실제 운영 data/backups를 건드리지 않는다.
 DB_PATH = Path(os.environ["KESCO_DB_PATH"]) if os.environ.get("KESCO_DB_PATH") else DATA_DIR / "kesco_media_briefing.db"
+BACKUPS_DIR = Path(os.environ["KESCO_BACKUPS_DIR"]) if os.environ.get("KESCO_BACKUPS_DIR") else BASE_DIR / "backups"
 
 
 def get_connection(db_path: Path = DB_PATH) -> sqlite3.Connection:

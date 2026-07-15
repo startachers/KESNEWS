@@ -1,5 +1,7 @@
 import { localDateKey } from "../utils/dates.js";
 import { showToast } from "../ui/notifications.js";
+import { friendlyError } from "../utils/strings.js";
+import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
   settingsVersion: 2,
@@ -27,7 +29,6 @@ export const DEFAULT_SETTINGS = {
 export const CATEGORY_COLORS = { direct: "#326c9c", safety: "#b64242", policy: "#70539b", management: "#c97a16", community: "#087f76", industry: "#397b62" };
 export const RISK_LABELS = { critical: "긴급", watch: "주의", routine: "일상" };
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
-export const STORAGE_PREFIX = "kesco_media_briefing_v1_";
 export const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
 export const LAST_AUTO_KEY = "kesco_media_briefing_last_auto_v2";
 export const AI_API_BASE = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname) && location.port === "8787" ? "/api" : "http://127.0.0.1:8787/api";
@@ -37,7 +38,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+  return { date, revision: 0, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
 }
 
 export function loadSettings() {
@@ -63,17 +64,62 @@ export function loadSettings() {
   } catch { return structuredClone(DEFAULT_SETTINGS); }
 }
 
-export function loadDailyState(date) {
+export async function loadDailyState(date) {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_PREFIX + date));
-    if (!saved) return makeEmptyState(date);
-    return { ...makeEmptyState(date), ...saved, date, summaryMode: saved.summaryMode || (saved.summaryEdited ? "manual" : "rule"), articles: Array.isArray(saved.articles) ? saved.articles : [] };
-  } catch { return makeEmptyState(date); }
+    let briefing;
+    try {
+      briefing = (await api.getBriefing(date)).data;
+    } catch (error) {
+      if (error.code === "BRIEFING_NOT_FOUND") briefing = (await api.putBriefing(date, 0, {})).data;
+      else throw error;
+    }
+    const articlesResult = await api.listArticles(date, false);
+    const articles = articlesResult.data.articles.map(a => ({ ...a, isDemo: false }));
+    return {
+      ...makeEmptyState(date),
+      articles,
+      revision: briefing.revision,
+      preparedBy: briefing.preparedBy || "",
+      summary: briefing.situationSummary || "",
+      summaryEdited: briefing.summaryMode === "manual" || briefing.summaryMode === "ai-edited",
+      summaryMode: briefing.summaryMode || "rule",
+      summaryModel: briefing.aiModel || "",
+      summaryGeneratedAt: briefing.aiGeneratedAt || "",
+      summaryInputSignature: briefing.aiInputSignature || "",
+      actionNote: briefing.actionNote || ""
+    };
+  } catch (error) {
+    showToast(`${date} 저장본을 불러오지 못했습니다: ${friendlyError(error)}`, "error");
+    return makeEmptyState(date);
+  }
 }
 
+let saveTimer = null;
+
+/** briefing 작업본의 스칼라 필드(요약·지시사항·담당자·AI 모델 등)만 저장한다.
+ * 기사별 선택·중요·메모는 features/articles.js의 patchArticle*이 개별 PATCH로 저장한다. */
 export function saveDailyState() {
-  try { localStorage.setItem(STORAGE_PREFIX + state.date, JSON.stringify(state)); }
-  catch { showToast("브라우저 저장 공간이 부족해 저장하지 못했습니다.", "error"); }
+  if (saveTimer) window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(async () => {
+    try {
+      const result = await api.putBriefing(state.date, state.revision, {
+        preparedBy: state.preparedBy,
+        situationSummary: state.summary,
+        actionNote: state.actionNote,
+        summaryMode: state.summaryMode,
+        aiModel: state.summaryModel,
+        aiGeneratedAt: state.summaryGeneratedAt,
+        aiInputSignature: state.summaryInputSignature
+      });
+      state.revision = result.data.revision;
+    } catch (error) {
+      if (error.code === "BRIEFING_REVISION_CONFLICT") {
+        showToast("다른 화면에서 브리핑이 변경되었습니다. 새로고침 후 다시 시도해 주세요.", "error");
+      } else {
+        showToast(`저장 실패: ${friendlyError(error)}`, "error");
+      }
+    }
+  }, 500);
 }
 
 export let settings = loadSettings();
