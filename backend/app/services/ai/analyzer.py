@@ -8,11 +8,19 @@ from typing import Any, Protocol
 from pydantic import ValidationError
 
 from backend.app.services.ai.prompt_builder import build_correction_prompt, build_prompt
+from backend.app.services.ai.runtime import CancellationToken
 from backend.app.services.ai.schemas import AnalysisResult, validate_evidence
 
 
 class AiClient(Protocol):
-    def generate(self, *, model: str, prompt: str) -> str: ...
+    def generate(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        format_schema: dict[str, Any] | None = None,
+        cancel_token: CancellationToken | None = None,
+    ) -> str: ...
 
 
 class AnalysisError(Exception):
@@ -114,6 +122,7 @@ def analyze(
     prepared_by: str,
     evidence_input: list[dict[str, Any]],
     evidence: dict[str, str],
+    cancel_token: CancellationToken | None = None,
 ) -> AnalysisOutput:
     prompt = build_prompt(report_date, prepared_by, evidence_input)
     last_error: AnalysisError | None = None
@@ -124,7 +133,12 @@ def analyze(
             if attempt == 1
             else build_correction_prompt(prompt, raw, str(last_error or "schema invalid"))
         )
-        raw = client.generate(model=model, prompt=current_prompt)
+        raw = client.generate(
+            model=model,
+            prompt=current_prompt,
+            format_schema=AnalysisResult.model_json_schema(),
+            cancel_token=cancel_token,
+        )
         try:
             result = _parse_and_validate(raw, set(evidence))
             return AnalysisOutput(result=result.model_dump(), raw_response=raw, attempts=attempt)

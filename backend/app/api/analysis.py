@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import time
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -25,9 +27,15 @@ from backend.app.services.ai.ollama_client import (
     OllamaError,
     default_client,
 )
+from backend.app.services.ai.runtime import (
+    AnalysisCancelled,
+    CancellationToken,
+    analysis_registry,
+)
 from backend.app.services.ai.prompt_builder import PROMPT_VERSION
 
 router = APIRouter()
+ANALYSIS_TIMEOUT_SECONDS = max(30, int(os.environ.get("KESCO_AI_TIMEOUT_SECONDS", "300")))
 
 
 class AnalyzeRequest(BaseModel):
@@ -83,21 +91,73 @@ def _error_with_preserved_result(code: str, message: str, briefing_id: str, run_
     return error_response(code, message, details)
 
 
-@router.post("/api/briefings/{report_date}/analyze")
-async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Request) -> Any:
-    client = getattr(request.app.state, "ollama_client", default_client)
-    context_length = getattr(client, "context_length", DEFAULT_CONTEXT_LENGTH)
+def _context_length(client: Any, model: str) -> int:
+    resolver = getattr(client, "context_length_for", None)
+    if callable(resolver):
+        return int(resolver(model))
+    return int(getattr(client, "context_length", DEFAULT_CONTEXT_LENGTH))
+
+
+@router.post("/api/briefings/{report_date}/analysis/cancel")
+async def cancel_analysis(report_date: str) -> Any:
     connection = get_connection()
     try:
         briefing = briefings_repo.get_by_date(connection, report_date)
         if briefing is None:
             return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+        run_id = analysis_registry.cancel_for_briefing(briefing["id"], "user")
+        if run_id is None:
+            running = ai_runs_repo.latest_running(connection)
+            if running is not None and running["briefing_id"] == briefing["id"]:
+                with connection:
+                    ai_runs_repo.finish_failed(
+                        connection,
+                        running["id"],
+                        "AI_INTERRUPTED: 실행 프로세스가 없어 중단 처리했습니다.",
+                    )
+                run_id = running["id"]
+            else:
+                return error_response("AI_CANCELLED", "현재 취소할 AI 분석이 없습니다.")
+    finally:
+        connection.close()
+    return ok_envelope({"runId": run_id, "cancelRequested": True})
+
+
+@router.post("/api/briefings/{report_date}/analyze")
+async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Request) -> Any:
+    client = getattr(request.app.state, "ollama_client", default_client)
+    context_length = _context_length(client, body.model)
+    active_run_id = analysis_registry.active_run_id()
+    if active_run_id is not None:
+        return error_response(
+            "AI_ALREADY_RUNNING",
+            "다른 AI 분석이 이미 실행 중입니다. 완료하거나 취소한 뒤 다시 시도해 주세요.",
+            {"runId": active_run_id},
+        )
+    connection = get_connection()
+    registered = False
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        orphan = ai_runs_repo.latest_running(connection)
+        if orphan is not None:
+            ai_runs_repo.finish_failed(
+                connection,
+                orphan["id"],
+                "AI_INTERRUPTED: 앱 재시작 전에 끝나지 않은 실행을 정리했습니다.",
+            )
+        briefing = briefings_repo.get_by_date(connection, report_date)
+        if briefing is None:
+            connection.rollback()
+            return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
         if briefing["status"] == "final":
+            connection.rollback()
             return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 분석할 수 없습니다.")
         if briefing["revision"] != body.expectedRevision:
+            connection.rollback()
             return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
         evidence_input, evidence = _inputs(connection, report_date)
         if not evidence:
+            connection.rollback()
             return error_response("AI_SCHEMA_INVALID", "분석할 선정 기사가 없습니다.")
         signature = input_signature(body.model, evidence_input, context_length)
         request_snapshot = {
@@ -107,32 +167,73 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             "attemptLimit": 2,
             "contextLength": context_length,
         }
-        with connection:
-            run = ai_runs_repo.create(
-                connection,
-                briefing_id=briefing["id"],
-                model=body.model,
-                prompt_version=PROMPT_VERSION,
-                input_signature=signature,
-                request=request_snapshot,
-                evidence=evidence,
-            )
+        run = ai_runs_repo.create(
+            connection,
+            briefing_id=briefing["id"],
+            model=body.model,
+            prompt_version=PROMPT_VERSION,
+            input_signature=signature,
+            request=request_snapshot,
+            evidence=evidence,
+        )
         run_id = run["id"]
         briefing_id = briefing["id"]
         prepared_by = briefing["prepared_by"] or ""
+        cancel_token = CancellationToken()
+        if not analysis_registry.register(run_id, briefing_id, cancel_token):
+            connection.rollback()
+            return error_response(
+                "AI_ALREADY_RUNNING", "다른 AI 분석이 이미 실행 중입니다.", {"runId": analysis_registry.active_run_id()}
+            )
+        registered = True
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        if registered:
+            analysis_registry.unregister(run_id)
+        raise
     finally:
         connection.close()
 
     try:
-        output = await asyncio.to_thread(
-            analyze,
-            client,
-            model=body.model,
-            report_date=report_date,
-            prepared_by=prepared_by,
-            evidence_input=evidence_input,
-            evidence=evidence,
+        worker = asyncio.create_task(
+            asyncio.to_thread(
+                analyze,
+                client,
+                model=body.model,
+                report_date=report_date,
+                prepared_by=prepared_by,
+                evidence_input=evidence_input,
+                evidence=evidence,
+                cancel_token=cancel_token,
+            )
         )
+        deadline = time.monotonic() + ANALYSIS_TIMEOUT_SECONDS
+        while not worker.done():
+            await asyncio.wait({worker}, timeout=0.25)
+            if worker.done():
+                break
+            if time.monotonic() >= deadline:
+                cancel_token.cancel("timeout")
+            elif await request.is_disconnected():
+                cancel_token.cancel("client_disconnected")
+        output = await worker
+    except AnalysisCancelled as exc:
+        if exc.reason == "timeout":
+            code = "AI_TIMEOUT"
+            stored_error = f"AI_TIMEOUT: {ANALYSIS_TIMEOUT_SECONDS}초 제한을 초과했습니다."
+            message = f"AI 분석이 {ANALYSIS_TIMEOUT_SECONDS // 60}분 제한을 초과해 중단됐습니다."
+        else:
+            code = "AI_CANCELLED"
+            stored_error = "AI_CANCELLED: 사용자가 분석을 취소했습니다."
+            message = "AI 분석을 취소했습니다."
+        connection = get_connection()
+        try:
+            with connection:
+                ai_runs_repo.finish_failed(connection, run_id, stored_error)
+        finally:
+            connection.close()
+        return _error_with_preserved_result(code, message, briefing_id, run_id)
     except AnalysisError as exc:
         connection = get_connection()
         try:
@@ -156,6 +257,14 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
         return _error_with_preserved_result(
             "AI_UNAVAILABLE", "Ollama에 연결할 수 없습니다.", briefing_id, run_id
         )
+    finally:
+        analysis_registry.unregister(run_id)
+        unload = getattr(client, "unload_model", None)
+        if callable(unload):
+            try:
+                await asyncio.to_thread(unload, body.model)
+            except (OllamaError, OSError, TimeoutError):
+                pass
 
     connection = get_connection()
     try:

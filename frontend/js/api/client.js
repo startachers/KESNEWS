@@ -49,7 +49,11 @@ export function analyzeBriefing(date, expectedRevision, model, signal) {
     method: "POST",
     body: JSON.stringify({ expectedRevision, model }),
     signal,
-  }, 600000);
+  }, 330000);
+}
+
+export function cancelBriefingAnalysis(date) {
+  return request(`/briefings/${date}/analysis/cancel`, { method: "POST" });
 }
 
 export function patchBriefingArticle(date, articleId, expectedRevision, fields) {

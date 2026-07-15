@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 
 from fastapi.testclient import TestClient
 
@@ -26,7 +28,7 @@ class FakeOllama:
         self.responses = list(responses)
         self.prompts = []
 
-    def generate(self, *, model, prompt):
+    def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
         self.prompts.append((model, prompt))
         response = self.responses.pop(0)
         if isinstance(response, Exception):
@@ -164,3 +166,52 @@ def test_ollama_offline_returns_last_success_and_current_error_together():
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
     assert loaded["aiState"]["lastSuccessfulRun"]
     assert "AI_UNAVAILABLE" in loaded["aiState"]["currentError"]
+
+
+def test_running_analysis_rejects_duplicate_and_can_be_cancelled():
+    report_date = "2025-03-08"
+    setup_selected_article(report_date)
+
+    class BlockingOllama:
+        def __init__(self):
+            self.started = threading.Event()
+
+        def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
+            self.started.set()
+            while not cancel_token.is_cancelled():
+                time.sleep(0.01)
+            cancel_token.raise_if_cancelled()
+            raise AssertionError("cancel token must raise")
+
+    fake = BlockingOllama()
+    app.state.ollama_client = fake
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    result = {}
+
+    def run_blocking_analysis():
+        result["response"] = client.post(
+            f"/api/briefings/{report_date}/analyze",
+            json={"expectedRevision": revision, "model": "gemma4:31b"},
+        )
+
+    thread = threading.Thread(target=run_blocking_analysis)
+    thread.start()
+    assert fake.started.wait(timeout=2)
+
+    duplicate = client.post(
+        f"/api/briefings/{report_date}/analyze",
+        json={"expectedRevision": revision, "model": "gemma4:31b"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "AI_ALREADY_RUNNING"
+
+    cancelled = client.post(f"/api/briefings/{report_date}/analysis/cancel")
+    assert cancelled.status_code == 200
+    thread.join(timeout=3)
+    assert not thread.is_alive()
+    assert result["response"].status_code == 409
+    assert result["response"].json()["error"]["code"] == "AI_CANCELLED"
+
+    loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
+    assert loaded["aiState"]["latestRun"]["status"] == "failed"
+    assert "AI_CANCELLED" in loaded["aiState"]["currentError"]

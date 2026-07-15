@@ -5,7 +5,7 @@ import { setStatus, showToast } from "./ui/notifications.js";
 import { renderAll } from "./ui/renderers.js";
 import { openSettings, saveSettingsFromForm, resetSettingsForm, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js";
 import { runSearch } from "./features/collection.js";
-import { setRuleSummary, generateAiManagementSummary, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
+import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles } from "./features/articles.js";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
 
@@ -42,7 +42,7 @@ function bindEvents() {
   $("articleForm").addEventListener("submit", addManualArticle);
   els.refreshBtn.addEventListener("click", () => runSearch(false));
   els.ruleSummaryBtn.addEventListener("click", () => { setRuleSummary(true); persistAndRender(); showToast("선정 기사 기준 기본 요약을 만들었습니다.", "success"); });
-  els.generateAiSummaryBtn.addEventListener("click", generateAiManagementSummary);
+  els.generateAiSummaryBtn.addEventListener("click", handleAiAnalysisAction);
   els.aiModelSelect.addEventListener("change", () => {
     settings.aiModel = els.aiModelSelect.value;
     state.summaryError = "";

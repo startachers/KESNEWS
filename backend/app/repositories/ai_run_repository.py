@@ -98,6 +98,24 @@ def latest_success(connection: sqlite3.Connection, briefing_id: str) -> sqlite3.
     ).fetchone()
 
 
+def latest_running(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM ai_runs WHERE status = 'running' ORDER BY started_at DESC, id DESC LIMIT 1"
+    ).fetchone()
+
+
+def fail_running(connection: sqlite3.Connection, error_message: str) -> int:
+    cursor = connection.execute(
+        """
+        UPDATE ai_runs
+        SET status = 'failed', error_message = ?, finished_at = ?
+        WHERE status = 'running'
+        """,
+        (error_message, now_iso()),
+    )
+    return cursor.rowcount
+
+
 def list_for_briefing(connection: sqlite3.Connection, briefing_id: str) -> list[sqlite3.Row]:
     return connection.execute(
         "SELECT * FROM ai_runs WHERE briefing_id = ? ORDER BY started_at, id", (briefing_id,)

@@ -97,9 +97,12 @@ export function renderAiSummaryStatus() {
   const modelChanged = !!state.summaryModel && state.summaryModel !== settings.aiModel;
   const stale = ["ai", "ai-edited"].includes(state.summaryMode) && (state.aiStale || modelChanged);
   const coverage = state.summaryCoverage;
+  const serverRunning = state.aiRunStatus === "running";
+  const cancelling = state.aiRunStatus === "cancelling";
+  const analyzing = isAnalyzingSummary || serverRunning || cancelling;
 
   els.aiModelSelect.value = [...els.aiModelSelect.options].some(option => option.value === settings.aiModel) ? settings.aiModel : els.aiModelSelect.value;
-  els.aiModelSelect.disabled = state.status === "final" || isAnalyzingSummary || !aiServerState.online;
+  els.aiModelSelect.disabled = state.status === "final" || analyzing || !aiServerState.online;
   if (coverage && ["ai", "ai-edited"].includes(state.summaryMode)) {
     const analyzed = coverage.selected ?? state.summarySelectedCount ?? 0;
     const rssCount = coverage.rssOnlyCount ?? coverage.summaryCount ?? 0;
@@ -126,9 +129,13 @@ export function renderAiSummaryStatus() {
   }
 
   els.aiSummaryStatus.className = "ai-summary-status no-print";
-  if (isAnalyzingSummary) {
+  if (cancelling) {
     els.aiSummaryStatus.classList.add("busy");
-    els.aiSummaryStatus.textContent = `${settings.aiModel}이 선정 기사 ${Math.min(selected.length, 20)}건의 본문을 수집하고 경영메시지를 분석 중입니다. 첫 실행은 수 분이 걸릴 수 있습니다.`;
+    els.aiSummaryStatus.textContent = `${settings.aiModel} 분석 취소를 요청했습니다. Ollama 작업을 정리하는 중입니다.`;
+  } else if (analyzing) {
+    els.aiSummaryStatus.classList.add("busy");
+    const safeMode = settings.aiModel.toLowerCase().includes(":31b") ? " · 31B 안전 모드(context 16K·최대 5분)" : " · 최대 5분";
+    els.aiSummaryStatus.textContent = `${settings.aiModel}이 선정 기사 ${Math.min(selected.length, 20)}건의 본문을 수집하고 경영메시지를 분석 중입니다${safeMode}. 이 버튼으로 즉시 취소할 수 있으며 창을 닫으면 실행도 자동 중단됩니다.`;
   } else if (state.summaryError) {
     els.aiSummaryStatus.classList.add("error");
     els.aiSummaryStatus.textContent = state.summaryError;
@@ -149,10 +156,55 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.textContent = `선정 기사 ${selected.length}건이 준비됐습니다. Gemma 4 경영메시지 생성을 실행하세요.`;
   }
 
-  els.generateAiSummaryBtn.disabled = state.status === "final" || isAnalyzingSummary || !selected.length || !aiServerState.online;
-  els.ruleSummaryBtn.disabled = state.status === "final" || isAnalyzingSummary;
-  els.generateAiSummaryBtn.innerHTML = isAnalyzingSummary ? '<span class="spinner"></span><span>Gemma 4 분석 중</span>' : "Gemma 4 경영메시지 생성";
-  els.generateAiSummaryBtn.title = !selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.";
+  els.generateAiSummaryBtn.disabled = state.status === "final" || cancelling || (!analyzing && (!selected.length || !aiServerState.online));
+  els.ruleSummaryBtn.disabled = state.status === "final" || analyzing;
+  els.generateAiSummaryBtn.classList.toggle("ai-cancel-btn", analyzing);
+  els.generateAiSummaryBtn.innerHTML = cancelling
+    ? '<span class="spinner"></span><span>취소 처리 중</span>'
+    : analyzing
+      ? "AI 분석 취소"
+      : "Gemma 4 경영메시지 생성";
+  els.generateAiSummaryBtn.title = analyzing ? "실행 중인 Ollama 분석을 중단합니다." : (!selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.");
+}
+
+export function handleAiAnalysisAction() {
+  if (isAnalyzingSummary || ["running", "cancelling"].includes(state.aiRunStatus)) return cancelAiManagementSummary();
+  return generateAiManagementSummary();
+}
+
+async function refreshAiRunState() {
+  const briefing = (await api.getBriefing(state.date)).data;
+  const latestRun = briefing.aiState?.latestRun;
+  state.aiRunId = latestRun?.id || "";
+  state.aiRunStatus = latestRun?.status || "idle";
+  state.summaryError = briefing.aiState?.currentError ? `최근 AI 실행 실패: ${briefing.aiState.currentError} · 마지막 정상 결과는 유지됩니다.` : "";
+  return state.aiRunStatus;
+}
+
+export async function cancelAiManagementSummary() {
+  if (state.aiRunStatus === "cancelling") return;
+  nextAiRequestSerial();
+  state.aiRunStatus = "cancelling";
+  renderAiSummaryStatus();
+  try {
+    await api.cancelBriefingAnalysis(state.date);
+    aiAbortController?.abort();
+    setAiAbortController(null);
+    setAnalyzingSummary(false);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const status = await refreshAiRunState();
+      if (status !== "running") break;
+      await new Promise(resolve => window.setTimeout(resolve, 250));
+    }
+    if (state.aiRunStatus === "running") state.aiRunStatus = "cancelling";
+    else showToast("AI 분석을 취소하고 모델 메모리를 정리했습니다.", "success");
+  } catch (error) {
+    state.summaryError = friendlyError(error);
+    showToast(`AI 분석 취소 실패: ${state.summaryError}`, "error");
+    await refreshAiRunState().catch(() => {});
+  } finally {
+    renderAll();
+  }
 }
 
 export async function generateAiManagementSummary() {
@@ -167,6 +219,8 @@ export async function generateAiManagementSummary() {
   const requestDate = state.date;
   const originalSummary = state.summary;
   state.summaryError = "";
+  state.aiRunId = "";
+  state.aiRunStatus = "running";
   setAnalyzingSummary(true);
   renderSummary();
   if (selectedAll.length > 20) showToast("관련도순 상위 20건을 AI 분석에 사용합니다.");
@@ -200,10 +254,13 @@ export async function generateAiManagementSummary() {
     state.summaryCoverage = { selected: selected.length, summaryCount: state.summaryEvidenceMap.filter(article => article.basis !== "missing").length };
     state.summaryError = "";
     state.aiStale = false;
+    state.aiRunId = run.id || "";
+    state.aiRunStatus = "success";
     state.revision = data.briefingRevision;
     showToast(`Gemma 4가 선정 기사 ${selected.length}건을 분석했습니다.`, "success");
   } catch (error) {
     if (requestId !== aiRequestSerial) return;
+    state.aiRunStatus = error.code === "AI_ALREADY_RUNNING" ? "running" : "failed";
     state.summaryError = friendlyError(error);
     showToast(`AI 분석 실패: ${state.summaryError}`, "error");
   } finally {

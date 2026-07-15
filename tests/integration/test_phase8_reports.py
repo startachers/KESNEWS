@@ -123,7 +123,7 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     }
 
     class FakeOllama:
-        def generate(self, *, model, prompt):  # noqa: ARG002
+        def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
             return json.dumps(analysis, ensure_ascii=False)
 
     app.state.ollama_client = FakeOllama()

@@ -39,6 +39,17 @@
 - `/api/settings`와 검색 요청 바디 축소: 기존 P4-001 후속 유지
 - 세션 토큰 기반 API 인증: 별도 운영 보안 범위
 
+### Phase 9 선행 AI 안정화 완료
+
+Phase 8 완료 뒤 확인된 `gemma4:31b` 장시간 GPU 점유를 별도 핫픽스로 처리했다.
+
+- 실제 Ollama 연결까지 중단하는 UI 취소
+- 앱 전체 AI 단일 실행과 중복 요청 거부
+- 브라우저 종료·5분 제한·앱 재시작 시 실행 정리
+- 31B 16K context, 2,048 출력 token, structured output
+- 성공·실패·취소 뒤 모델 메모리 해제
+- 회귀 기록: `docs/regression/PRE_PHASE9_AI_2026-07-16.md`
+
 ---
 
 ## 다음 작업 — Phase 9: 자동화·운영 안정화

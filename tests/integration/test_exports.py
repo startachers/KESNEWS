@@ -140,7 +140,7 @@ def test_json_schema_v4_round_trip_preserves_ai_run():
     }
 
     class FakeOllama:
-        def generate(self, *, model, prompt):  # noqa: ARG002
+        def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
             return json.dumps(analysis, ensure_ascii=False)
 
     report_date = "2025-02-11"

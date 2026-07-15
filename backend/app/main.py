@@ -15,6 +15,7 @@ from backend.app.api.exports import router as exports_router
 from backend.app.api.issues import router as issues_router
 from backend.app.api.reports import router as reports_router
 from backend.app.repositories.database import get_connection, init_db
+from backend.app.repositories import ai_run_repository as ai_runs_repo
 from backend.app.services.ai.ollama_client import OllamaError, default_client
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -40,6 +41,16 @@ async def _run_migrations_on_startup() -> None:
     applied_migrations = await asyncio.to_thread(init_db)
     if applied_migrations:
         logger.info("DB migration 적용: %s", ", ".join(applied_migrations))
+    connection = get_connection()
+    try:
+        with connection:
+            recovered = ai_runs_repo.fail_running(
+                connection, "AI_INTERRUPTED: 앱 재시작으로 실행이 중단됐습니다."
+            )
+        if recovered:
+            logger.warning("미완료 AI 실행 %s건을 중단 상태로 복구했습니다.", recovered)
+    finally:
+        connection.close()
 
 
 def _check_db_connected() -> bool:

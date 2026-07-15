@@ -415,6 +415,16 @@ reference  45 미만
 
 ## 5. AI 근거 ID 계약
 
+### 5.0 실행·취소 계약
+
+- `POST /api/briefings/{date}/analyze`는 앱 전체에서 동시에 1건만 실행한다.
+- 실행 중 새 분석 요청은 `AI_ALREADY_RUNNING`으로 거부한다.
+- `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
+- 브라우저 연결이 끊기거나 총 실행시간 5분을 넘으면 분석을 중단한다.
+- 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
+- `gemma4:31b`는 기본 16K context와 2,048 출력 token 상한을 사용한다. 환경변수 `KESCO_OLLAMA_NUM_CTX_31B`로 4K 이상 범위에서 조정할 수 있다.
+- 성공·실패·취소 뒤 해당 모델을 Ollama 메모리에서 내린다.
+
 ### 5.1 근거 index
 
 AI 실행마다 고정 index를 만든다.

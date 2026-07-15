@@ -58,3 +58,9 @@ Phase 4에서 SQLite migration(`backend/app/db/`), 작업본·기사 API(`briefi
 | P4-004 | JSON/CSV import(`briefing_repository.set_article_state`)는 대량 반영 시 `expectedRevision` 검증 없이 직접 `briefing_articles`를 덮어쓴다 | import 자체가 "가져오기 대상으로 전체 교체"라는 명시적 배타 동작이라(JSON은 `mode=replace` 확인 후, CSV는 손실형 병합) 단건 PATCH의 동시성 계약과는 성격이 다르다고 판단 | 다중 사용자·다중 탭 동시 import 시나리오가 실제로 필요해지면 재검토 |
 | P4-005 | `DELETE /api/articles/{id}`의 "다른 보고일 참조 없음" 조건을 `briefing_articles`에 연결된 서로 다른 `briefing_id` 개수(1개 이하만 허용)로 근사 구현했다 | **Phase 6에서 후속 처리.** 기존 보고일 참조 조건에 더해 `issue_auto_articles` 또는 `issue_membership_overrides`가 기사를 참조하면 물리 삭제를 거부한다. 이슈에서 제거하려면 membership override를 사용한다. | 완료 |
 | P4-006 | CSV export/import의 "분류(category)" 컬럼은 한글 라벨 변환 없이 내부 `category_hint` 원시값(`direct`/`safety` 등)을 그대로 왕복한다 | 카테고리 한글 라벨은 `settings.queries`(현재 요청 바디/미래 `/api/settings`)에서 오는데, CSV export/import는 그 설정을 참조하지 않기로 결정(P4-001과 연동) | `/api/settings` 도입 후 category label 매핑을 CSV export/import에도 반영할지 재검토 |
+
+## Phase 8 이후 후속 항목
+
+| ID | 후속 필요 사항 | 배경 | 처리 Phase |
+|---|---|---|---|
+| P8-001 | 브라우저의 `AbortController`는 HTTP 요청만 끊고 `asyncio.to_thread`의 Ollama 생성은 계속되어, 창을 닫은 뒤에도 31B가 GPU를 점유할 수 있었다 | 팬 지속·중복 요청·10분 이상 timeout, 기존 화면에는 취소 버튼 없음 | **Phase 9 선행 핫픽스에서 해소.** 취소 token이 스트리밍 HTTP 소켓을 직접 종료하고, 단일 실행·5분 제한·31B 16K context/2,048 출력 상한·구조화 schema·종료 후 unload를 적용했다. `tests/integration/test_ai_analysis_api.py::test_running_analysis_rejects_duplicate_and_can_be_cancelled`, `tests/unit/test_ollama_client.py::test_cancel_interrupts_connection_before_first_response` |
