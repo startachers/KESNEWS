@@ -1,0 +1,2042 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>한국전기안전공사 CEO 언론브리핑</title>
+  <style>
+    :root {
+      --navy: #10253c;
+      --navy-2: #193752;
+      --ink: #18222d;
+      --muted: #697785;
+      --line: #dce2e5;
+      --paper: #ffffff;
+      --canvas: #f2f3ef;
+      --soft: #f7f8f6;
+      --teal: #087f76;
+      --teal-dark: #075f59;
+      --teal-soft: #e4f2ef;
+      --amber: #c97a16;
+      --amber-soft: #fff2dc;
+      --red: #b64242;
+      --red-soft: #fae9e7;
+      --blue: #326c9c;
+      --blue-soft: #e8f0f7;
+      --shadow: 0 20px 60px rgba(16, 37, 60, .09);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 8%, rgba(8,127,118,.08), transparent 26rem),
+        var(--canvas);
+      font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .58; }
+    a { color: inherit; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    .appbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(16, 37, 60, .96);
+      color: #fff;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(16px);
+    }
+    .appbar-inner {
+      max-width: 1500px;
+      min-height: 68px;
+      margin: 0 auto;
+      padding: 10px 28px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 255px; }
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 11px;
+      display: grid; place-items: center;
+      background: linear-gradient(145deg, #20b4a4, #087f76);
+      box-shadow: inset 0 1px rgba(255,255,255,.32);
+    }
+    .brand strong { display: block; font-size: 14px; letter-spacing: -.01em; }
+    .brand small { display: block; margin-top: 1px; color: #aebdcb; font-size: 10px; letter-spacing: .12em; }
+    .appbar-status {
+      display: flex; align-items: center; gap: 8px;
+      min-width: 0; color: #c6d2dd; font-size: 12px;
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #7b8c9c; flex: 0 0 auto; }
+    .status-dot.live { background: #46d2af; box-shadow: 0 0 0 4px rgba(70,210,175,.12); }
+    .status-dot.busy { background: #f5b852; animation: pulse 1s infinite; }
+    .status-dot.error { background: #ff8178; }
+    @keyframes pulse { 50% { opacity: .35; } }
+    .appbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .btn {
+      min-height: 38px;
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-weight: 700;
+      font-size: 13px;
+      transition: transform .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: #bbc7cc; }
+    .btn svg { width: 16px; height: 16px; }
+    .btn-primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+    .btn-primary:hover { background: var(--teal-dark); border-color: var(--teal-dark); }
+    .btn-ghost { color: #e4ebf0; background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); }
+    .btn-ghost:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.30); }
+    .btn-icon { width: 38px; padding: 0; }
+    .btn-subtle { background: var(--soft); }
+    .btn-danger { color: var(--red); }
+
+    .workspace {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 28px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 22px;
+      align-items: start;
+    }
+    .report {
+      min-width: 0;
+      background: var(--paper);
+      border: 1px solid #e2e6e8;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .report-masthead {
+      position: relative;
+      min-height: 270px;
+      padding: 38px 42px 34px;
+      color: #fff;
+      background:
+        linear-gradient(112deg, rgba(16,37,60,.98) 0%, rgba(16,37,60,.94) 58%, rgba(8,127,118,.88) 100%);
+      overflow: hidden;
+    }
+    .report-masthead::before {
+      content: "";
+      position: absolute;
+      width: 430px; height: 430px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 50%; right: -150px; top: -260px;
+      box-shadow: 0 0 0 60px rgba(255,255,255,.025), 0 0 0 120px rgba(255,255,255,.018);
+    }
+    .masthead-top { position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+    .eyebrow { margin: 0 0 13px; color: #72d4c8; font-weight: 800; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+    .report-masthead h1 { margin: 0; font-size: clamp(30px, 3.4vw, 47px); line-height: 1.1; letter-spacing: -.045em; font-weight: 800; }
+    .report-masthead h1 span { display: block; margin-top: 8px; color: #cdd9e2; font-size: .42em; letter-spacing: .12em; font-weight: 600; }
+    .report-date-box { min-width: 170px; padding-left: 20px; border-left: 1px solid rgba(255,255,255,.22); text-align: right; }
+    .report-date-box strong { display: block; font-size: 27px; letter-spacing: -.04em; }
+    .report-date-box span { display: block; color: #b8c8d5; font-size: 11px; letter-spacing: .12em; }
+    .masthead-bottom {
+      position: relative;
+      margin-top: 40px;
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 22px;
+    }
+    .scope-line { color: #c7d4de; font-size: 12px; }
+    .scope-line strong { color: #fff; }
+    .confidential { padding: 6px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; color: #d6e0e7; font-size: 10px; letter-spacing: .11em; white-space: nowrap; }
+    .demo-banner { display: none; padding: 10px 42px; background: #fff3cd; color: #674d00; font-weight: 700; border-bottom: 1px solid #f1d98a; }
+    .demo-mode .demo-banner { display: block; }
+
+    .report-body { padding: 30px 36px 42px; }
+    .kpis {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      margin-top: -62px; position: relative; z-index: 2;
+    }
+    .kpi {
+      min-height: 108px;
+      padding: 17px 18px;
+      border: 1px solid #e2e7e8;
+      border-radius: 14px;
+      background: rgba(255,255,255,.98);
+      box-shadow: 0 9px 28px rgba(8,31,51,.10);
+    }
+    .kpi-label { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: .04em; }
+    .kpi-value { margin: 4px 0 1px; font-size: 29px; line-height: 1.15; color: var(--navy); font-weight: 800; letter-spacing: -.04em; }
+    .kpi-value small { margin-left: 2px; font-size: 12px; font-weight: 700; }
+    .kpi-note { color: #85919c; font-size: 10px; }
+    .kpi.risk .kpi-value { color: var(--red); }
+    .kpi.positive .kpi-value { color: var(--teal); }
+
+    .section { margin-top: 30px; }
+    .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+    .section-heading h2 { margin: 0; color: var(--navy); font-size: 18px; letter-spacing: -.025em; }
+    .section-heading p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+    .section-rule { flex: 1; height: 1px; margin: 0 2px 5px; background: var(--line); }
+    .mini-action { border: 0; background: transparent; color: var(--teal); font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .summary-heading-actions { display: flex; align-items: center; gap: 7px; }
+    .ai-generate-btn { min-height: 34px; padding: 7px 12px; font-size: 10px; }
+    .summary-card {
+      display: grid; grid-template-columns: 1.55fr .75fr;
+      border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+    }
+    .summary-main { padding: 24px 25px; }
+    .summary-label { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .summary-label::before { content: ""; width: 17px; height: 3px; background: var(--teal); border-radius: 9px; }
+    .ai-summary-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+    .ai-pill { display: inline-flex; min-height: 25px; padding: 4px 8px; align-items: center; gap: 5px; border: 1px solid #d8e0e2; border-radius: 999px; background: var(--soft); color: #667782; font-size: 9px; font-weight: 800; }
+    .ai-pill.online { color: #086b63; border-color: #b9ddd8; background: var(--teal-soft); }
+    .ai-pill.offline { color: #8c4d45; border-color: #e5c6c1; background: var(--red-soft); }
+    .ai-model-wrap { display: inline-flex; align-items: center; gap: 5px; min-height: 25px; padding: 3px 5px 3px 8px; border: 1px solid #d8e0e2; border-radius: 999px; background: #fff; color: #667782; font-size: 9px; font-weight: 800; }
+    .ai-model-select { max-width: 145px; border: 0; outline: 0; background: transparent; color: var(--navy); font-size: 9px; font-weight: 800; }
+    .ai-summary-status { margin: 0 0 13px; padding: 9px 11px; border-left: 3px solid #9aa8b1; border-radius: 0 8px 8px 0; background: #f6f8f8; color: #64747f; font-size: 9px; line-height: 1.5; }
+    .ai-summary-status.ready { border-color: var(--teal); background: var(--teal-soft); color: #176b65; }
+    .ai-summary-status.busy { border-color: var(--blue); background: var(--blue-soft); color: #315c7d; }
+    .ai-summary-status.stale { border-color: var(--amber); background: var(--amber-soft); color: #7a5621; }
+    .ai-summary-status.error { border-color: var(--red); background: var(--red-soft); color: #82463f; }
+    .summary-editor {
+      width: 100%; min-height: 185px; resize: none; overflow: hidden;
+      border: 0; outline: 0; padding: 0; background: transparent;
+      color: var(--ink); font-size: 14px; line-height: 1.8;
+    }
+    .print-summary { display: none; white-space: pre-wrap; font-size: 13px; line-height: 1.75; }
+    .summary-side { padding: 23px; background: var(--soft); border-left: 1px solid var(--line); }
+    .summary-side h3 { margin: 0 0 12px; color: var(--navy); font-size: 12px; }
+    .risk-stack { display: grid; gap: 10px; }
+    .risk-row { display: grid; grid-template-columns: 52px 1fr 24px; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); }
+    .risk-track { height: 7px; background: #e6eaeb; border-radius: 999px; overflow: hidden; }
+    .risk-fill { height: 100%; border-radius: inherit; transition: width .3s ease; }
+    .risk-fill.critical { background: var(--red); }
+    .risk-fill.watch { background: var(--amber); }
+    .risk-fill.routine { background: var(--teal); }
+    .action-note { margin-top: 18px; }
+    .action-note label { display: block; color: var(--navy); margin-bottom: 6px; font-size: 11px; font-weight: 800; }
+    .action-note textarea {
+      width: 100%; min-height: 66px; resize: vertical;
+      padding: 10px; border: 1px solid #d8dfe1; border-radius: 9px; background: #fff; color: var(--ink); font-size: 11px;
+    }
+    .print-action-note { display: none; white-space: pre-wrap; font-size: 11px; }
+
+    .issues-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+    .issue-card {
+      min-height: 190px; padding: 18px;
+      border: 1px solid var(--line); border-radius: 14px; background: #fff;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .issue-card.empty { background: var(--soft); color: #8a959d; justify-content: center; text-align: center; }
+    .issue-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .rank { color: #a0a9b0; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; padding: 3px 8px; border-radius: 999px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+    .badge-critical { color: #8c2c2c; background: var(--red-soft); }
+    .badge-watch { color: #8d570c; background: var(--amber-soft); }
+    .badge-routine { color: #086b63; background: var(--teal-soft); }
+    .badge-positive { color: #086b63; background: var(--teal-soft); }
+    .badge-neutral { color: #536572; background: #edf0f1; }
+    .badge-negative { color: #9d3737; background: var(--red-soft); }
+    .badge-manual { color: #3d6284; background: var(--blue-soft); }
+    .badge-relevance { color: #244f73; background: var(--blue-soft); border: 1px solid #cfdeea; }
+    .badge-relevance.top { color: #086b63; background: var(--teal-soft); border-color: #c5e3de; }
+    .badge-yonhap { color: #174a8b; background: #edf4ff; border: 1px solid #c9dbf5; }
+    .badge-selected { color: #086b63; background: var(--teal-soft); border: 1px solid #b7ddd7; }
+    .issue-card h3 { margin: 0; color: var(--navy); font-size: 14px; line-height: 1.45; letter-spacing: -.015em; }
+    .issue-meta { margin-top: auto; color: var(--muted); font-size: 10px; }
+    .issue-reason { padding-top: 9px; border-top: 1px solid #e7eaeb; color: #596a76; font-size: 10px; }
+
+    .article-toolbar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 11px; border: 1px solid var(--line); border-radius: 13px; background: var(--soft);
+    }
+    .search-box { position: relative; min-width: 220px; flex: 1; }
+    .search-box svg { position: absolute; left: 11px; top: 10px; width: 15px; height: 15px; color: #80909b; }
+    .search-box input { width: 100%; height: 36px; padding: 7px 12px 7px 34px; border: 1px solid #d9e0e2; border-radius: 9px; background: #fff; outline: 0; }
+    .search-box input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(8,127,118,.10); }
+    .control-select { height: 36px; padding: 6px 30px 6px 10px; border: 1px solid #d9e0e2; border-radius: 9px; background: #fff; color: var(--ink); font-size: 11px; font-weight: 700; }
+    .selection-toggle { height: 36px; padding: 6px 11px; border: 1px solid #b9d8d4; border-radius: 9px; background: #fff; color: var(--teal-dark); font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .selection-toggle:hover { border-color: var(--teal); background: var(--teal-soft); }
+    .selection-toggle.active { border-color: var(--teal); background: var(--teal); color: #fff; box-shadow: 0 4px 12px rgba(8,127,118,.18); }
+    .selection-toggle strong { display: inline-grid; min-width: 19px; height: 19px; margin-left: 4px; padding: 0 5px; place-items: center; border-radius: 999px; background: var(--teal-soft); color: var(--teal-dark); font-size: 9px; }
+    .selection-toggle.active strong { background: rgba(255,255,255,.2); color: #fff; }
+    .count-label { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .relevance-guide { display: flex; align-items: flex-start; gap: 8px; margin: 8px 2px 0; color: #71808a; font-size: 9px; }
+    .relevance-guide strong { flex: 0 0 auto; color: var(--navy); }
+    .articles { display: grid; gap: 9px; margin-top: 10px; }
+    .article-card {
+      display: grid; grid-template-columns: 27px minmax(0, 1fr) 84px;
+      gap: 12px; padding: 15px 14px;
+      border: 1px solid var(--line); border-radius: 13px; background: #fff;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    .article-card:hover { border-color: #bfcace; box-shadow: 0 7px 20px rgba(16,37,60,.06); }
+    .article-card.included { border-color: #9ccfc9; box-shadow: inset 3px 0 0 var(--teal); }
+    .article-card:not(.included) { background: #fcfdfd; }
+    .include-check { appearance: none; width: 19px; height: 19px; margin: 3px 0 0; border: 1.5px solid #aeb9bf; border-radius: 6px; background: #fff; }
+    .include-check:checked { background: var(--teal); border-color: var(--teal); box-shadow: inset 0 0 0 4px #fff; }
+    .article-main { min-width: 0; }
+    .article-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .category-label { color: var(--blue); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+    .article-title {
+      display: inline; color: var(--navy); text-decoration: none; font-size: 14px; font-weight: 800; line-height: 1.45; letter-spacing: -.012em;
+    }
+    .article-title[href]:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+    .article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; margin-top: 7px; color: var(--muted); font-size: 10px; }
+    .article-desc { margin: 7px 0 0; color: #687986; font-size: 10px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .article-note { margin-top: 8px; width: 100%; padding: 7px 9px; border: 1px dashed #ccd5d8; border-radius: 8px; background: #fbfcfb; color: var(--ink); font-size: 10px; outline: 0; }
+    .article-note:focus { border-style: solid; border-color: var(--teal); background: #fff; }
+    .article-actions { display: flex; justify-content: flex-end; align-items: flex-start; gap: 4px; }
+    .small-icon {
+      width: 31px; height: 31px; padding: 0; border: 1px solid #dde2e4; border-radius: 8px; background: #fff; color: #798892; display: grid; place-items: center;
+    }
+    .small-icon:hover { color: var(--navy); border-color: #bfc9cd; }
+    .small-icon.active { color: #b66a00; background: var(--amber-soft); border-color: #efcf9f; }
+    .small-icon svg { width: 14px; height: 14px; }
+    .empty-state { padding: 52px 24px; border: 1px dashed #cbd4d7; border-radius: 15px; background: var(--soft); text-align: center; }
+    .empty-icon { width: 50px; height: 50px; margin: 0 auto 13px; border-radius: 16px; display: grid; place-items: center; color: var(--teal); background: var(--teal-soft); }
+    .empty-state h3 { margin: 0; color: var(--navy); font-size: 16px; }
+    .empty-state p { max-width: 430px; margin: 7px auto 17px; color: var(--muted); font-size: 11px; }
+    .empty-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+
+    .report-footer { margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 18px; color: #8a959d; font-size: 9px; }
+    .report-footer strong { color: #5c6c78; }
+
+    .side-panel { position: sticky; top: 91px; display: grid; gap: 13px; }
+    .side-card { padding: 18px; border: 1px solid #e0e5e6; border-radius: 16px; background: rgba(255,255,255,.90); box-shadow: 0 10px 30px rgba(16,37,60,.055); }
+    .side-card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; color: var(--navy); font-size: 13px; }
+    .side-card h2 svg { width: 16px; color: var(--teal); }
+    .field { margin-top: 11px; }
+    .field:first-child { margin-top: 0; }
+    .field label { display: block; margin-bottom: 5px; color: #546571; font-size: 10px; font-weight: 800; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 10px; border: 1px solid #d7dee0; border-radius: 9px; background: #fff; color: var(--ink); outline: 0; font-size: 11px; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(8,127,118,.09); }
+    .date-input { font-weight: 800; color: var(--navy) !important; }
+    .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }
+    .side-actions .btn { padding-inline: 8px; font-size: 11px; }
+    .source-state { padding: 11px; border-radius: 10px; background: var(--soft); }
+    .source-state.error { background: var(--red-soft); }
+    .source-state.error .source-icon { color: var(--red); background: #fff; }
+    .source-state.warning { background: var(--amber-soft); }
+    .source-line { display: flex; align-items: flex-start; gap: 8px; }
+    .source-icon { flex: 0 0 auto; width: 23px; height: 23px; border-radius: 7px; display: grid; place-items: center; background: var(--teal-soft); color: var(--teal); }
+    .source-line strong { display: block; color: var(--navy); font-size: 10px; }
+    .source-line span { display: block; margin-top: 1px; color: var(--muted); font-size: 9px; }
+    .collection-errors { margin-top: 9px; padding: 9px 10px; border: 1px solid #ead0cd; border-radius: 9px; background: #fffafa; color: #7c4440; font-size: 9px; }
+    .collection-errors summary { cursor: pointer; font-weight: 800; }
+    .collection-errors ul { margin: 7px 0 0; padding-left: 16px; }
+    .collection-errors li + li { margin-top: 4px; }
+    .keyword-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
+    .keyword-chip { padding: 4px 7px; border: 1px solid #d9e1e2; border-radius: 7px; background: #fff; color: #52636f; font-size: 9px; }
+    .side-card p.helper { margin: 10px 0 0; color: #82909a; font-size: 9px; }
+    .workflow { display: grid; gap: 9px; }
+    .workflow-step { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+    .workflow-step span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; color: var(--teal); background: var(--teal-soft); font-size: 9px; font-weight: 800; }
+    .workflow-step strong { display: block; color: var(--navy); font-size: 10px; }
+    .workflow-step small { display: block; color: var(--muted); font-size: 9px; }
+
+    .overlay {
+      position: fixed; inset: 0; z-index: 80; padding: 24px;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(5, 18, 31, .56); backdrop-filter: blur(5px);
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      width: min(760px, 100%); max-height: min(840px, calc(100vh - 48px)); overflow: auto;
+      border-radius: 20px; background: #fff; box-shadow: 0 30px 100px rgba(0,0,0,.23);
+    }
+    .modal.small { width: min(560px, 100%); }
+    .modal-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 19px 22px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.97); }
+    .modal-header h2 { margin: 0; color: var(--navy); font-size: 17px; }
+    .close-btn { width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--soft); color: #657681; font-size: 20px; }
+    .modal-body { padding: 22px; }
+    .modal-footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 15px 22px; border-top: 1px solid var(--line); background: rgba(255,255,255,.97); }
+    .settings-section { margin-top: 24px; }
+    .settings-section:first-child { margin-top: 0; }
+    .settings-section h3 { margin: 0 0 5px; color: var(--navy); font-size: 13px; }
+    .settings-section > p { margin: 0 0 12px; color: var(--muted); font-size: 10px; }
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+    .setting-box { padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
+    .toggle-line { display: flex; align-items: flex-start; gap: 10px; }
+    .toggle-line input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--teal); }
+    .toggle-line strong { display: block; color: var(--navy); font-size: 11px; }
+    .toggle-line small { display: block; color: var(--muted); font-size: 9px; }
+    .query-list { display: grid; gap: 8px; }
+    .query-row { display: grid; grid-template-columns: 22px 82px 1fr; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; }
+    .query-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--teal); }
+    .query-row label { color: var(--navy); font-size: 10px; font-weight: 800; }
+    .query-row input[type="text"] { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #d8dfe1; border-radius: 7px; color: var(--ink); font-size: 10px; }
+    .security-note { margin-top: 10px; padding: 11px 12px; border-left: 3px solid var(--amber); background: var(--amber-soft); color: #755221; font-size: 9px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .required::after { content: " *"; color: var(--red); }
+
+    .toast-region { position: fixed; z-index: 120; right: 22px; bottom: 22px; display: grid; gap: 8px; pointer-events: none; }
+    .toast { min-width: 270px; max-width: 380px; padding: 12px 14px; border-radius: 11px; color: #fff; background: var(--navy); box-shadow: 0 12px 30px rgba(0,0,0,.18); font-size: 11px; animation: toast-in .18s ease; }
+    .toast.error { background: #8f3434; }
+    .toast.success { background: var(--teal-dark); }
+    @keyframes toast-in { from { transform: translateY(7px); opacity: 0; } }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.34); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1120px) {
+      .workspace { grid-template-columns: 1fr; }
+      .side-panel { position: static; grid-template-columns: repeat(3, 1fr); }
+      .appbar-status { display: none; }
+    }
+    @media (max-width: 780px) {
+      .appbar-inner { padding: 9px 14px; }
+      .brand { min-width: 0; }
+      .brand small, .appbar-actions .hide-mobile { display: none; }
+      .workspace { padding: 12px; }
+      .report { border-radius: 15px; }
+      .report-masthead { min-height: 240px; padding: 28px 23px; }
+      .report-date-box { min-width: 125px; }
+      .report-date-box strong { font-size: 21px; }
+      .masthead-bottom { margin-top: 32px; }
+      .report-body { padding: 24px 18px 30px; }
+      .kpis { grid-template-columns: repeat(2, 1fr); margin-top: -51px; }
+      .summary-card { grid-template-columns: 1fr; }
+      .summary-side { border-left: 0; border-top: 1px solid var(--line); }
+      .issues-grid { grid-template-columns: 1fr; }
+      .article-card { grid-template-columns: 24px minmax(0, 1fr); }
+      .article-actions { grid-column: 2; justify-content: flex-start; }
+      .side-panel { grid-template-columns: 1fr; }
+      .settings-grid, .form-grid { grid-template-columns: 1fr; }
+      .form-grid .full { grid-column: auto; }
+      .query-row { grid-template-columns: 20px 72px 1fr; }
+    }
+
+    @page { size: A4; margin: 12mm 12mm 13mm; }
+    @media print {
+      :root { --line: #d5dadd; }
+      body { background: #fff !important; color: #161d24; font-size: 10pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print, .appbar, .side-panel, .overlay, .toast-region, .article-toolbar, .article-actions, .include-check, .mini-action, .article-note { display: none !important; }
+      .workspace { display: block; max-width: none; padding: 0; }
+      .report { border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+      .report-masthead { min-height: 48mm; padding: 13mm 12mm 11mm; border-radius: 0; }
+      .report-masthead h1 { font-size: 26pt; }
+      .report-masthead h1 span { font-size: 10pt; }
+      .report-date-box strong { font-size: 16pt; }
+      .masthead-bottom { margin-top: 9mm; }
+      .demo-banner { padding: 3mm 10mm; }
+      .report-body { padding: 7mm 7mm 0; }
+      .kpis { grid-template-columns: repeat(4, 1fr); margin-top: -13mm; gap: 2mm; }
+      .kpi { min-height: 24mm; padding: 3.2mm; border-radius: 2mm; box-shadow: 0 2mm 6mm rgba(16,37,60,.08); }
+      .kpi-value { font-size: 18pt; }
+      .section { margin-top: 6mm; }
+      .section-heading { margin-bottom: 2.5mm; }
+      .section-heading h2 { font-size: 12pt; }
+      .summary-card { grid-template-columns: 1.55fr .75fr; border-radius: 2mm; break-inside: avoid; }
+      .summary-main, .summary-side { padding: 4mm; }
+      .summary-editor, .action-note textarea { display: none !important; }
+      .print-summary, .print-action-note { display: block; }
+      .issues-grid { grid-template-columns: repeat(3, 1fr); gap: 2mm; }
+      .issue-card { min-height: 33mm; padding: 3mm; border-radius: 2mm; break-inside: avoid; }
+      .issue-card h3 { font-size: 9.5pt; }
+      .article-card { grid-template-columns: minmax(0, 1fr); padding: 3mm 3.5mm; border-radius: 2mm; break-inside: avoid; }
+      .article-card:not(.included) { display: none !important; }
+      .article-title { font-size: 9.5pt; }
+      .article-desc { font-size: 7.5pt; -webkit-line-clamp: 2; }
+      .article-meta { font-size: 7.5pt; }
+      .articles { gap: 2mm; }
+      .report-footer { font-size: 7pt; }
+    }
+  </style>
+</head>
+<body>
+  <header class="appbar no-print">
+    <div class="appbar-inner">
+      <div class="brand" aria-label="한국전기안전공사 언론브리핑">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="25" height="25" fill="none">
+            <path d="M16 3.5 27 8v7.5c0 6.5-4.5 10.8-11 13-6.5-2.2-11-6.5-11-13V8l11-4.5Z" fill="white" fill-opacity=".98"/>
+            <path d="m17.4 7-7 10.1h5l-1 7.9 7.2-11h-5.1l.9-7Z" fill="#087f76"/>
+          </svg>
+        </div>
+        <div><strong>한국전기안전공사 언론브리핑</strong><small>KESCO MEDIA INTELLIGENCE</small></div>
+      </div>
+      <div class="appbar-status" aria-live="polite">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="globalStatus">오늘 브리핑을 준비하고 있습니다</span>
+      </div>
+      <nav class="appbar-actions" aria-label="주요 작업">
+        <button class="btn btn-ghost btn-icon" id="settingsBtn" title="검색 설정" aria-label="검색 설정">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V21h-4v-.08a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.52 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        </button>
+        <button class="btn btn-ghost hide-mobile" id="addArticleBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>기사 추가
+        </button>
+        <button class="btn btn-ghost hide-mobile" id="importBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>가져오기
+        </button>
+        <button class="btn btn-primary" id="refreshBtn" data-testid="refresh-news">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <article class="report" id="report">
+      <section class="report-masthead">
+        <div class="masthead-top">
+          <div>
+            <p class="eyebrow">CEO Morning Intelligence</p>
+            <h1>일일 언론브리핑<span>DAILY MEDIA BRIEFING</span></h1>
+          </div>
+          <div class="report-date-box">
+            <strong id="mastheadDate">2026. 07. 15</strong>
+            <span id="mastheadDay">WEDNESDAY · 08:00 KST</span>
+          </div>
+        </div>
+        <div class="masthead-bottom">
+          <div class="scope-line"><strong>한국전기안전공사</strong> 관련 온라인 보도 및 주요 이슈 모니터링</div>
+          <div class="confidential">CEO BRIEF · INTERNAL USE</div>
+        </div>
+      </section>
+      <div class="demo-banner">샘플 화면입니다. 실제 보고에 사용하기 전에 ‘오늘 기사 검색’을 실행하거나 실제 기사를 가져오세요.</div>
+
+      <div class="report-body">
+        <section class="kpis" aria-label="핵심 지표">
+          <div class="kpi">
+            <div class="kpi-label">수집 보도</div><div class="kpi-value" id="kpiTotal">0<small>건</small></div><div class="kpi-note" id="kpiTotalNote">검색 대기</div>
+          </div>
+          <div class="kpi risk">
+            <div class="kpi-label">주의 이상</div><div class="kpi-value" id="kpiRisk">0<small>건</small></div><div class="kpi-note">키워드 기반 위험 신호</div>
+          </div>
+          <div class="kpi positive">
+            <div class="kpi-label">긍정 보도</div><div class="kpi-value" id="kpiPositive">0<small>건</small></div><div class="kpi-note">성과·협력·예방 활동</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">보도 매체</div><div class="kpi-value" id="kpiSources">0<small>개</small></div><div class="kpi-note" id="kpiSourceNote">중복 제목 자동 정리</div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div><h2>오늘의 핵심 경영 메시지</h2><p>브리핑 선정 기사의 본문·RSS 요약을 Gemma 4가 분석합니다. 보고 전 담당자가 근거를 확인·수정하세요.</p></div>
+            <div class="section-rule"></div>
+            <div class="summary-heading-actions no-print">
+              <button class="mini-action" id="ruleSummaryBtn">기본 요약</button>
+              <button class="btn btn-primary ai-generate-btn" id="generateAiSummaryBtn">Gemma 4 경영메시지 생성</button>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-main">
+              <div class="summary-label">오늘의 핵심 경영메시지</div>
+              <div class="ai-summary-tools no-print">
+                <span class="ai-pill" id="aiConnectionState">AI 도우미 확인 중</span>
+                <label class="ai-model-wrap" for="aiModelSelect">모델
+                  <select class="ai-model-select" id="aiModelSelect"><option value="gemma4:26b">gemma4:26b</option><option value="gemma4:e4b">gemma4:e4b</option><option value="gemma4:e2b">gemma4:e2b</option></select>
+                </label>
+                <span class="ai-pill" id="aiCoverageState">선정 0건</span>
+              </div>
+              <div class="ai-summary-status no-print" id="aiSummaryStatus">원클릭 실행 파일로 AI 도우미를 시작하면 선정 기사 분석을 사용할 수 있습니다.</div>
+              <textarea id="summaryEditor" class="summary-editor" aria-label="CEO 핵심 경영메시지" placeholder="기사를 선정한 뒤 ‘Gemma 4 경영메시지 생성’을 누르세요. 생성 결과는 직접 수정할 수 있습니다."></textarea>
+              <div id="printSummary" class="print-summary"></div>
+            </div>
+            <aside class="summary-side">
+              <h3>위험 신호 구성</h3>
+              <div class="risk-stack">
+                <div class="risk-row"><span>긴급</span><div class="risk-track"><div id="criticalBar" class="risk-fill critical" style="width:0"></div></div><strong id="criticalCount">0</strong></div>
+                <div class="risk-row"><span>주의</span><div class="risk-track"><div id="watchBar" class="risk-fill watch" style="width:0"></div></div><strong id="watchCount">0</strong></div>
+                <div class="risk-row"><span>일상</span><div class="risk-track"><div id="routineBar" class="risk-fill routine" style="width:0"></div></div><strong id="routineCount">0</strong></div>
+              </div>
+              <div class="action-note">
+                <label for="actionNote">CEO 참고·지시사항</label>
+                <textarea id="actionNote" placeholder="예: 사실관계 확인 후 10시까지 보고"></textarea>
+                <div id="printActionNote" class="print-action-note"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading"><div><h2>Top Issues</h2><p>위험도·최신성·중요 표시를 반영한 우선 검토 기사</p></div><div class="section-rule"></div></div>
+          <div class="issues-grid" id="topIssues"></div>
+        </section>
+
+        <section class="section" id="articlesSection">
+          <div class="section-heading"><div><h2>Media Coverage</h2><p>필요한 기사에 체크하면 ‘브리핑 선정’ 태그로 저장되고 종합 요약·인쇄에 반영됩니다.</p></div><div class="section-rule"></div></div>
+          <div class="article-toolbar no-print">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <label class="sr-only" for="articleSearch">기사 내 검색</label>
+              <input id="articleSearch" type="search" placeholder="제목·매체·키워드 검색">
+            </div>
+            <label class="sr-only" for="categoryFilter">분류 필터</label>
+            <select id="categoryFilter" class="control-select"><option value="all">전체 분류</option></select>
+            <label class="sr-only" for="riskFilter">위험도 필터</label>
+            <select id="riskFilter" class="control-select">
+              <option value="all">모든 위험도</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option>
+            </select>
+            <label class="sr-only" for="selectionFilter">선정 상태 필터</label>
+            <select id="selectionFilter" class="control-select"><option value="all">전체 기사</option><option value="selected">브리핑 선정만</option><option value="starred">중요 표시만</option><option value="unselected">미선정만</option></select>
+            <button type="button" id="selectedOnlyBtn" class="selection-toggle" aria-pressed="false">✓ 선택 기사만 보기 <strong id="selectedOnlyCount">0</strong></button>
+            <label class="sr-only" for="sortOrder">정렬</label>
+            <select id="sortOrder" class="control-select"><option value="relevance">공사 관련도순</option><option value="priority">위험·중요도순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
+            <span class="count-label" id="visibleCount">0건 표시</span>
+          </div>
+          <div class="relevance-guide no-print"><strong>관련도 기준</strong><span>① 공사 직접 거론 〉 ② 전기화재 〉 ③ 감전사고 〉 ④ 기후에너지환경부+(에너지/전기) 〉 ⑤ 재생에너지 · 같은 기준에서는 연합뉴스를 먼저 표시합니다.</span></div>
+          <div class="articles" id="articleList" data-testid="article-list"></div>
+        </section>
+
+        <footer class="report-footer">
+          <div><strong>자료 기준</strong> <span id="footerTimestamp">수집 전</span> · 공개 온라인 기사 제목·요약</div>
+          <div>자동 위험도는 키워드 기반 참고 지표이며 최종 판단은 담당자 검토를 따릅니다.</div>
+        </footer>
+      </div>
+    </article>
+
+    <aside class="side-panel no-print">
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+          브리핑 기준일
+        </h2>
+        <div class="field"><label for="reportDate">보고 날짜</label><input id="reportDate" class="date-input" type="date"></div>
+        <div class="field"><label for="preparedBy">작성 부서·담당</label><input id="preparedBy" type="text" placeholder="예: 홍보실 / 홍길동"></div>
+        <div class="side-actions">
+          <button class="btn btn-subtle" id="exportBtn">JSON 백업</button>
+          <button class="btn btn-subtle" id="csvBtn">CSV 내보내기</button>
+          <button class="btn btn-subtle" id="copySummaryBtn">요약 복사</button>
+          <button class="btn btn-primary" id="printBtn">인쇄·PDF</button>
+        </div>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          수집 상태
+        </h2>
+        <div class="source-state" id="sourceStateBox">
+          <div class="source-line">
+            <div class="source-icon">●</div>
+            <div><strong id="sourceStateTitle">검색 대기</strong><span id="sourceStateDetail">연합뉴스 RSS 우선 · Google 뉴스 보완</span></div>
+          </div>
+        </div>
+        <details class="collection-errors" id="collectionErrors" hidden>
+          <summary id="collectionErrorsSummary">수집 오류 상세</summary>
+          <ul id="collectionErrorsList"></ul>
+        </details>
+        <p class="helper">페이지를 열어 둔 상태에서만 자동 검색됩니다. 결과는 이 브라우저에 날짜별로 저장됩니다.</p>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 13c0 5-3.5 8-8 8s-8-3-8-8 3.5-10 8-10 8 5 8 10Z"/><path d="M8 13h8M12 9v8"/></svg>
+          핵심 모니터링어
+        </h2>
+        <div class="keyword-cloud" id="keywordCloud"></div>
+        <button class="mini-action" id="editKeywordsBtn" style="margin-top:12px">검색식 편집 →</button>
+      </section>
+
+      <section class="side-card">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h4"/></svg>
+          매일 보고 흐름
+        </h2>
+        <div class="workflow">
+          <div class="workflow-step"><span>1</span><div><strong>자동 수집</strong><small>열 때 당일 기사 검색·중복 제거</small></div></div>
+          <div class="workflow-step"><span>2</span><div><strong>담당자 선별</strong><small>브리핑 선정·중요 표시·메모 작성</small></div></div>
+          <div class="workflow-step"><span>3</span><div><strong>CEO 보고</strong><small>요약 확인 후 PDF 인쇄 또는 복사</small></div></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <input id="fileInput" type="file" accept=".json,.csv,application/json,text/csv" hidden>
+
+  <div class="overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal">
+      <div class="modal-header"><h2 id="settingsTitle">검색 및 자동화 설정</h2><button class="close-btn" data-close="settingsOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <section class="settings-section">
+          <h3>매일 실행</h3>
+          <p>HTML을 열었을 때 당일 저장본이 없으면 자동으로 새 기사를 검색합니다.</p>
+          <div class="settings-grid">
+            <div class="setting-box toggle-line"><input id="settingAutoRun" type="checkbox"><div><strong>하루 한 번 자동 검색</strong><small>브라우저가 닫혀 있으면 실행되지 않습니다.</small></div></div>
+            <div class="setting-box"><div class="field"><label for="settingLookback">검색 기간</label><select id="settingLookback"><option value="24">최근 24시간</option><option value="48">최근 48시간</option><option value="72">최근 72시간</option><option value="168">최근 7일</option></select></div></div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>기사 검색식</h3>
+          <p>분류별 검색식입니다. 체크를 해제하면 해당 검색은 실행하지 않습니다.</p>
+          <div class="query-list" id="querySettings"></div>
+        </section>
+
+        <section class="settings-section">
+          <h3>판별 키워드</h3>
+          <p>쉼표로 구분합니다. 위험도·긍부정 분류는 제목과 기사 요약의 단어 일치에 기반합니다.</p>
+          <div class="settings-grid">
+            <div class="field"><label for="settingCoreKeywords">기관 핵심어</label><textarea id="settingCoreKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingRiskKeywords">위기·주의어</label><textarea id="settingRiskKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingPositiveKeywords">긍정어</label><textarea id="settingPositiveKeywords" rows="3"></textarea></div>
+            <div class="field"><label for="settingExcludeKeywords">제외어</label><textarea id="settingExcludeKeywords" rows="3" placeholder="예: 동명이인, 채용공고"></textarea></div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>데이터 연결</h3>
+          <p>연합뉴스 공식 RSS를 먼저 읽고 Google 뉴스 RSS로 보완하며, 수집 경로가 실패하면 GDELT 공개 기사 색인을 시도합니다.</p>
+          <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingYonhap" type="checkbox"><div><strong>연합뉴스 공식 RSS 우선 수집</strong><small>최근 종합 뉴스에서 지정 관련도 기준과 일치하는 기사만 반영합니다.</small></div></div>
+          <div class="field"><label for="settingProxy">RSS 프록시 URL ({url} 위치에 원본 주소 삽입)</label><input id="settingProxy" type="url"></div>
+          <div class="field"><label for="settingEndpoint">기관용 뉴스 API 프록시 URL (선택)</label><input id="settingEndpoint" type="text" placeholder="https://내부주소/news?q={query}&hours={hours}"></div>
+          <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
+          <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건 (권장)</option><option value="300">300건</option></select></div>
+          <div class="security-note">공개 프록시에는 검색어와 RSS 주소가 전달됩니다. 기관 내부·비공개 키워드나 API 비밀키를 이 HTML에 입력하지 마세요. 네이버 뉴스 API를 사용하려면 비밀키를 서버에 보관한 기관용 프록시 URL을 연결하는 방식을 권장합니다.</div>
+        </section>
+      </div>
+      <div class="modal-footer"><button class="btn btn-subtle" id="resetSettingsBtn">기본값 복원</button><button class="btn" data-close="settingsOverlay">취소</button><button class="btn btn-primary" id="saveSettingsBtn">저장</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="articleOverlay" role="dialog" aria-modal="true" aria-labelledby="articleModalTitle">
+    <div class="modal small">
+      <div class="modal-header"><h2 id="articleModalTitle">기사 직접 추가</h2><button class="close-btn" data-close="articleOverlay" aria-label="닫기">×</button></div>
+      <form id="articleForm">
+        <div class="modal-body form-grid">
+          <div class="field full"><label class="required" for="manualTitle">기사 제목</label><input id="manualTitle" required type="text"></div>
+          <div class="field"><label class="required" for="manualSource">매체명</label><input id="manualSource" required type="text"></div>
+          <div class="field"><label for="manualDate">보도 일시</label><input id="manualDate" type="datetime-local"></div>
+          <div class="field full"><label for="manualUrl">기사 URL</label><input id="manualUrl" type="url" placeholder="https://"></div>
+          <div class="field"><label for="manualCategory">분류</label><select id="manualCategory"></select></div>
+          <div class="field"><label for="manualRisk">위험도</label><select id="manualRisk"><option value="auto">자동 판별</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option></select></div>
+          <div class="field full"><label for="manualDescription">기사 요약</label><textarea id="manualDescription" rows="4"></textarea></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn" data-close="articleOverlay">취소</button><button type="submit" class="btn btn-primary">브리핑에 추가</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const ICONS = {
+        star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>',
+        trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6M14 11v6"/></svg>',
+        search: '<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>'
+      };
+
+      const DEFAULT_SETTINGS = {
+        settingsVersion: 2,
+        autoRun: true,
+        enableYonhap: true,
+        lookback: 48,
+        maxRecords: 50,
+        collectionLimit: 200,
+        aiModel: "gemma4:26b",
+        proxy: "https://syndicate.fallible.net/feed_cors_proxy/{url}",
+        endpoint: "",
+        coreKeywords: ["한국전기안전공사", "전기안전공사", "KESCO"],
+        riskKeywords: ["사망", "중대재해", "압수수색", "감사", "국정감사", "화재", "감전", "사고", "논란", "위반", "고발", "부실", "해킹", "정전", "피해", "징계"],
+        positiveKeywords: ["수상", "협약", "성과", "혁신", "봉사", "지원", "캠페인", "예방", "확대", "우수", "개선", "안전문화"],
+        excludeKeywords: ["채용공고"],
+        queries: [
+          { id: "direct", label: "기관 직접", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO")' },
+          { id: "safety", label: "전기화재·감전", enabled: true, query: '("전기화재" OR "전기 화재" OR "감전사고" OR "감전 사고")' },
+          { id: "policy", label: "기후·에너지 정책", enabled: true, query: '"기후에너지환경부" (에너지 OR 전기)' },
+          { id: "management", label: "경영·감사", enabled: true, query: '("한국전기안전공사" OR "전기안전공사") (사장 OR 감사 OR 국정감사 OR 경영평가 OR 인사)' },
+          { id: "community", label: "지역·상생", enabled: true, query: '("한국전기안전공사" OR "전기안전공사") (협약 OR 봉사 OR 지원 OR 캠페인 OR 지역)' },
+          { id: "industry", label: "재생에너지", enabled: true, query: '("재생에너지" OR "신재생에너지")' }
+        ]
+      };
+
+      const CATEGORY_COLORS = { direct: "#326c9c", safety: "#b64242", policy: "#70539b", management: "#c97a16", community: "#087f76", industry: "#397b62" };
+      const RISK_LABELS = { critical: "긴급", watch: "주의", routine: "일상" };
+      const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
+      const STORAGE_PREFIX = "kesco_media_briefing_v1_";
+      const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
+      const LAST_AUTO_KEY = "kesco_media_briefing_last_auto_v2";
+      const AI_API_BASE = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname) && location.port === "8787" ? "/api" : "http://127.0.0.1:8787/api";
+      const AI_SESSION_TOKEN = document.querySelector('meta[name="kesco-ai-token"]')?.content || new URLSearchParams(location.hash.slice(1)).get("ai") || "";
+
+      let settings = loadSettings();
+      let state = makeEmptyState(localDateKey());
+      let filters = { text: "", category: "all", risk: "all", selection: "all", sort: "relevance" };
+      let isSearching = false;
+      let isAnalyzingSummary = false;
+      let aiRequestSerial = 0;
+      let aiAbortController = null;
+      let aiServerState = { checking: true, online: false, models: [], defaultModel: "", error: "" };
+
+      const $ = (id) => document.getElementById(id);
+      const els = {};
+
+      document.addEventListener("DOMContentLoaded", init);
+
+      function init() {
+        ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "querySettings", "toastRegion", "fileInput"].forEach(id => els[id] = $(id));
+
+        state = loadDailyState(localDateKey());
+        bindEvents();
+        populateStaticControls();
+        renderAll();
+        autoResize(els.summaryEditor);
+        window.setTimeout(checkAiServer, 120);
+
+        const today = localDateKey();
+        const skipAutoRun = new URLSearchParams(location.search).has("noauto");
+        const shouldAutoRun = !skipAutoRun && settings.autoRun && !state.articles.length && localStorage.getItem(LAST_AUTO_KEY) !== today;
+        if (shouldAutoRun) {
+          window.setTimeout(() => runSearch(true), 450);
+        } else if (state.articles.length) {
+          setStatus("live", `${state.articles.length}건 저장본을 불러왔습니다`);
+        } else {
+          setStatus("idle", "검색 버튼을 눌러 오늘 브리핑을 시작하세요");
+        }
+      }
+
+      function bindEvents() {
+        $("settingsBtn").addEventListener("click", openSettings);
+        $("editKeywordsBtn").addEventListener("click", openSettings);
+        $("saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
+        $("resetSettingsBtn").addEventListener("click", resetSettingsForm);
+        $("addArticleBtn").addEventListener("click", openArticleModal);
+        $("articleForm").addEventListener("submit", addManualArticle);
+        els.refreshBtn.addEventListener("click", () => runSearch(false));
+        els.ruleSummaryBtn.addEventListener("click", () => { setRuleSummary(true); persistAndRender(); showToast("선정 기사 기준 기본 요약을 만들었습니다.", "success"); });
+        els.generateAiSummaryBtn.addEventListener("click", generateAiManagementSummary);
+        els.aiModelSelect.addEventListener("change", () => {
+          settings.aiModel = els.aiModelSelect.value;
+          state.summaryError = "";
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          saveDailyState();
+          renderSummary();
+        });
+        els.summaryEditor.addEventListener("input", () => {
+          state.summary = els.summaryEditor.value;
+          state.summaryEdited = true;
+          state.summaryMode = state.summaryMode === "ai" || state.summaryMode === "ai-edited" ? "ai-edited" : "manual";
+          state.summaryError = "";
+          els.printSummary.textContent = state.summary;
+          autoResize(els.summaryEditor);
+          saveDailyState();
+          renderAiSummaryStatus();
+        });
+        els.actionNote.addEventListener("input", () => { state.actionNote = els.actionNote.value; els.printActionNote.textContent = state.actionNote || "별도 지시사항 없음"; saveDailyState(); });
+        els.preparedBy.addEventListener("input", () => {
+          state.preparedBy = els.preparedBy.value;
+          saveDailyState();
+          renderAiSummaryStatus();
+        });
+        els.reportDate.addEventListener("change", changeReportDate);
+        els.articleSearch.addEventListener("input", () => { filters.text = els.articleSearch.value.trim().toLowerCase(); renderArticles(); });
+        els.categoryFilter.addEventListener("change", () => { filters.category = els.categoryFilter.value; renderArticles(); });
+        els.riskFilter.addEventListener("change", () => { filters.risk = els.riskFilter.value; renderArticles(); });
+        els.selectionFilter.addEventListener("change", () => { filters.selection = els.selectionFilter.value; renderArticles(); });
+        els.selectedOnlyBtn.addEventListener("click", () => {
+          filters.selection = filters.selection === "selected" ? "all" : "selected";
+          els.selectionFilter.value = filters.selection;
+          renderArticles();
+        });
+        els.sortOrder.addEventListener("change", () => { filters.sort = els.sortOrder.value; renderArticles(); });
+        els.articleList.addEventListener("change", handleArticleChange);
+        els.articleList.addEventListener("click", handleArticleClick);
+        els.articleList.addEventListener("input", handleArticleInput);
+        $("importBtn").addEventListener("click", () => els.fileInput.click());
+        els.fileInput.addEventListener("change", importFile);
+        $("exportBtn").addEventListener("click", exportJson);
+        $("csvBtn").addEventListener("click", exportCsv);
+        $("copySummaryBtn").addEventListener("click", copySummary);
+        $("printBtn").addEventListener("click", () => window.print());
+        document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", () => closeOverlay(btn.dataset.close)));
+        document.querySelectorAll(".overlay").forEach(overlay => overlay.addEventListener("click", e => { if (e.target === overlay) closeOverlay(overlay.id); }));
+        document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".overlay.open").forEach(o => closeOverlay(o.id)); });
+        window.addEventListener("beforeprint", () => { els.printSummary.textContent = state.summary || "수집 기사 없음"; els.printActionNote.textContent = state.actionNote || "별도 지시사항 없음"; });
+      }
+
+      function populateStaticControls() {
+        const options = settings.queries.map(q => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.label)}</option>`).join("");
+        els.categoryFilter.innerHTML = `<option value="all">전체 분류</option>${options}`;
+        $("manualCategory").innerHTML = options;
+      }
+
+      function makeEmptyState(date) {
+        return { date, articles: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiAnalysis: null, actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+      }
+
+      function localDateKey(date = new Date()) {
+        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+      }
+
+      function loadSettings() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+          if (!saved) return structuredClone(DEFAULT_SETTINGS);
+          const merged = { ...structuredClone(DEFAULT_SETTINGS), ...saved, queries: Array.isArray(saved.queries) ? saved.queries : structuredClone(DEFAULT_SETTINGS.queries) };
+          if (Number(saved.settingsVersion || 0) < DEFAULT_SETTINGS.settingsVersion) {
+            const savedById = new Map((Array.isArray(saved.queries) ? saved.queries : []).map(query => [query.id, query]));
+            merged.maxRecords = Math.min(100, Math.max(50, Number(saved.maxRecords || 0)));
+            merged.collectionLimit = Math.max(200, Number(saved.collectionLimit || 0));
+            merged.queries = structuredClone(DEFAULT_SETTINGS.queries).map(query => ({
+              ...query,
+              enabled: savedById.has(query.id) ? savedById.get(query.id).enabled !== false : query.enabled
+            }));
+            merged.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+          }
+          if (!merged.proxy || merged.proxy.includes("api.allorigins.win")) merged.proxy = DEFAULT_SETTINGS.proxy;
+          const direct = merged.queries.find(q => q.id === "direct");
+          if (direct && !direct.query.trim().startsWith("(")) direct.query = `(${direct.query})`;
+          return merged;
+        } catch { return structuredClone(DEFAULT_SETTINGS); }
+      }
+
+      function loadDailyState(date) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_PREFIX + date));
+          if (!saved) return makeEmptyState(date);
+          return { ...makeEmptyState(date), ...saved, date, summaryMode: saved.summaryMode || (saved.summaryEdited ? "manual" : "rule"), articles: Array.isArray(saved.articles) ? saved.articles : [] };
+        } catch { return makeEmptyState(date); }
+      }
+
+      function saveDailyState() {
+        try { localStorage.setItem(STORAGE_PREFIX + state.date, JSON.stringify(state)); }
+        catch { showToast("브라우저 저장 공간이 부족해 저장하지 못했습니다.", "error"); }
+      }
+
+      function renderAll() {
+        renderHeader();
+        renderMetrics();
+        renderSummary();
+        renderTopIssues();
+        renderArticles();
+        renderSidePanel();
+      }
+
+      function renderHeader() {
+        const d = new Date(`${state.date}T12:00:00`);
+        const ko = new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(d).replace(/\. /g, ". ").replace(/\.$/, "");
+        const day = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(d).toUpperCase();
+        els.mastheadDate.textContent = ko;
+        els.mastheadDay.textContent = `${day} · CEO BRIEF`;
+        els.reportDate.value = state.date;
+        els.preparedBy.value = state.preparedBy || "";
+        els.report.classList.toggle("demo-mode", !!state.demo);
+      }
+
+      function renderMetrics() {
+        const items = state.articles;
+        const risk = items.filter(a => a.risk === "critical" || a.risk === "watch").length;
+        const positive = items.filter(a => a.sentiment === "positive").length;
+        const sources = new Set(items.map(a => a.source).filter(Boolean)).size;
+        els.kpiTotal.innerHTML = `${items.length}<small>건</small>`;
+        els.kpiRisk.innerHTML = `${risk}<small>건</small>`;
+        els.kpiPositive.innerHTML = `${positive}<small>건</small>`;
+        els.kpiSources.innerHTML = `${sources}<small>개</small>`;
+        els.kpiTotalNote.textContent = state.fetchedAt ? `${settings.lookback}시간 · 원본 후보 ${state.rawCollectedCount || items.length}건` : "검색 대기";
+        const selected = items.filter(a => a.included).length;
+        els.kpiSourceNote.textContent = items.length ? `${selected}건 브리핑 선정 · 중복 ${state.duplicatesRemoved || 0}건 제거` : "유사 제목·동일 URL 자동 정리";
+        const counts = { critical: 0, watch: 0, routine: 0 };
+        items.forEach(a => counts[a.risk] = (counts[a.risk] || 0) + 1);
+        const max = Math.max(items.length, 1);
+        ["critical", "watch", "routine"].forEach(k => { els[`${k}Count`].textContent = counts[k]; els[`${k}Bar`].style.width = `${Math.round(counts[k] / max * 100)}%`; });
+      }
+
+      function renderSummary() {
+        if (!state.summary && state.articles.length) refreshRuleSummaryIfNeeded();
+        if (els.summaryEditor.value !== (state.summary || "")) els.summaryEditor.value = state.summary || "";
+        if (els.actionNote.value !== (state.actionNote || "")) els.actionNote.value = state.actionNote || "";
+        els.printSummary.textContent = state.summary || "수집 기사 없음";
+        els.printActionNote.textContent = state.actionNote || "별도 지시사항 없음";
+        autoResize(els.summaryEditor);
+        renderAiSummaryStatus();
+      }
+
+      function generateSummary() {
+        const items = state.articles.filter(a => a.included);
+        if (!items.length) return "• 현재 CEO 보고 대상으로 선택된 기사가 없습니다.\n• 기사를 검색하거나 직접 추가한 뒤 포함 여부를 확인해 주세요.";
+        const critical = items.filter(a => a.risk === "critical");
+        const watch = items.filter(a => a.risk === "watch");
+        const positive = items.filter(a => a.sentiment === "positive");
+        const sources = new Set(items.map(a => a.source).filter(Boolean)).size;
+        const top = [...items].sort(prioritySort)[0];
+        const categories = countBy(items, "category");
+        const topCategory = Object.entries(categories).sort((a,b) => b[1]-a[1])[0];
+        const categoryLabel = settings.queries.find(q => q.id === topCategory?.[0])?.label || "주요 이슈";
+        const lines = [
+          `• 최근 ${settings.lookback}시간 기준 ${sources}개 매체의 관련 보도 ${items.length}건을 CEO 보고 대상으로 선별했습니다.`,
+          `• 최우선 검토 보도는 「${top.title}」이며, ${RISK_LABELS[top.risk]} 단계로 분류했습니다.`,
+          `• 보도 비중은 ${categoryLabel} 분야가 ${topCategory?.[1] || 0}건으로 가장 높고, 긴급 ${critical.length}건·주의 ${watch.length}건·긍정 ${positive.length}건입니다.`
+        ];
+        if (critical.length) lines.push("• 제언: 긴급 보도의 사실관계와 확산 추이를 우선 확인하고, 필요 시 주관 부서 메시지를 조기에 정렬할 필요가 있습니다.");
+        else if (watch.length) lines.push("• 제언: 주의 보도의 추가 확산 여부를 모니터링하고 문의 대응용 핵심 사실을 사전 점검하는 것이 좋습니다.");
+        else lines.push("• 제언: 즉시 대응이 필요한 위험 신호는 낮으며, 주요 성과 보도의 후속 확산 기회를 검토할 수 있습니다.");
+        return lines.join("\n");
+      }
+
+      function setRuleSummary(force = false) {
+        if (!force && state.summary && state.summaryMode !== "rule") return;
+        state.summary = generateSummary();
+        state.summaryEdited = false;
+        state.summaryMode = "rule";
+        state.summaryModel = "";
+        state.summaryGeneratedAt = "";
+        state.summaryInputSignature = "";
+        state.summarySelectedCount = state.articles.filter(article => article.included).length;
+        state.summaryEvidenceIds = [];
+        state.summaryEvidenceMap = [];
+        state.summaryCoverage = null;
+        state.summaryError = "";
+        state.aiAnalysis = null;
+      }
+
+      function refreshRuleSummaryIfNeeded() {
+        if (state.summaryMode === "rule") setRuleSummary(true);
+      }
+
+      async function checkAiServer() {
+        aiServerState = { ...aiServerState, checking: true, error: "" };
+        renderAiSummaryStatus();
+        try {
+          const response = await fetchWithTimeout(`${AI_API_BASE}/health`, { headers: { Accept: "application/json" } }, 7000);
+          const data = await response.json();
+          if (!response.ok || !data.ok) throw new Error(data.error || `AI 도우미 응답 ${response.status}`);
+          aiServerState = { checking: false, online: true, models: data.models || [], defaultModel: data.defaultModel || "", error: "" };
+          populateAiModelOptions();
+        } catch (error) {
+          aiServerState = { checking: false, online: false, models: [], defaultModel: "", error: friendlyError(error) };
+        }
+        renderAiSummaryStatus();
+      }
+
+      function populateAiModelOptions() {
+        const names = aiServerState.models.map(model => model.name).filter(Boolean);
+        const fallbackNames = ["gemma4:26b", "gemma4:e4b", "gemma4:e2b"];
+        const options = names.length ? names : fallbackNames;
+        if (!options.includes(settings.aiModel)) settings.aiModel = aiServerState.defaultModel || options[0];
+        els.aiModelSelect.innerHTML = options.map(name => `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("");
+        els.aiModelSelect.value = settings.aiModel;
+      }
+
+      function renderAiSummaryStatus() {
+        if (!els.aiSummaryStatus) return;
+        const selected = state.articles.filter(article => article.included);
+        const currentSignature = getSummaryInputSignature();
+        const modelChanged = !!state.summaryModel && state.summaryModel !== settings.aiModel;
+        const stale = ["ai", "ai-edited"].includes(state.summaryMode) && !!state.summaryInputSignature && (state.summaryInputSignature !== currentSignature || modelChanged);
+        const coverage = state.summaryCoverage;
+
+        els.aiModelSelect.value = [...els.aiModelSelect.options].some(option => option.value === settings.aiModel) ? settings.aiModel : els.aiModelSelect.value;
+        els.aiModelSelect.disabled = isAnalyzingSummary || !aiServerState.online;
+        if (coverage && ["ai", "ai-edited"].includes(state.summaryMode)) {
+          const analyzed = coverage.selected ?? state.summarySelectedCount ?? 0;
+          const rssCount = coverage.rssOnlyCount ?? coverage.summaryCount ?? 0;
+          const extra = [
+            coverage.metaOnlyCount ? `메타 ${coverage.metaOnlyCount}건` : "",
+            coverage.noteOnlyCount ? `메모 ${coverage.noteOnlyCount}건` : "",
+            coverage.titleOnlyCount ? `제목 ${coverage.titleOnlyCount}건` : "",
+            coverage.failedCount ? `실패 ${coverage.failedCount}건` : ""
+          ].filter(Boolean).join(" · ");
+          els.aiCoverageState.textContent = `분석 ${analyzed}/선정 ${selected.length}건 · 본문 ${coverage.bodyCount || 0}건 · RSS ${rssCount}건${extra ? ` · ${extra}` : ""}`;
+        } else {
+          els.aiCoverageState.textContent = `선정 ${selected.length}건`;
+        }
+
+        els.aiConnectionState.classList.remove("online", "offline");
+        if (aiServerState.checking) {
+          els.aiConnectionState.textContent = "AI 도우미 확인 중";
+        } else if (aiServerState.online && AI_SESSION_TOKEN) {
+          els.aiConnectionState.classList.add("online");
+          els.aiConnectionState.textContent = "Ollama 로컬 연결";
+        } else {
+          els.aiConnectionState.classList.add("offline");
+          els.aiConnectionState.textContent = aiServerState.online ? "실행 인증 필요" : "AI 도우미 오프라인";
+        }
+
+        els.aiSummaryStatus.className = "ai-summary-status no-print";
+        if (isAnalyzingSummary) {
+          els.aiSummaryStatus.classList.add("busy");
+          els.aiSummaryStatus.textContent = `${settings.aiModel}이 선정 기사 ${Math.min(selected.length, 20)}건의 본문을 수집하고 경영메시지를 분석 중입니다. 첫 실행은 수 분이 걸릴 수 있습니다.`;
+        } else if (state.summaryError) {
+          els.aiSummaryStatus.classList.add("error");
+          els.aiSummaryStatus.textContent = state.summaryError;
+        } else if (stale) {
+          els.aiSummaryStatus.classList.add("stale");
+          els.aiSummaryStatus.textContent = "선정 기사·메모 또는 분석 모델이 변경되었습니다. 기존 메시지는 유지되며, 최신 근거로 다시 생성하는 것이 좋습니다.";
+        } else if (["ai", "ai-edited"].includes(state.summaryMode) && state.summaryGeneratedAt) {
+          els.aiSummaryStatus.classList.add("ready");
+          const edited = state.summaryMode === "ai-edited" ? " · 담당자 수정본" : "";
+          const confidence = state.aiAnalysis?.confidence ? ` · 신뢰도 ${state.aiAnalysis.confidence}` : "";
+          els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel} · 선정 ${state.summarySelectedCount}건${confidence}${edited}`;
+        } else if (!selected.length) {
+          els.aiSummaryStatus.textContent = "먼저 브리핑에 사용할 기사를 선택해 주세요.";
+        } else if (!aiServerState.online || !AI_SESSION_TOKEN) {
+          els.aiSummaryStatus.textContent = "start_kesco_briefing.command를 실행해 이 화면을 다시 열면 로컬 Gemma 4 분석을 사용할 수 있습니다.";
+        } else {
+          els.aiSummaryStatus.textContent = `선정 기사 ${selected.length}건이 준비됐습니다. Gemma 4 경영메시지 생성을 실행하세요.`;
+        }
+
+        els.generateAiSummaryBtn.disabled = isAnalyzingSummary || !selected.length || !aiServerState.online || !AI_SESSION_TOKEN;
+        els.ruleSummaryBtn.disabled = isAnalyzingSummary;
+        els.generateAiSummaryBtn.innerHTML = isAnalyzingSummary ? '<span class="spinner"></span><span>Gemma 4 분석 중</span>' : "Gemma 4 경영메시지 생성";
+        els.generateAiSummaryBtn.title = !AI_SESSION_TOKEN ? "원클릭 실행 파일로 화면을 열어 주세요." : !selected.length ? "브리핑 기사를 먼저 선택해 주세요." : "선정 기사 본문과 RSS 요약을 분석합니다.";
+      }
+
+      async function generateAiManagementSummary() {
+        const selectedAll = state.articles.filter(article => article.included).sort(relevanceSort);
+        if (!selectedAll.length) { showToast("브리핑에 사용할 기사를 먼저 선택해 주세요.", "error"); return; }
+        if (!aiServerState.online || !AI_SESSION_TOKEN) { state.summaryError = "AI 도우미가 연결되지 않았습니다. 원클릭 실행 파일로 다시 열어 주세요."; renderSummary(); return; }
+
+        const selected = selectedAll.slice(0, 20);
+        const requestId = ++aiRequestSerial;
+        aiAbortController?.abort();
+        aiAbortController = new AbortController();
+        const requestDate = state.date;
+        const inputSignature = getSummaryInputSignature();
+        const originalSummary = state.summary;
+        state.summaryError = "";
+        isAnalyzingSummary = true;
+        renderSummary();
+        if (selectedAll.length > 20) showToast("관련도순 상위 20건을 AI 분석에 사용합니다.");
+
+        try {
+          const articles = selected.map((article, index) => {
+            const relevance = getRelevance(article);
+            return {
+              id: `A${String(index + 1).padStart(2, "0")}`,
+              title: article.title,
+              source: article.source,
+              url: article.url,
+              pubDate: article.pubDate,
+              description: article.description || "",
+              note: article.note || "",
+              relevance: relevance.rank < 99 ? `${relevance.rank}순위 · ${relevance.reasons.join(" · ")}` : "지정 기준 외",
+              risk: RISK_LABELS[article.risk] || article.risk,
+              starred: !!article.starred
+            };
+          });
+          const response = await fetchWithTimeout(`${AI_API_BASE}/analyze`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-KESCO-App": "kesco-media-briefing-v1",
+              "X-KESCO-Token": AI_SESSION_TOKEN
+            },
+            signal: aiAbortController.signal,
+            body: JSON.stringify({ model: settings.aiModel, date: state.date, preparedBy: state.preparedBy || "", articles })
+          }, 600_000);
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.ok) throw new Error(data.error || `AI 분석 응답 ${response.status}`);
+          if (requestId !== aiRequestSerial) return;
+          if (state.date !== requestDate || getSummaryInputSignature() !== inputSignature || state.summary !== originalSummary) {
+            throw new Error("분석 중 선정 기사·메모 또는 메시지가 변경되어 결과를 적용하지 않았습니다. 다시 실행해 주세요.");
+          }
+
+          state.aiAnalysis = data.analysis;
+          state.summaryEvidenceMap = Array.isArray(data.articles) ? data.articles.map(article => ({
+            id: article.id,
+            title: article.title,
+            source: article.source,
+            basis: article.basis,
+            error: article.error || ""
+          })) : [];
+          state.summary = formatAiAnalysis(data.analysis, state.summaryEvidenceMap);
+          state.summaryEdited = false;
+          state.summaryMode = "ai";
+          state.summaryModel = data.model || settings.aiModel;
+          state.summaryGeneratedAt = data.generatedAt || new Date().toISOString();
+          state.summaryInputSignature = inputSignature;
+          state.summarySelectedCount = selected.length;
+          state.summaryEvidenceIds = selected.map((_, index) => `A${String(index + 1).padStart(2, "0")}`);
+          state.summaryCoverage = data.stats || null;
+          state.summaryError = "";
+          saveDailyState();
+          showToast(`Gemma 4가 선정 기사 ${selected.length}건을 분석했습니다.`, "success");
+        } catch (error) {
+          if (requestId !== aiRequestSerial) return;
+          state.summaryError = friendlyError(error);
+          showToast(`AI 분석 실패: ${state.summaryError}`, "error");
+        } finally {
+          if (requestId === aiRequestSerial) {
+            isAnalyzingSummary = false;
+            aiAbortController = null;
+          }
+          renderAll();
+        }
+      }
+
+      function formatAiAnalysis(analysis, evidenceMap = []) {
+        const lines = [analysis.managementMessage || "핵심 경영메시지를 생성하지 못했습니다."];
+        if (analysis.situationSummary) lines.push("", "■ 핵심 상황", analysis.situationSummary);
+        if (analysis.keyIssues?.length) {
+          lines.push("", "■ 핵심 이슈");
+          analysis.keyIssues.forEach((issue, index) => {
+            const evidence = issue.articleIds?.length ? ` [근거 ${issue.articleIds.join(", ")}]` : "";
+            lines.push(`${index + 1}. ${issue.title} (${issue.urgency})${evidence}`, `   ${issue.summary}`, `   경영 영향: ${issue.managementImpact}`);
+          });
+        }
+        if (analysis.decisionPoints?.length) {
+          lines.push("", "■ 경영 판단 포인트");
+          analysis.decisionPoints.forEach(point => lines.push(`• ${point}`));
+        }
+        if (analysis.actionItems?.length) {
+          lines.push("", "■ 확인·지시 필요사항");
+          analysis.actionItems.forEach(item => {
+            const evidence = item.articleIds?.length ? ` [근거 ${item.articleIds.join(", ")}]` : "";
+            lines.push(`• [${item.priority}] ${item.action}${evidence}`);
+          });
+        }
+        if (analysis.riskOutlook) lines.push("", "■ 위험 전망", analysis.riskOutlook);
+        if (analysis.limitations?.length) lines.push("", `※ 분석 한계: ${analysis.limitations.join(" · ")}`);
+        if (evidenceMap.length) {
+          lines.push("", "■ 근거 기사");
+          evidenceMap.forEach(article => lines.push(`${article.id}. ${article.title} (${article.source || "출처 미상"} · ${article.basis || "근거 미상"})`));
+        }
+        return lines.join("\n");
+      }
+
+      function getSummaryInputSignature() {
+        const selected = state.articles.filter(article => article.included).sort(relevanceSort).slice(0, 20).map(article => ({
+          article,
+          stableKey: canonicalArticleUrl(article.url) || normalizedArticleTitle(article.title) || String(article.id || "")
+        })).sort((a, b) => a.stableKey.localeCompare(b.stableKey, "ko"));
+        const raw = JSON.stringify({
+          preparedBy: state.preparedBy || "",
+          articles: selected.map(({ article, stableKey }) => [stableKey, article.title, article.source, article.url, article.pubDate, article.description || "", article.note || "", article.risk, !!article.starred])
+        });
+        let hash = 2166136261;
+        for (let index = 0; index < raw.length; index += 1) {
+          hash ^= raw.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return `v2-${(hash >>> 0).toString(16)}-${selected.length}`;
+      }
+
+      function renderTopIssues() {
+        const top = state.articles.filter(a => a.included).sort(prioritySort).slice(0, 3);
+        els.topIssues.innerHTML = [0,1,2].map((_, i) => {
+          const a = top[i];
+          if (!a) return `<div class="issue-card empty"><div>ISSUE ${String(i+1).padStart(2,"0")}</div><strong>선별된 기사가 없습니다</strong></div>`;
+          const reason = a.starred ? "담당자가 중요 기사로 표시했습니다." : a.risk === "critical" ? "강한 위기 키워드가 감지됐습니다." : a.risk === "watch" ? "주의 키워드가 감지됐습니다." : "최신성과 분류 비중을 반영했습니다.";
+          return `<article class="issue-card">
+            <div class="issue-head"><span class="rank">ISSUE ${String(i+1).padStart(2,"0")}</span><span class="badge badge-${a.risk}">${RISK_LABELS[a.risk]}</span></div>
+            <h3>${escapeHtml(a.title)}</h3>
+            <div class="issue-meta">${escapeHtml(a.source || "출처 미상")} · ${formatRelative(a.pubDate)}</div>
+            <div class="issue-reason">${escapeHtml(reason)}</div>
+          </article>`;
+        }).join("");
+      }
+
+      function renderArticles() {
+        const selectedCount = state.articles.filter(article => article.included).length;
+        const selectedOnlyActive = filters.selection === "selected";
+        els.selectedOnlyCount.textContent = selectedCount;
+        els.selectedOnlyBtn.classList.toggle("active", selectedOnlyActive);
+        els.selectedOnlyBtn.setAttribute("aria-pressed", String(selectedOnlyActive));
+        els.selectedOnlyBtn.title = selectedOnlyActive ? "전체 기사 보기" : `선택한 기사 ${selectedCount}건만 보기`;
+        let items = state.articles.filter(a => {
+          const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")}`.toLowerCase();
+          const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
+          return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && (filters.risk === "all" || a.risk === filters.risk) && selectionMatch;
+        });
+        if (filters.sort === "relevance") items.sort(relevanceSort);
+        else if (filters.sort === "newest") items.sort((a,b) => dateValue(b.pubDate)-dateValue(a.pubDate));
+        else if (filters.sort === "source") items.sort((a,b) => (a.source || "").localeCompare(b.source || "", "ko"));
+        else items.sort(prioritySort);
+        els.visibleCount.textContent = `${items.length}건 표시`;
+
+        if (!state.articles.length) {
+          els.articleList.innerHTML = `<div class="empty-state">
+            <div class="empty-icon">${ICONS.search}</div><h3>아직 수집된 기사가 없습니다</h3>
+            <p>‘오늘 기사 검색’을 누르면 설정된 키워드로 최근 보도를 모읍니다. 자동 수집이 제한될 때는 기사 추가나 JSON·CSV 가져오기를 이용하세요.</p>
+            <div class="empty-actions"><button class="btn btn-primary" data-action="search">오늘 기사 검색</button><button class="btn" data-action="sample">샘플 화면 보기</button></div>
+          </div>`;
+          return;
+        }
+        if (!items.length) {
+          els.articleList.innerHTML = `<div class="empty-state"><h3>조건에 맞는 기사가 없습니다</h3><p>검색어나 필터를 초기화해 보세요.</p><div class="empty-actions"><button class="btn" data-action="clear-filters">필터 초기화</button></div></div>`;
+          return;
+        }
+
+        els.articleList.innerHTML = items.map(a => {
+          const category = settings.queries.find(q => q.id === a.category)?.label || "기타";
+          const relevance = getRelevance(a);
+          const href = safeUrl(a.url);
+          const titleEl = href ? `<a class="article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>` : `<span class="article-title">${escapeHtml(a.title)}</span>`;
+          const relevanceBadge = relevance.rank < 99 ? `관련 ${relevance.rank}순위` : "관련 기준 외";
+          const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.risk}">${RISK_LABELS[a.risk]}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
+          if (isYonhapArticle(a)) badges.unshift('<span class="badge badge-yonhap">연합뉴스 우선</span>');
+          if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
+          if (a.manual) badges.push('<span class="badge badge-manual">직접 추가</span>');
+          if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
+          return `<article class="article-card ${a.included ? "included" : ""}" data-id="${escapeAttr(a.id)}">
+            <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""}>
+            <div class="article-main">
+              <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
+              ${titleEl}
+              <div class="article-meta"><strong>${escapeHtml(a.source || "출처 미상")}</strong><span>${formatDateTime(a.pubDate)}</span><span>${escapeHtml(relevance.reasons.join(" · "))}</span><span>${escapeHtml((a.matchedKeywords || []).slice(0,4).join(" · ") || "키워드 자동 분류")}</span></div>
+              ${a.description ? `<p class="article-desc">${escapeHtml(a.description)}</p>` : ""}
+              <input class="article-note" data-action="note" value="${escapeAttr(a.note || "")}" aria-label="기사 메모" placeholder="보고 메모 추가 (인쇄에는 포함되지 않음)">
+            </div>
+            <div class="article-actions">
+              <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사">${ICONS.star}</button>
+              <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제">${ICONS.trash}</button>
+            </div>
+          </article>`;
+        }).join("");
+      }
+
+      function renderSidePanel() {
+        els.footerTimestamp.textContent = state.lastRunStatus === "error" && state.lastAttemptAt
+          ? `${formatDateTime(state.lastAttemptAt)} 수집 시도 실패`
+          : state.fetchedAt ? `${formatDateTime(state.fetchedAt)} 수집` : "수집 전";
+        const providerLabel = state.provider || "연합뉴스 RSS 우선 · Google 뉴스 보완";
+        els.sourceStateBox.classList.remove("error", "warning");
+        if (isSearching) {
+          els.sourceStateTitle.textContent = "기사 검색 중";
+          els.sourceStateDetail.textContent = "검색식별 수집·중복 제거 중";
+        } else if (state.lastRunStatus === "error") {
+          els.sourceStateBox.classList.add("error");
+          els.sourceStateTitle.textContent = "수집 실패 · 다시 시도 가능";
+          els.sourceStateDetail.textContent = state.errors[0] ? shortText(state.errors[0], 92) : "데이터 서버 연결을 확인해 주세요.";
+        } else if (state.fetchedAt) {
+          if (state.warnings?.length) els.sourceStateBox.classList.add("warning");
+          els.sourceStateTitle.textContent = `${formatTime(state.fetchedAt)} 수집 완료`;
+          els.sourceStateDetail.textContent = `${providerLabel} · 원본 ${state.rawCollectedCount || state.articles.length}건 → 중복 ${state.duplicatesRemoved || 0}건 제거 → 최종 ${state.articles.length}건`;
+        } else {
+          els.sourceStateTitle.textContent = "검색 대기";
+          els.sourceStateDetail.textContent = providerLabel;
+        }
+        const diagnostics = state.errors?.length ? state.errors : (state.warnings || []);
+        els.collectionErrors.hidden = !diagnostics.length;
+        els.collectionErrors.open = !!state.errors?.length;
+        els.collectionErrorsSummary.textContent = state.errors?.length ? `수집 오류 ${state.errors.length}건` : `일부 검색 알림 ${diagnostics.length}건`;
+        els.collectionErrorsList.innerHTML = diagnostics.map(message => `<li>${escapeHtml(message)}</li>`).join("");
+        els.keywordCloud.innerHTML = settings.coreKeywords.concat(settings.riskKeywords.slice(0,5)).map(k => `<span class="keyword-chip">${escapeHtml(k)}</span>`).join("");
+      }
+
+      async function runSearch(auto = false) {
+        if (isSearching) return;
+        if (state.date !== localDateKey() && auto) return;
+        const enabled = settings.queries.filter(q => q.enabled && q.query.trim());
+        if (!enabled.length && !settings.enableYonhap) { showToast("활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요.", "error"); return; }
+        isSearching = true;
+        state.demo = false;
+        setSearchButton(true);
+        setStatus("busy", `연합뉴스 우선 · ${enabled.length}개 검색식으로 기사를 찾는 중…`);
+        renderSidePanel();
+
+        try {
+          const tasks = [
+            ...(settings.enableYonhap ? [{ label: "연합뉴스", category: "auto", fetcher: fetchYonhapRss }] : []),
+            ...enabled.map(query => ({ label: query.label, category: query.id, fetcher: () => fetchQuery(query) }))
+          ];
+          const results = await Promise.allSettled(tasks.map(task => task.fetcher()));
+          const collected = [];
+          const providers = new Set();
+          const failures = [];
+          const warnings = [];
+          results.forEach((result, index) => {
+            const task = tasks[index];
+            if (result.status === "fulfilled") {
+              result.value.items.forEach(item => collected.push({ ...item, category: task.category === "auto" ? inferCategory(item) : task.category }));
+              if (result.value.provider) providers.add(result.value.provider);
+              if (result.value.warning) warnings.push(`${task.label}: ${result.value.warning}`);
+            } else {
+              failures.push(`${task.label}: ${friendlyError(result.reason)}`);
+            }
+          });
+
+          let networkSucceeded = providers.size > 0;
+          if (!collected.length && failures.length) {
+            try {
+              const gdeltItems = await fetchGdeltCombined();
+              gdeltItems.forEach(item => collected.push({ ...item, category: inferCategory(item) }));
+              providers.add("GDELT");
+              networkSucceeded = true;
+              warnings.push(...failures.map(message => `RSS 보조 전환: ${message}`));
+              failures.length = 0;
+            } catch (gdeltError) {
+              failures.push(`GDELT 보조: ${friendlyError(gdeltError)}`);
+            }
+          }
+
+          const eligible = collected
+            .filter(a => !shouldExclude(a))
+            .filter(a => withinLookback(a.pubDate, settings.lookback));
+          const firstPass = deduplicateDetailed(eligible);
+          const oldArticles = state.articles.filter(a => !a.isDemo);
+          const fresh = firstPass.items
+            .map(raw => {
+              const classified = classifyArticle(raw);
+              const old = oldArticles.find(article => sameArticle(article, classified));
+              return { ...classified, included: old?.included ?? false, starred: old?.starred ?? false, note: old?.note || "" };
+            })
+            .sort(relevanceSort)
+            .slice(0, Number(settings.collectionLimit || 200));
+
+          state.lastAttemptAt = new Date().toISOString();
+          if (networkSucceeded) {
+            const manual = state.articles.filter(a => a.manual && !a.isDemo);
+            const finalPass = deduplicateDetailed([...manual, ...fresh]);
+            state.articles = finalPass.items.sort(relevanceSort);
+            state.demo = false;
+            state.fetchedAt = state.lastAttemptAt;
+            state.lastRunStatus = "success";
+            state.provider = [...providers].join(" + ");
+            state.rawCollectedCount = collected.length;
+            state.duplicatesRemoved = firstPass.removed + finalPass.removed;
+            state.errors = [];
+            state.warnings = [...warnings, ...failures.map(message => `일부 검색 실패: ${message}`)];
+            localStorage.setItem(LAST_AUTO_KEY, localDateKey());
+            state.summaryError = "";
+            refreshRuleSummaryIfNeeded();
+
+            if (fresh.length) {
+              setStatus("live", `${fresh.length}건 정리 · 중복 ${state.duplicatesRemoved}건 제거`);
+              showToast(`${fresh.length}건을 정리하고 중복 ${state.duplicatesRemoved}건을 제거했습니다.${state.warnings.length ? ` 일부 검색 ${state.warnings.length}건은 보조 처리했습니다.` : ""}`, state.warnings.length ? "" : "success");
+            } else {
+              setStatus("idle", "검색 기간 내 관련 기사가 없습니다");
+              showToast("수집 연결은 정상이지만 검색 기간 내 관련 기사가 없습니다.");
+            }
+          } else {
+            state.lastRunStatus = "error";
+            state.provider = "수집 실패";
+            state.errors = failures.length ? failures : ["데이터 제공 경로에서 응답을 받지 못했습니다."];
+            state.warnings = warnings;
+            localStorage.removeItem(LAST_AUTO_KEY);
+            setStatus("error", "기사 수집 실패 · 오류 상세를 확인하세요");
+            showToast(`수집 실패: ${shortText(state.errors[0], 120)}`, "error");
+          }
+          saveDailyState();
+        } catch (error) {
+          state.lastAttemptAt = new Date().toISOString();
+          state.lastRunStatus = "error";
+          state.errors = [friendlyError(error)];
+          localStorage.removeItem(LAST_AUTO_KEY);
+          saveDailyState();
+          setStatus("error", "기사 검색을 완료하지 못했습니다");
+          showToast(friendlyError(error), "error");
+        } finally {
+          isSearching = false;
+          setSearchButton(false);
+          renderAll();
+        }
+      }
+
+      async function fetchQuery(queryDef) {
+        if (settings.endpoint.trim()) {
+          try { return { items: await fetchCustomEndpoint(queryDef), provider: "기관용 뉴스 API" }; }
+          catch (endpointError) {
+            try {
+              return { items: await fetchGoogleRss(queryDef), provider: "Google 뉴스 RSS", warning: `기관 API 연결 실패(${friendlyError(endpointError)})로 공개 RSS를 사용했습니다.` };
+            } catch (rssError) {
+              throw new Error(`기관 API: ${friendlyError(endpointError)} / RSS: ${friendlyError(rssError)}`);
+            }
+          }
+        }
+        return { items: await fetchGoogleRss(queryDef), provider: "Google 뉴스 RSS" };
+      }
+
+      async function fetchGoogleRss(queryDef) {
+        const days = Math.max(1, Math.ceil(Number(settings.lookback) / 24));
+        const feedUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(`${queryDef.query} when:${days}d`)}&hl=ko&gl=KR&ceid=KR:ko`;
+        const proxy = settings.proxy.trim();
+        if (!proxy) throw new Error("RSS 프록시 주소가 비어 있습니다.");
+        const url = proxy.includes("{url}") ? proxy.replace("{url}", encodeURIComponent(feedUrl)) : proxy + encodeURIComponent(feedUrl);
+        const response = await fetchWithTimeout(url, { headers: { Accept: "application/rss+xml, application/xml, text/xml, */*" } }, 16000);
+        if (!response.ok) throw new Error(`프록시 응답 ${response.status}`);
+        const text = await response.text();
+        return parseRssItems(text, "Google 뉴스 RSS").slice(0, Number(settings.maxRecords)).map(item => {
+          const source = item.source;
+          let title = item.title;
+          if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim();
+          return { ...item, title, source: source || inferSourceFromTitle(title) };
+        });
+      }
+
+      async function fetchYonhapRss() {
+        const feedUrl = "https://www.yna.co.kr/rss/news.xml";
+        const proxy = settings.proxy.trim();
+        if (!proxy) throw new Error("RSS 프록시 주소가 비어 있습니다.");
+        const url = proxy.includes("{url}") ? proxy.replace("{url}", encodeURIComponent(feedUrl)) : proxy + encodeURIComponent(feedUrl);
+        const response = await fetchWithTimeout(url, { headers: { Accept: "application/rss+xml, application/xml, text/xml, */*" } }, 16000);
+        if (!response.ok) throw new Error(`연합뉴스 RSS 프록시 응답 ${response.status}`);
+        const text = await response.text();
+        const items = parseRssItems(text, "연합뉴스 RSS", "연합뉴스")
+          .filter(item => withinLookback(item.pubDate, settings.lookback))
+          .filter(item => getRelevance(item).rank < 99)
+          .slice(0, Number(settings.collectionLimit || 200));
+        return { items, provider: "연합뉴스 RSS" };
+      }
+
+      function parseRssItems(text, provider, defaultSource = "") {
+        const xml = new DOMParser().parseFromString(text, "text/xml");
+        if (xml.querySelector("parsererror")) throw new Error("RSS 형식을 읽을 수 없습니다.");
+        return [...xml.querySelectorAll("item")].map(item => {
+          const source = cleanText(item.querySelector("source")?.textContent || "");
+          const dateNode = item.querySelector("pubDate") || item.getElementsByTagName("dc:date")[0];
+          return {
+            id: uid(), title: cleanText(item.querySelector("title")?.textContent || "제목 없음"), source: source || defaultSource,
+            url: cleanText(item.querySelector("link")?.textContent || ""),
+            pubDate: parseDate(dateNode?.textContent),
+            description: cleanText(item.querySelector("description")?.textContent || ""),
+            provider
+          };
+        });
+      }
+
+      async function fetchGdeltCombined() {
+        const terms = settings.coreKeywords.filter(Boolean).map(term => `"${term.replaceAll('"', "")}"`).join(" OR ");
+        const query = `(${terms}) sourcelang:korean`;
+        const limit = Math.min(100, Math.max(20, Number(settings.maxRecords) * 3));
+        const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=${limit}&format=json&timespan=${Number(settings.lookback)}h&sort=datedesc`;
+        const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 18000);
+        const text = await response.text();
+        if (!response.ok) {
+          const detail = shortText(cleanText(text), 140);
+          throw new Error(response.status === 429 ? `GDELT 속도 제한(429): ${detail || "잠시 후 다시 시도해 주세요."}` : `GDELT 응답 ${response.status}: ${detail}`);
+        }
+        let data;
+        try { data = JSON.parse(text); }
+        catch { throw new Error(`GDELT 응답 형식 오류: ${shortText(cleanText(text), 140)}`); }
+        return (data.articles || []).map(item => ({
+          id: uid(), title: cleanText(item.title || "제목 없음"), source: cleanText(item.domain || "출처 미상"),
+          url: item.url || "", pubDate: parseGdeltDate(item.seendate), description: cleanText(item.socialimage ? "" : (item.snippet || "")), provider: "GDELT"
+        }));
+      }
+
+      function inferCategory(article) {
+        const text = `${article.title || ""} ${article.description || ""}`.toLowerCase();
+        const rules = [
+          ["safety", ["화재", "감전", "사고", "안전점검", "누전", "정전", "재해"]],
+          ["management", ["사장", "감사", "국정감사", "경영평가", "인사", "채용", "노조", "비위"]],
+          ["policy", ["산업통상", "전기안전관리법", "정책", "규제", "법안", "국회"]],
+          ["industry", ["태양광", "ess", "전기차", "배터리", "신재생", "충전시설"]],
+          ["community", ["협약", "봉사", "지원", "캠페인", "지역", "상생"]]
+        ];
+        return rules.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)))?.[0] || "direct";
+      }
+
+      async function fetchCustomEndpoint(queryDef) {
+        const endpoint = settings.endpoint.trim()
+          .replaceAll("{query}", encodeURIComponent(queryDef.query))
+          .replaceAll("{hours}", encodeURIComponent(settings.lookback))
+          .replaceAll("{limit}", encodeURIComponent(settings.maxRecords));
+        const response = await fetchWithTimeout(endpoint, { headers: { Accept: "application/json" } }, 16000);
+        if (!response.ok) throw new Error(`기관 API 응답 ${response.status}`);
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.items || data.articles || []);
+        return items.slice(0, Number(settings.maxRecords)).map(item => ({
+          id: uid(),
+          title: cleanText(item.title || item.headline || "제목 없음"),
+          source: cleanText(item.source?.name || item.source || item.publisher || item.domain || "출처 미상"),
+          url: item.originallink || item.url || item.link || "",
+          pubDate: parseDate(item.pubDate || item.publishedAt || item.seendate || item.date),
+          description: cleanText(item.description || item.summary || item.snippet || ""),
+          provider: "기관용 뉴스 API"
+        }));
+      }
+
+      function classifyArticle(raw) {
+        const text = `${raw.title} ${raw.description || ""}`.toLowerCase();
+        const title = raw.title.toLowerCase();
+        let score = 0;
+        const matched = [];
+        const heavy = { "사망": 6, "중대재해": 6, "압수수색": 6, "고발": 5, "해킹": 5, "감전": 4, "화재": 4, "사고": 3, "논란": 3, "위반": 3, "부실": 3, "정전": 3, "피해": 3, "국정감사": 2, "감사": 2, "징계": 4 };
+        settings.riskKeywords.forEach(k => {
+          const key = k.trim(); if (!key || !text.includes(key.toLowerCase())) return;
+          matched.push(key); score += heavy[key] || 2; if (title.includes(key.toLowerCase())) score += 1;
+        });
+        const positives = settings.positiveKeywords.filter(k => k.trim() && text.includes(k.trim().toLowerCase()));
+        positives.forEach(k => { if (!matched.includes(k)) matched.push(k); });
+        const risk = score >= 6 ? "critical" : score >= 3 ? "watch" : "routine";
+        const sentiment = score >= 3 ? "negative" : positives.length ? "positive" : "neutral";
+        return { ...raw, id: raw.id || uid(), pubDate: raw.pubDate || new Date().toISOString(), description: cleanText(raw.description || ""), matchedKeywords: matched.slice(0,8), risk, riskScore: score, sentiment, included: raw.included ?? !!raw.manual, starred: !!raw.starred, note: raw.note || "", manual: !!raw.manual, isDemo: !!raw.isDemo };
+      }
+
+      function shouldExclude(article) {
+        const text = `${article.title} ${article.description || ""}`.toLowerCase();
+        return settings.excludeKeywords.some(k => k.trim() && text.includes(k.trim().toLowerCase()));
+      }
+
+      function deduplicate(items) {
+        return deduplicateDetailed(items).items;
+      }
+
+      function deduplicateDetailed(items) {
+        const unique = [];
+        let removed = 0;
+        items.forEach(item => {
+          const classified = item.risk ? item : classifyArticle(item);
+          const index = unique.findIndex(existing => sameArticle(existing, classified));
+          if (index < 0) unique.push(classified);
+          else {
+            unique[index] = mergeDuplicateArticles(unique[index], classified);
+            removed += 1;
+          }
+        });
+        return { items: unique, removed };
+      }
+
+      function sameArticle(a, b) {
+        const leftUrl = canonicalArticleUrl(a.url);
+        const rightUrl = canonicalArticleUrl(b.url);
+        if (leftUrl && rightUrl && leftUrl === rightUrl) return true;
+        const leftTitle = normalizedArticleTitle(a.title);
+        const rightTitle = normalizedArticleTitle(b.title);
+        if (!leftTitle || !rightTitle) return false;
+        if (leftTitle === rightTitle) return true;
+        if (Math.min(leftTitle.length, rightTitle.length) < 16) return false;
+        const leftDate = dateValue(a.pubDate);
+        const rightDate = dateValue(b.pubDate);
+        if (leftDate && rightDate && Math.abs(leftDate - rightDate) > 72 * 3600000) return false;
+        return bigramSimilarity(leftTitle, rightTitle) >= 0.9;
+      }
+
+      function mergeDuplicateArticles(left, right) {
+        const preference = articlePreference(right) > articlePreference(left) ? right : left;
+        const other = preference === left ? right : left;
+        const longerDescription = (left.description || "").length >= (right.description || "").length ? left.description : right.description;
+        return {
+          ...other,
+          ...preference,
+          description: longerDescription || preference.description || "",
+          included: !!(left.included || right.included),
+          starred: !!(left.starred || right.starred),
+          note: left.note || right.note || "",
+          matchedKeywords: [...new Set([...(left.matchedKeywords || []), ...(right.matchedKeywords || [])])].slice(0, 8),
+          duplicateSources: [...new Set([...(left.duplicateSources || []), ...(right.duplicateSources || []), left.source, right.source].filter(Boolean))]
+        };
+      }
+
+      function articlePreference(article) {
+        return (article.manual ? 1000 : 0) + (isYonhapArticle(article) ? 500 : 0) + Math.min((article.description || "").length, 300) + dateValue(article.pubDate) / 1e13;
+      }
+
+      function normalizedArticleTitle(value) {
+        return cleanText(value || "").normalize("NFKC").toLowerCase()
+          .replace(/^\s*[\[【(][^\]】)]{1,18}[\]】)]\s*/u, "")
+          .replace(/\s*[-–—]\s*[^-–—]{2,24}$/u, "")
+          .replace(/[^가-힣a-z0-9]/g, "")
+          .slice(0, 180);
+      }
+
+      function canonicalArticleUrl(value) {
+        const safe = safeUrl(value);
+        if (!safe) return "";
+        try {
+          const url = new URL(safe);
+          if (url.hostname.includes("news.google.com")) return "";
+          url.hash = "";
+          ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "source"].forEach(key => url.searchParams.delete(key));
+          return `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/$/, "")}${url.search}`.toLowerCase();
+        } catch { return ""; }
+      }
+
+      function bigramSimilarity(left, right) {
+        const grams = value => {
+          const result = new Map();
+          for (let index = 0; index < value.length - 1; index += 1) {
+            const gram = value.slice(index, index + 2);
+            result.set(gram, (result.get(gram) || 0) + 1);
+          }
+          return result;
+        };
+        const a = grams(left);
+        const b = grams(right);
+        let overlap = 0;
+        a.forEach((count, gram) => { overlap += Math.min(count, b.get(gram) || 0); });
+        return (2 * overlap) / Math.max(1, left.length + right.length - 2);
+      }
+
+      function isYonhapArticle(article) {
+        if ((article.source || "").trim() === "연합뉴스" || (article.provider || "").trim() === "연합뉴스") return true;
+        try {
+          const hostname = new URL(article.url || "").hostname.toLowerCase();
+          return hostname === "yna.co.kr" || hostname.endsWith(".yna.co.kr");
+        }
+        catch { return false; }
+      }
+
+      function articleKey(a) {
+        return normalizedArticleTitle(a.title) || canonicalArticleUrl(a.url) || a.id;
+      }
+
+      function withinLookback(date, hours) {
+        const value = dateValue(date);
+        if (!value) return true;
+        const targetDate = state.date === localDateKey() ? Date.now() : new Date(`${state.date}T23:59:59`).getTime();
+        return value <= targetDate + 3600000 && value >= targetDate - Number(hours) * 3600000;
+      }
+
+      function getRelevance(article) {
+        const normalize = value => cleanText(value || "").normalize("NFKC").toLowerCase().replace(/\s+/g, " ");
+        const title = normalize(article.title);
+        const fullText = `${title} ${normalize(article.description)}`;
+        const criteria = [
+          { rank: 1, reason: "① 공사 직접 거론", match: text => /한국전기안전공사|전기안전공사/u.test(text) },
+          { rank: 2, reason: "② 전기화재", match: text => /전기[\s·ㆍ-]*화재/u.test(text) },
+          { rank: 3, reason: "③ 감전사고", match: text => /감전[\s·ㆍ-]*사고/u.test(text) },
+          { rank: 4, reason: "④ 기후에너지환경부+에너지/전기", match: text => {
+            if (!text.includes("기후에너지환경부")) return false;
+            const context = text.replaceAll("기후에너지환경부", " ");
+            return /에너지|전기/u.test(context);
+          } },
+          { rank: 5, reason: "⑤ 재생에너지", match: text => /재생[\s·ㆍ-]*에너지/u.test(text) }
+        ];
+        const matches = criteria.filter(criterion => criterion.match(fullText));
+        if (!matches.length) return { rank: 99, score: 0, label: "낮음", titleMatch: false, matchCount: 0, reasons: ["지정 관련도 기준 미일치"] };
+        const primary = matches[0];
+        const titleMatch = primary.match(title);
+        const baseScore = { 1: 100, 2: 85, 3: 70, 4: 55, 5: 40 }[primary.rank];
+        const score = primary.rank === 1 ? 100 : Math.min(99, baseScore + (titleMatch ? 7 : 0) + Math.min(5, (matches.length - 1) * 2));
+        const label = primary.rank === 1 ? "매우 높음" : primary.rank <= 3 ? "높음" : primary.rank === 4 ? "보통" : "관심";
+        return { rank: primary.rank, score, label, titleMatch, matchCount: matches.length, reasons: matches.map(match => match.reason) };
+      }
+
+      function relevanceSort(a, b) {
+        const left = getRelevance(a);
+        const right = getRelevance(b);
+        const riskOrder = { critical: 3, watch: 2, routine: 1 };
+        return left.rank - right.rank
+          || Number(isYonhapArticle(b)) - Number(isYonhapArticle(a))
+          || Number(b.starred) - Number(a.starred)
+          || Number(right.titleMatch) - Number(left.titleMatch)
+          || right.matchCount - left.matchCount
+          || right.score - left.score
+          || (riskOrder[b.risk] || 0) - (riskOrder[a.risk] || 0)
+          || dateValue(b.pubDate) - dateValue(a.pubDate)
+          || (a.title || "").localeCompare(b.title || "", "ko")
+          || String(a.id || "").localeCompare(String(b.id || ""));
+      }
+
+      function prioritySort(a, b) {
+        const score = x => (x.starred ? 1000 : 0) + (x.risk === "critical" ? 300 : x.risk === "watch" ? 150 : 0) + Math.min((x.riskScore || 0) * 8, 80) + (x.sentiment === "positive" ? 8 : 0) + dateValue(x.pubDate) / 1e13;
+        return score(b) - score(a);
+      }
+
+      function handleArticleChange(e) {
+        const card = e.target.closest(".article-card"); if (!card) return;
+        const article = state.articles.find(a => a.id === card.dataset.id); if (!article) return;
+        if (e.target.dataset.action === "include") {
+          article.included = e.target.checked;
+          afterArticleMutation();
+          showToast(article.included ? "브리핑 기사로 선정했습니다." : "브리핑 선정을 해제했습니다.", article.included ? "success" : "");
+        }
+      }
+
+      function handleArticleInput(e) {
+        if (e.target.dataset.action !== "note") return;
+        const card = e.target.closest(".article-card");
+        const article = state.articles.find(a => a.id === card?.dataset.id);
+        if (article) {
+          article.note = e.target.value;
+          state.summaryError = "";
+          saveDailyState();
+          renderAiSummaryStatus();
+        }
+      }
+
+      function handleArticleClick(e) {
+        const action = e.target.closest("[data-action]")?.dataset.action;
+        if (action === "search") return runSearch(false);
+        if (action === "sample") return loadSample();
+        if (action === "clear-filters") {
+          filters = { text: "", category: "all", risk: "all", selection: "all", sort: "relevance" };
+          els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "relevance"; renderArticles(); return;
+        }
+        if (!action) return;
+        const card = e.target.closest(".article-card");
+        const article = state.articles.find(a => a.id === card?.dataset.id); if (!article) return;
+        if (action === "star") { article.starred = !article.starred; afterArticleMutation(); }
+        if (action === "delete") { state.articles = state.articles.filter(a => a.id !== article.id); afterArticleMutation(); showToast("기사를 브리핑에서 삭제했습니다."); }
+      }
+
+      function afterArticleMutation() {
+        state.summaryError = "";
+        refreshRuleSummaryIfNeeded();
+        persistAndRender();
+      }
+
+      function persistAndRender() { saveDailyState(); renderAll(); }
+
+      function openSettings() {
+        $("settingAutoRun").checked = settings.autoRun;
+        $("settingYonhap").checked = settings.enableYonhap !== false;
+        $("settingLookback").value = String(settings.lookback);
+        $("settingMaxRecords").value = String(settings.maxRecords);
+        $("settingCollectionLimit").value = String(settings.collectionLimit || 200);
+        $("settingProxy").value = settings.proxy;
+        $("settingEndpoint").value = settings.endpoint;
+        $("settingCoreKeywords").value = settings.coreKeywords.join(", ");
+        $("settingRiskKeywords").value = settings.riskKeywords.join(", ");
+        $("settingPositiveKeywords").value = settings.positiveKeywords.join(", ");
+        $("settingExcludeKeywords").value = settings.excludeKeywords.join(", ");
+        renderQuerySettings(settings.queries);
+        openOverlay("settingsOverlay");
+      }
+
+      function renderQuerySettings(queries) {
+        els.querySettings.innerHTML = queries.map(q => `<div class="query-row" data-query-id="${escapeAttr(q.id)}"><input type="checkbox" ${q.enabled ? "checked" : ""} aria-label="${escapeAttr(q.label)} 사용"><label>${escapeHtml(q.label)}</label><input type="text" value="${escapeAttr(q.query)}" aria-label="${escapeAttr(q.label)} 검색식"></div>`).join("");
+      }
+
+      function saveSettingsFromForm() {
+        settings = {
+          ...settings,
+          autoRun: $("settingAutoRun").checked,
+          enableYonhap: $("settingYonhap").checked,
+          lookback: Number($("settingLookback").value),
+          maxRecords: Number($("settingMaxRecords").value),
+          collectionLimit: Number($("settingCollectionLimit").value),
+          proxy: $("settingProxy").value.trim(),
+          endpoint: $("settingEndpoint").value.trim(),
+          coreKeywords: parseKeywordList($("settingCoreKeywords").value),
+          riskKeywords: parseKeywordList($("settingRiskKeywords").value),
+          positiveKeywords: parseKeywordList($("settingPositiveKeywords").value),
+          excludeKeywords: parseKeywordList($("settingExcludeKeywords").value),
+          queries: [...els.querySettings.querySelectorAll(".query-row")].map(row => ({
+            id: row.dataset.queryId,
+            label: settings.queries.find(q => q.id === row.dataset.queryId)?.label || row.dataset.queryId,
+            enabled: row.querySelector('input[type="checkbox"]').checked,
+            query: row.querySelector('input[type="text"]').value.trim()
+          }))
+        };
+        if (!settings.coreKeywords.length) { showToast("기관 핵심어를 한 개 이상 입력해 주세요.", "error"); return; }
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        populateStaticControls(); closeOverlay("settingsOverlay"); renderAll(); showToast("검색 설정을 저장했습니다.", "success");
+      }
+
+      function resetSettingsForm() {
+        settings = structuredClone(DEFAULT_SETTINGS);
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        openSettings();
+        showToast("기본 검색식으로 복원했습니다.");
+      }
+
+      function openArticleModal() {
+        $("articleForm").reset();
+        const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        $("manualDate").value = now.toISOString().slice(0,16);
+        openOverlay("articleOverlay");
+        window.setTimeout(() => $("manualTitle").focus(), 30);
+      }
+
+      function addManualArticle(e) {
+        e.preventDefault();
+        const raw = {
+          id: uid(), title: $("manualTitle").value.trim(), source: $("manualSource").value.trim(),
+          url: $("manualUrl").value.trim(), pubDate: parseDate($("manualDate").value), description: $("manualDescription").value.trim(),
+          category: $("manualCategory").value || "direct", manual: true
+        };
+        let article = classifyArticle(raw);
+        const forcedRisk = $("manualRisk").value;
+        if (forcedRisk !== "auto") { article.risk = forcedRisk; article.sentiment = forcedRisk === "routine" ? article.sentiment : "negative"; }
+        const result = deduplicateDetailed([article, ...state.articles.filter(item => !item.isDemo)]);
+        state.articles = result.items; state.demo = false;
+        state.duplicatesRemoved = (state.duplicatesRemoved || 0) + result.removed;
+        refreshRuleSummaryIfNeeded();
+        closeOverlay("articleOverlay"); persistAndRender();
+        showToast(result.removed ? "중복 기사를 기존 항목과 합쳤습니다." : "기사를 브리핑에 추가했습니다.", "success");
+      }
+
+      function changeReportDate() {
+        const next = els.reportDate.value; if (!next) return;
+        aiAbortController?.abort();
+        aiAbortController = null;
+        aiRequestSerial += 1;
+        isAnalyzingSummary = false;
+        saveDailyState(); state = loadDailyState(next); filters = { text: "", category: "all", risk: "all", selection: "all", sort: "relevance" };
+        els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "relevance"; renderAll();
+        setStatus(state.articles.length ? "live" : "idle", state.articles.length ? `${next} 저장본 ${state.articles.length}건` : `${next} 저장본이 없습니다`);
+      }
+
+      function loadSample() {
+        const base = new Date();
+        const samples = [
+          { title: "전기안전 취약시설 합동점검 확대…선제적 화재 예방", source: "샘플경제", description: "전통시장과 사회복지시설을 대상으로 계절별 안전점검과 예방 활동을 확대한다는 내용입니다.", category: "safety", hours: 2 },
+          { title: "지역 에너지 복지 향상 위한 기관 간 업무협약", source: "샘플일보", description: "지역사회 안전망 강화와 취약계층 지원을 위한 협력 체계를 구축했습니다.", category: "community", hours: 5 },
+          { title: "전기설비 안전관리 기준 개선 논의…현장 의견 수렴", source: "샘플뉴스", description: "제도 개선 과정에서 산업계와 현장의 의견을 반영하는 간담회가 열렸습니다.", category: "policy", hours: 9 },
+          { title: "배터리 설비 화재 사고 이후 안전점검 실효성 논란", source: "샘플방송", description: "사고 예방 점검 체계와 후속 대응을 두고 개선 필요성이 제기됐습니다.", category: "industry", hours: 12 }
+        ];
+        state.articles = samples.map((s, i) => classifyArticle({ id: `sample-${i}`, ...s, pubDate: new Date(base.getTime()-s.hours*3600000).toISOString(), url: "", isDemo: true, included: true }));
+        state.demo = true;
+        state.provider = "샘플 데이터";
+        state.fetchedAt = new Date().toISOString();
+        setRuleSummary(true);
+        persistAndRender();
+        setStatus("idle", "샘플 화면 · 실제 검색 전");
+      }
+
+      async function importFile(e) {
+        const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+        try {
+          const text = await file.text();
+          if (file.name.toLowerCase().endsWith(".json")) {
+            const data = JSON.parse(text);
+            const imported = Array.isArray(data) ? data : (data.articles || []);
+            if (!Array.isArray(imported)) throw new Error("기사 배열을 찾을 수 없습니다.");
+            state.articles = deduplicate([...state.articles.filter(a => !a.isDemo), ...imported.map(normalizeImportedArticle)]);
+            if (data.preparedBy) state.preparedBy = data.preparedBy;
+            if (data.summary) {
+              state.summary = data.summary;
+              state.summaryEdited = true;
+              state.summaryMode = "manual";
+              state.summaryModel = "";
+              state.summaryGeneratedAt = "";
+              state.summaryInputSignature = "";
+              state.summaryEvidenceIds = [];
+              state.summaryEvidenceMap = [];
+              state.summaryCoverage = null;
+              state.summaryError = "";
+              state.aiAnalysis = null;
+              if (["ai", "ai-edited"].includes(data.summaryMode) && data.aiAnalysis) {
+                state.summaryMode = data.summaryMode;
+                state.summaryEdited = data.summaryMode === "ai-edited";
+                state.summaryModel = data.summaryModel || "";
+                state.summaryGeneratedAt = data.summaryGeneratedAt || "";
+                state.summaryInputSignature = data.summaryInputSignature || "";
+                state.summarySelectedCount = Number(data.summarySelectedCount || 0);
+                state.summaryEvidenceIds = Array.isArray(data.summaryEvidenceIds) ? data.summaryEvidenceIds : [];
+                state.summaryEvidenceMap = Array.isArray(data.summaryEvidenceMap) ? data.summaryEvidenceMap : [];
+                state.summaryCoverage = data.summaryCoverage || null;
+                state.aiAnalysis = data.aiAnalysis;
+              }
+            }
+          } else {
+            const rows = parseCsv(text);
+            state.articles = deduplicate([...state.articles.filter(a => !a.isDemo), ...rows.map(normalizeImportedArticle)]);
+          }
+          state.demo = false;
+          refreshRuleSummaryIfNeeded();
+          persistAndRender(); showToast(`${state.articles.length}건을 브리핑에 반영했습니다.`, "success");
+        } catch (error) { showToast(`가져오기 실패: ${friendlyError(error)}`, "error"); }
+      }
+
+      function normalizeImportedArticle(item) {
+        const raw = {
+          id: item.id || uid(), title: item.title || item.제목 || "제목 없음", source: item.source || item.매체 || "출처 미상",
+          url: item.url || item.링크 || "", pubDate: parseDate(item.pubDate || item.date || item.보도일시), description: item.description || item.summary || item.요약 || "",
+          category: item.category || item.분류 || "direct", manual: true, note: item.note || item.메모 || ""
+        };
+        const article = classifyArticle(raw);
+        if (item.risk && RISK_LABELS[item.risk]) article.risk = item.risk;
+        const selectedValue = item.included ?? item.브리핑선정 ?? item.포함;
+        const starredValue = item.starred ?? item.중요;
+        article.included = selectedValue === undefined ? true : ![false, "N", "n", "false", "0"].includes(selectedValue);
+        article.starred = [true, "Y", "y", "true", "1"].includes(starredValue);
+        return article;
+      }
+
+      function exportJson() {
+        const payload = { version: 1, exportedAt: new Date().toISOString(), organization: "한국전기안전공사", ...state };
+        downloadBlob(JSON.stringify(payload, null, 2), `KESCO_언론브리핑_${state.date}.json`, "application/json;charset=utf-8");
+        showToast("당일 브리핑 JSON을 저장했습니다.", "success");
+      }
+
+      function exportCsv() {
+        const headers = ["브리핑선정","중요","위험도","정서","분류","관련도","관련도점수","관련도근거","제목","매체","보도일시","URL","키워드","메모"];
+        const rows = state.articles.map(a => {
+          const relevance = getRelevance(a);
+          return [a.included ? "Y":"N", a.starred ? "Y":"N", RISK_LABELS[a.risk], SENTIMENT_LABELS[a.sentiment], settings.queries.find(q=>q.id===a.category)?.label || a.category, relevance.label, relevance.score, relevance.reasons.join("|"), a.title, a.source, a.pubDate, a.url, (a.matchedKeywords||[]).join("|"), a.note || ""];
+        });
+        const csv = "\ufeff" + [headers, ...rows].map(row => row.map(csvCell).join(",")).join("\r\n");
+        downloadBlob(csv, `KESCO_언론기사_${state.date}.csv`, "text/csv;charset=utf-8");
+        showToast("기사 목록 CSV를 저장했습니다.", "success");
+      }
+
+      async function copySummary() {
+        const selected = state.articles.filter(article => article.included).sort(relevanceSort);
+        const articleList = selected.length ? selected.map((article, index) => {
+          const relevance = getRelevance(article);
+          const note = article.note ? `\n   메모: ${article.note}` : "";
+          const link = safeUrl(article.url) ? `\n   원문: ${safeUrl(article.url)}` : "";
+          return `${index + 1}. [${relevance.rank < 99 ? `관련 ${relevance.rank}순위` : "관련 기준 외"}] ${article.title}\n   ${article.source || "출처 미상"} · ${formatDateTime(article.pubDate)}${note}${link}`;
+        }).join("\n\n") : "선정된 기사 없음";
+        const text = `[한국전기안전공사 일일 언론브리핑 | ${state.date}]\n\n${state.summary || "수집 기사 없음"}\n\n[브리핑 선정 기사 ${selected.length}건]\n${articleList}\n\n[CEO 참고·지시사항]\n${state.actionNote || "별도 지시사항 없음"}`;
+        try { await navigator.clipboard.writeText(text); showToast("브리핑 요약을 복사했습니다.", "success"); }
+        catch {
+          const area = document.createElement("textarea"); area.value = text; document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove(); showToast("브리핑 요약을 복사했습니다.", "success");
+        }
+      }
+
+      function parseCsv(text) {
+        const rows = []; let row = [], cell = "", quoted = false;
+        for (let i=0; i<text.length; i++) {
+          const c = text[i];
+          if (c === '"' && quoted && text[i+1] === '"') { cell += '"'; i++; }
+          else if (c === '"') quoted = !quoted;
+          else if (c === "," && !quoted) { row.push(cell); cell = ""; }
+          else if ((c === "\n" || c === "\r") && !quoted) { if (c === "\r" && text[i+1] === "\n") i++; row.push(cell); if (row.some(v=>v.trim())) rows.push(row); row=[]; cell=""; }
+          else cell += c;
+        }
+        row.push(cell); if (row.some(v=>v.trim())) rows.push(row);
+        if (rows.length < 2) return [];
+        const headers = rows.shift().map(h => h.replace(/^\ufeff/, "").trim());
+        return rows.map(values => Object.fromEntries(headers.map((h,i) => [h, values[i] || ""])));
+      }
+
+      function openOverlay(id) { $(id).classList.add("open"); document.body.style.overflow = "hidden"; }
+      function closeOverlay(id) { $(id).classList.remove("open"); if (!document.querySelector(".overlay.open")) document.body.style.overflow = ""; }
+
+      function setSearchButton(busy) {
+        els.refreshBtn.disabled = busy;
+        els.refreshBtn.innerHTML = busy ? '<span class="spinner"></span><span>기사 수집 중</span>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>';
+      }
+
+      function setStatus(type, message) {
+        els.statusDot.className = `status-dot ${type === "idle" ? "" : type}`;
+        els.globalStatus.textContent = message;
+      }
+
+      function showToast(message, type = "") {
+        const toast = document.createElement("div"); toast.className = `toast ${type}`; toast.textContent = message; els.toastRegion.appendChild(toast);
+        window.setTimeout(() => toast.remove(), 4200);
+      }
+
+      function fetchWithTimeout(url, options = {}, ms = 15000) {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), ms);
+        const signals = [controller.signal, options.signal].filter(Boolean);
+        const signal = signals.length > 1 && typeof AbortSignal.any === "function" ? AbortSignal.any(signals) : controller.signal;
+        return fetch(url, { ...options, signal, cache: "no-store" }).finally(() => clearTimeout(timer));
+      }
+
+      function parseKeywordList(text) { return [...new Set(text.split(/[,\n]/).map(v => v.trim()).filter(Boolean))]; }
+      function cleanText(value) { const doc = new DOMParser().parseFromString(String(value || ""), "text/html"); return (doc.body.textContent || "").replace(/\s+/g, " ").trim(); }
+      function safeUrl(value) { try { const u = new URL(String(value || "")); return ["http:", "https:"].includes(u.protocol) ? u.href : ""; } catch { return ""; } }
+      function inferSourceFromTitle(title) { const match = title.match(/\s[-–—]\s([^-–—]{2,30})$/u); return match?.[1] || "출처 미상"; }
+      function parseDate(value) { const d = value ? new Date(value) : new Date(); return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString(); }
+      function parseGdeltDate(value) { if (/^\d{8}T\d{6}Z$/.test(value || "")) return parseDate(`${value.slice(0,4)}-${value.slice(4,6)}-${value.slice(6,8)}T${value.slice(9,11)}:${value.slice(11,13)}:${value.slice(13,15)}Z`); return parseDate(value); }
+      function dateValue(value) { const n = new Date(value || 0).getTime(); return Number.isNaN(n) ? 0 : n; }
+      function formatDateTime(value) { if (!value) return "일시 미상"; try { return new Intl.DateTimeFormat("ko-KR", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false }).format(new Date(value)); } catch { return "일시 미상"; } }
+      function formatTime(value) { if (!value) return ""; return new Intl.DateTimeFormat("ko-KR", { hour:"2-digit", minute:"2-digit", hour12:false }).format(new Date(value)); }
+      function formatRelative(value) { const diff = Date.now() - dateValue(value); if (diff < 0) return formatDateTime(value); const h = Math.floor(diff/3600000); return h < 1 ? "1시간 이내" : h < 24 ? `${h}시간 전` : `${Math.floor(h/24)}일 전`; }
+      function uid() { return `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
+      function countBy(items, key) { return items.reduce((acc, item) => { const k = item[key] || "other"; acc[k] = (acc[k] || 0) + 1; return acc; }, {}); }
+      function autoResize(el) { if (!el) return; el.style.height = "auto"; el.style.height = `${Math.max(150, el.scrollHeight)}px`; }
+      function shortText(value, max = 100) { const text = cleanText(value); return text.length > max ? `${text.slice(0, max - 1)}…` : text; }
+      function friendlyError(error) {
+        if (error?.name === "AbortError") return "연결 시간이 초과됐습니다.";
+        const message = cleanText(error?.message || String(error || "알 수 없는 오류"));
+        if (/failed to fetch|networkerror|load failed/i.test(message)) return "브라우저에서 데이터 서버에 연결할 수 없습니다(CORS 또는 네트워크 오류).";
+        return message;
+      }
+      function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])); }
+      function escapeAttr(value) { return escapeHtml(value).replace(/`/g, "&#96;"); }
+      function csvCell(value) { const s = String(value ?? ""); return `"${s.replace(/"/g, '""')}"`; }
+      function downloadBlob(content, name, type) { const url = URL.createObjectURL(new Blob([content], { type })); const a = document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1000); }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# 환경 설정 (예시 파일만 추적)
+.env
+
+# 런타임 산출물 — 업무 데이터는 Git으로 관리하지 않는다
+data/
+logs/
+backups/
+reports/
+
+# 편집기
+.idea/
+.vscode/

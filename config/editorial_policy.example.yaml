@@ -1,0 +1,54 @@
+version: 2
+briefing:
+  max_ai_articles: 20
+  max_top_issues: 3
+  default_status: "draft"
+  final_report_requires_manual_review: true
+  one_working_copy_per_report_date: true
+  optimistic_revision_required: true
+
+versioning:
+  final_snapshot_table: "briefing_versions"
+  latest_report_route_uses: "latest_final"
+  preview_route_uses: "working"
+  reopen_preserves_previous_versions: true
+
+article_state:
+  deselect_preserves_note_and_starred: true
+  dismiss_preserves_row: true
+  physical_delete_manual_only: true
+
+priority_labels:
+  required: "보고필수"
+  review: "검토"
+  reference: "참고"
+
+issue_status_labels:
+  new: "신규"
+  ongoing: "지속"
+  expanding: "확산"
+  cooling: "진정"
+  closed: "종료"
+
+clustering:
+  preview_before_apply: true
+  preserve_editor_fields: true
+  preserve_membership_overrides: true
+
+ai_evidence:
+  require_for_all_claim_fields: true
+  allow_empty_only_for_limitations: true
+  reject_unknown_ids: true
+  repair_retry_count: 1
+
+exports:
+  json_is_full_backup: true
+  csv_is_lossy_exchange: true
+
+report_sections:
+  - "오늘의 언론상황"
+  - "핵심 이슈"
+  - "공사 영향"
+  - "확인·지시 필요사항"
+  - "공사 직접 보도"
+  - "선정 기사 별첨"

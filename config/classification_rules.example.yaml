@@ -1,0 +1,159 @@
+version: 2
+classifier_version: "rules-v2"
+
+organization_terms:
+  - "한국전기안전공사"
+  - "전기안전공사"
+  - "KESCO"
+
+rule_precedence:
+  - "hard_exclusion"
+  - "explicit_adverse_event"
+  - "management_risk"
+  - "prevention_context"
+  - "achievement_context"
+  - "general_fallback"
+
+hard_exclusion_phrases:
+  - "채용공고"
+
+false_positive_phrases:
+  - phrase: "감사패"
+    suppress_tokens: ["감사"]
+  - phrase: "감사 인사"
+    suppress_tokens: ["감사"]
+  - phrase: "안전사고 예방"
+    suppress_tokens: ["사고"]
+
+occurrence_cues:
+  - "발생"
+  - "사망"
+  - "부상"
+  - "인명피해"
+  - "피해"
+  - "대피"
+  - "중단"
+  - "수사"
+  - "압수수색"
+  - "적발"
+
+accident_terms:
+  - "전기화재"
+  - "전기 화재"
+  - "감전사고"
+  - "감전 사고"
+  - "대규모 정전"
+  - "정전 발생"
+  - "누전 사고"
+
+management_risk_phrases:
+  - "감사원 감사"
+  - "감사 결과"
+  - "국정감사"
+  - "압수수색"
+  - "고발"
+  - "징계"
+  - "법 위반"
+
+prevention_cues:
+  - "예방"
+  - "점검"
+  - "교육"
+  - "캠페인"
+  - "훈련"
+
+prevention_phrases:
+  - "화재 예방"
+  - "전기화재 예방"
+  - "감전 예방"
+  - "사고 예방"
+  - "정전 예방"
+  - "안전점검"
+  - "예방 캠페인"
+
+achievement_terms:
+  - "수상"
+  - "협약"
+  - "성과"
+  - "혁신"
+  - "봉사"
+  - "지원"
+  - "우수"
+  - "개선"
+
+relevance_scores:
+  direct_mention: 100
+  electrical_fire: 85
+  electric_shock: 70
+  ministry_policy_context: 55
+  renewable_energy: 40
+  low: 15
+
+# hard floor·cap이 사용하는 relevance 등급 경계
+# direct는 점수가 아니라 organization_terms 매칭 여부로 판정한다
+relevance_tiers:
+  related_min_score: 40
+
+# spread_score 가산에 사용하는 주요 매체
+major_outlets:
+  - "연합뉴스"
+  - "KBS"
+  - "MBC"
+  - "SBS"
+  - "조선일보"
+  - "중앙일보"
+  - "동아일보"
+  - "한겨레"
+  - "경향신문"
+
+spread_scoring:
+  per_distinct_source: 12
+  major_outlet_bonus: 20
+  per_recent_24h_article: 8
+  max_score: 100
+
+severity_scores:
+  death_or_serious_injury: 100
+  major_fire_or_outage: 85
+  investigation_or_raid: 80
+  audit_or_legal_violation: 65
+  controversy_or_minor_damage: 45
+  prevention_or_routine: 10
+  achievement_or_community: 5
+
+priority_scoring:
+  article_weights:
+    relevance: 0.55
+    severity: 0.45
+  issue_weights:
+    relevance: 0.40
+    severity: 0.40
+    spread: 0.20
+  thresholds:
+    required: 75
+    review: 45
+
+hard_floors:
+  - id: "direct_serious_adverse"
+    when:
+      relevance: "direct"
+      severity_at_least: 70
+    minimum_priority: "required"
+  - id: "electrical_safety_casualty"
+    when:
+      relevance_at_least: "related"
+      event_type: "accident"
+      severity_at_least: 85
+    minimum_priority: "review"
+
+priority_caps:
+  - id: "positive_context_cap"
+    when_event_types: ["prevention", "achievement", "community"]
+    maximum_priority: "review"
+  - id: "low_relevance_cap"
+    when_relevance: "low"
+    maximum_priority: "reference"
+
+manual_override:
+  final_values_win: true
+  preserve_on_reclassification: true

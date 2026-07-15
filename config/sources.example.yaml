@@ -1,0 +1,39 @@
+version: 2
+providers:
+  yonhap:
+    enabled: true
+    type: rss
+    # 전체 뉴스 피드는 최신 120건(약 4~5시간분)만 제공한다 — KNOWN_RISKS LEG-012
+    # 커버리지 보강 시 섹션 피드를 추가한다. 예: economy.xml, society.xml, local.xml
+    url: "https://www.yna.co.kr/rss/news.xml"
+    priority: 10
+    fallback_only: false
+    timeout_seconds: 15
+
+  google_news:
+    enabled: true
+    type: google_news_rss
+    priority: 20
+    fallback_only: false
+    timeout_seconds: 15
+    locale:
+      hl: "ko"
+      gl: "KR"
+      ceid: "KR:ko"
+
+  gdelt:
+    enabled: true
+    type: gdelt
+    priority: 90
+    fallback_only: true
+    timeout_seconds: 20
+
+collection:
+  default_lookback_hours: 48
+  per_query_limit: 50
+  total_limit: 200
+  retry_count: 1
+  partial_success_allowed: true
+  preserve_previous_candidates_on_provider_failure: true
+  stale_result_allowed: true
+  record_every_observation: true

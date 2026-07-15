@@ -1,0 +1,1476 @@
+# KESCO 일일 언론브리핑 로컬 웹앱 아키텍처
+
+- 문서 상태: 기준 설계
+- 설계 버전: 1.2
+- 운영 환경: 로컬 Mac 단독 사용
+- 사용자: 홍보실 담당자 1인
+- 기본 주소: `http://127.0.0.1:8787`
+- 핵심 기술: HTML/CSS/JavaScript, FastAPI, SQLite, Ollama
+- 구현 전 필수 계약: `docs/API_DATA_CONTRACTS.md`
+
+---
+
+## 1. 목표
+
+기존 단일 HTML의 장점을 유지하면서 다음 업무를 한 흐름으로 처리한다.
+
+```text
+기사 수집
+→ 정규화·중복 제거
+→ 관련도·사안 판별
+→ 동일 이슈 묶기
+→ 담당자 선별·메모
+→ Gemma 분석
+→ 담당자 수정
+→ CEO 보고 HTML·PDF
+→ 날짜별 보관·복구
+```
+
+1차 완성 목표는 “기능이 많은 플랫폼”이 아니라 다음 조건을 만족하는 안정적인 로컬 업무도구다.
+
+- Mac에서 원클릭 실행된다.
+- 브라우저가 닫혀도 데이터는 SQLite에 남는다.
+- 기사 수집 실패 원인을 확인할 수 있다.
+- 예방 보도를 사고 보도로 오분류하는 문제를 줄인다.
+- 동일 사건의 여러 기사를 하나의 이슈로 볼 수 있다.
+- AI 결과에 근거 기사가 연결된다.
+- 담당자가 수정한 결과는 자동 작업으로 덮어쓰지 않는다.
+- 최종 보고 화면은 편집 화면과 분리된다.
+
+---
+
+## 2. 범위
+
+### 포함
+
+- 연합뉴스 RSS, Google 뉴스 RSS, GDELT 보조 수집
+- 기사 직접 추가, JSON·CSV 가져오기
+- 기사 정규화, 완전 중복 제거, 유사 중복 판별
+- 관련도, 보도 성격, 보고 우선도 분류
+- 동일 사건 기사 군집화
+- 브리핑 기사 선정, 중요 표시, 메모
+- Ollama 기반 구조화 분석
+- 날짜별 브리핑 저장
+- 읽기 전용 CEO 보고 HTML
+- 브라우저 인쇄를 통한 PDF 저장
+- 자동 백업과 실행 로그
+- macOS 원클릭 실행 및 후속 `launchd` 자동수집
+
+### 1차 범위 제외
+
+- 외부 서버·클라우드 배포
+- 기관 업무망 연계
+- 계정·로그인·권한
+- 다중 사용자 동시 편집
+- 모바일·아이패드 지원
+- React, Vue 등 프런트엔드 프레임워크 전환
+- Docker
+- 자동 이메일·메신저 발송
+- 상용 뉴스 데이터 계약 연동
+- 완전 자동 최종보고 확정
+
+---
+
+## 3. 설계 원칙
+
+### 3.1 기존 화면을 버리지 않는다
+
+현재 HTML의 레이아웃, 기사 선택, 메모, 요약 수정, 인쇄 경험을 기준으로 삼는다. 초기 리팩터링은 기능과 디자인을 바꾸지 않는다.
+
+### 3.2 브라우저는 업무 화면이다
+
+최종 구조에서 브라우저 JavaScript가 직접 RSS를 읽거나 위험도를 계산하거나 영구 저장하지 않는다.
+
+```text
+프런트엔드: 표시, 입력, 필터, API 호출
+백엔드: 수집, 정규화, 분류, 군집화, AI, 보고 생성
+SQLite: 기사, 이슈, 브리핑, 실행 이력
+```
+
+### 3.3 기사·이슈·브리핑을 분리한다
+
+- **기사(Article)**: 언론사가 게시한 원본 보도
+- **이슈(Issue)**: 같은 사건을 다룬 여러 기사 묶음
+- **브리핑(Briefing)**: 특정 보고일에 담당자가 확정한 보고 내용
+
+기사에 `selected`, `starred`, `note`를 직접 저장하지 않는다. 이 값들은 보고일마다 달라질 수 있으므로 브리핑-기사 연결 정보로 저장한다.
+
+### 3.4 자동 판정과 담당자 최종값을 분리한다
+
+자동 분류 결과와 수동 수정값을 같은 필드로 덮어쓰지 않는다.
+
+```text
+자동 판정: auto_priority, auto_category, auto_event_type
+담당자 최종: final_priority, final_category, final_event_type
+```
+
+최종값이 없을 때만 자동값을 화면에 사용한다.
+
+### 3.5 규칙 우선, AI 보조
+
+기사 전체를 매번 LLM에 보내 분류하지 않는다.
+
+1. 명시적 규칙으로 빠르게 분류
+2. 경계 사례만 선택적으로 AI 보조
+3. 최종 선정 기사만 고품질 AI 분석
+
+### 3.6 실패를 숨기지 않는다
+
+수집 실패 시 기존 기사를 삭제하지 않는다. 마지막 정상 수집 시각과 실패 원인을 함께 표시한다.
+
+### 3.7 작은 단계로 전환한다
+
+단일 HTML 분리, 서버 도입, 수집 이전, SQLite 이전을 각각 독립 단계로 수행한다. 한 단계의 회귀검증이 끝나기 전에 다음 단계로 넘어가지 않는다.
+
+### 3.8 API·데이터 계약을 먼저 고정한다
+
+백엔드와 DB 구현 전에 `docs/API_DATA_CONTRACTS.md`의 계약을 따른다. 특히 다음 항목은 구현 중 임의로 바꾸지 않는다.
+
+- 보고일별 작업본과 최종 version 선택 규칙
+- 선택 해제·숨김·물리 삭제의 의미
+- provider 관측과 수집 실행 이력 보존
+- 분류 점수·임계값·문맥 충돌 순서
+- AI 모든 주장 필드의 근거 ID 검증
+- 재군집화 시 담당자 override 보존
+
+이 문서와 상세 계약이 충돌하면 상세 계약이 우선한다.
+
+---
+
+## 4. 시스템 구성
+
+```text
+┌──────────────────────────────────────────────┐
+│ macOS                                        │
+│                                              │
+│  Safari/Chrome                               │
+│  ┌────────────────────────────────────────┐  │
+│  │ HTML/CSS/ES Modules                    │  │
+│  │ 편집 화면 / CEO 보고 화면             │  │
+│  └───────────────────┬────────────────────┘  │
+│                      │ HTTP / JSON            │
+│  ┌───────────────────▼────────────────────┐  │
+│  │ FastAPI 127.0.0.1:8787                │  │
+│  │ API · 수집 · 판별 · 군집 · AI · 보고  │  │
+│  └───────┬───────────────┬────────────────┘  │
+│          │               │                   │
+│  ┌───────▼────────┐  ┌───▼────────────────┐  │
+│  │ SQLite         │  │ Ollama             │  │
+│  │ app.db         │  │ Gemma 계열 모델    │  │
+│  └────────────────┘  └────────────────────┘  │
+│          │                                   │
+│  ┌───────▼────────────────────────────────┐  │
+│  │ reports / backups / logs               │  │
+│  └────────────────────────────────────────┘  │
+└──────────────────────────────────────────────┘
+          │
+          ▼
+연합뉴스 RSS / Google 뉴스 RSS / GDELT / 기사 원문
+```
+
+---
+
+## 5. 목표 저장소 구조
+
+> 아래는 최종 목표 구조다. 첫 작업에서 모든 빈 파일을 한꺼번에 만들지 않는다. 기능이 해당 계층으로 이동할 때 필요한 파일만 생성한다.
+
+```text
+kesco-media-briefing/
+├─ AGENTS.md
+├─ README.md
+├─ CHANGELOG.md
+├─ pyproject.toml
+├─ .env.example
+├─ .gitignore
+├─ setup_kesco_briefing.command
+├─ start_kesco_briefing.command
+│
+├─ docs/
+│  ├─ ARCHITECTURE.md
+│  ├─ API_DATA_CONTRACTS.md
+│  ├─ KNOWN_RISKS.md
+│  ├─ MANUAL_REGRESSION_CHECKLIST.md
+│  ├─ REFACTORING_MAP.md
+│  └─ CODEX_NEXT_TASK.md
+│
+├─ legacy/
+│  └─ kesco_media_briefing_original.html
+│
+├─ frontend/
+│  ├─ index.html
+│  ├─ report.html
+│  ├─ css/
+│  │  ├─ tokens.css
+│  │  ├─ app.css
+│  │  └─ print.css
+│  └─ js/
+│     ├─ app.js
+│     ├─ api/
+│     │  └─ client.js
+│     ├─ state/
+│     │  └─ store.js
+│     ├─ features/
+│     │  ├─ articles.js
+│     │  ├─ issues.js
+│     │  ├─ briefing.js
+│     │  ├─ settings.js
+│     │  ├─ ai-analysis.js
+│     │  └─ exports.js
+│     ├─ ui/
+│     │  ├─ renderers.js
+│     │  ├─ dialogs.js
+│     │  └─ notifications.js
+│     └─ utils/
+│        ├─ dates.js
+│        ├─ dom.js
+│        └─ format.js
+│
+├─ backend/
+│  └─ app/
+│     ├─ main.py
+│     ├─ api/
+│     │  ├─ health.py
+│     │  ├─ collections.py
+│     │  ├─ articles.py
+│     │  ├─ issues.py
+│     │  ├─ briefings.py
+│     │  ├─ settings.py
+│     │  ├─ analysis.py
+│     │  └─ exports.py
+│     ├─ core/
+│     │  ├─ config.py
+│     │  ├─ paths.py
+│     │  ├─ clock.py
+│     │  └─ logging.py
+│     ├─ domain/
+│     │  ├─ article.py
+│     │  ├─ observation.py
+│     │  ├─ issue.py
+│     │  ├─ cluster_run.py
+│     │  ├─ briefing.py
+│     │  ├─ briefing_version.py
+│     │  ├─ assessment.py
+│     │  └─ enums.py
+│     ├─ repositories/
+│     │  ├─ database.py
+│     │  ├─ article_repository.py
+│     │  ├─ observation_repository.py
+│     │  ├─ issue_repository.py
+│     │  ├─ cluster_run_repository.py
+│     │  ├─ briefing_repository.py
+│     │  ├─ briefing_version_repository.py
+│     │  ├─ settings_repository.py
+│     │  └─ run_repository.py
+│     ├─ services/
+│     │  ├─ collection/
+│     │  │  ├─ collector.py
+│     │  │  ├─ yonhap.py
+│     │  │  ├─ google_news.py
+│     │  │  └─ gdelt.py
+│     │  ├─ extraction/
+│     │  │  ├─ extractor.py
+│     │  │  └─ cleaner.py
+│     │  ├─ normalization/
+│     │  │  ├─ title.py
+│     │  │  ├─ url.py
+│     │  │  ├─ source.py
+│     │  │  └─ dates.py
+│     │  ├─ deduplication/
+│     │  │  ├─ exact.py
+│     │  │  ├─ fuzzy.py
+│     │  │  └─ service.py
+│     │  ├─ classification/
+│     │  │  ├─ rule_engine.py
+│     │  │  └─ service.py
+│     │  ├─ clustering/
+│     │  │  ├─ features.py
+│     │  │  ├─ proposal.py
+│     │  │  └─ service.py
+│     │  ├─ ai/
+│     │  │  ├─ ollama_client.py
+│     │  │  ├─ prompt_builder.py
+│     │  │  ├─ schemas.py
+│     │  │  └─ analyzer.py
+│     │  ├─ briefing/
+│     │  │  ├─ selection.py
+│     │  │  ├─ rule_summary.py
+│     │  │  └─ report_builder.py
+│     │  └─ maintenance/
+│     │     ├─ backup.py
+│     │     └─ scheduler.py
+│     └─ db/
+│        ├─ migrator.py
+│        └─ migrations/
+│           └─ 0001_initial.sql
+│
+├─ config/
+│  ├─ sources.yaml
+│  ├─ search_rules.yaml
+│  ├─ classification_rules.yaml
+│  ├─ editorial_policy.yaml
+│  └─ briefing_style_guide.md
+│
+├─ scripts/
+│  ├─ import_localstorage_json.py
+│  ├─ backup_database.py
+│  └─ install_launchd.command
+│
+├─ data/
+│  └─ kesco_media_briefing.db
+├─ reports/
+├─ backups/
+├─ logs/
+│
+└─ tests/
+   ├─ fixtures/
+   │  ├─ rss/
+   │  ├─ articles/
+   │  └─ classification_cases.yaml
+   ├─ unit/
+   │  ├─ test_normalization.py
+   │  ├─ test_deduplication.py
+   │  ├─ test_classification.py
+   │  ├─ test_clustering.py
+   │  └─ test_ai_schema.py
+   └─ integration/
+      ├─ test_database_migrations.py
+      ├─ test_collection_pipeline.py
+      └─ test_api.py
+```
+
+---
+
+## 6. 계층별 책임
+
+### 6.1 Frontend
+
+프런트엔드는 다음만 담당한다.
+
+- API에서 받은 데이터 표시
+- 필터·검색·정렬 같은 화면 상태
+- 기사 선택, 중요 표시, 메모 입력
+- AI 실행 요청과 진행상태 표시
+- 담당자 직접 문장 수정
+- 읽기 전용 보고 화면 표시
+- 인쇄 호출
+
+프런트엔드에 두지 않는 기능:
+
+- RSS 호출
+- 기사 URL 정규화
+- 중복 제거
+- 위험도 계산
+- 관련도 계산
+- 이슈 군집화
+- SQLite 저장
+- Ollama 직접 호출
+
+### 6.2 API
+
+API는 입력 검증과 서비스 호출만 담당한다. 업무 규칙을 route 함수에 직접 작성하지 않는다.
+
+### 6.3 Domain
+
+기사, 이슈, 브리핑, 평가의 데이터 구조와 불변조건을 정의한다. FastAPI나 SQLite 세부 구현에 의존하지 않는다.
+
+### 6.4 Repository
+
+SQLite 읽기·쓰기만 담당한다. 기사 수집이나 분류 판단을 하지 않는다.
+
+### 6.5 Service
+
+실제 업무 규칙을 담당한다.
+
+- collection: 외부 수집원 호출
+- extraction: 기사 본문 정제
+- normalization: 제목·URL·매체·시각 표준화
+- deduplication: 동일 기사 판정
+- classification: 관련도·보도 성격·우선도 판정
+- clustering: 같은 사건 기사 묶기
+- ai: Ollama 분석과 응답 검증
+- briefing: 선정 기사·이슈로 보고서 구성
+- maintenance: 백업·예약 실행
+
+---
+
+## 7. 핵심 도메인 모델
+
+### 7.1 Article
+
+언론사가 게시한 보도 원본이다. 한 번 저장된 원본 사실과 수집 메타데이터는 담당자 편집 상태와 분리한다.
+
+주요 필드:
+
+```text
+id
+content_key
+canonical_url
+title
+normalized_title
+source
+source_domain
+published_at
+first_observed_at
+last_observed_at
+description
+body_text
+body_status
+category_hint
+manual
+created_at
+updated_at
+```
+
+`content_key`는 다음 우선순위로 생성한다.
+
+1. canonical URL hash
+2. normalized title + source + published date hash
+
+### 7.2 ArticleAssessment
+
+기사 자동 판정과 담당자 최종 판정을 저장한다.
+
+```text
+article_id
+auto_category
+auto_event_type
+auto_relevance_score
+auto_severity_score
+auto_priority_score
+auto_priority
+auto_tone
+auto_reasons_json
+final_category
+final_event_type
+final_priority
+final_tone
+manual_override
+classifier_version
+updated_at
+```
+
+화면 표시값은 `final_*`이 있으면 최종값, 없으면 `auto_*`를 사용한다.
+
+### 7.3 Issue
+
+동일 사건·주제를 다룬 기사 묶음이다. 자동 군집 결과와 담당자 편집값을 분리한다.
+
+```text
+id
+representative_article_id
+auto_title
+editor_title
+auto_status
+editor_status
+auto_priority
+editor_priority
+first_seen_at
+last_seen_at
+direct_mention
+needs_review
+last_cluster_run_id
+created_at
+updated_at
+```
+
+유효 표시값은 `editor_*`가 있으면 담당자 값, 없으면 `auto_*`다.
+
+상태:
+
+```text
+new        신규
+ongoing    지속
+expanding  확산
+cooling    진정
+closed     종료
+```
+
+기사 구성은 자동 membership과 담당자 add/remove override를 분리한다. 재군집화가 담당자 제목·상태·구성을 덮어쓰지 않는 상세 규칙은 `docs/API_DATA_CONTRACTS.md` 6장을 따른다.
+
+### 7.4 Briefing
+
+보고일별 **현재 작업본**이다. `report_date`당 정확히 1개만 존재한다.
+
+```text
+id
+report_date
+prepared_by
+status
+situation_summary
+action_note
+summary_mode
+ai_model
+ai_prompt_version
+ai_generated_at
+ai_input_signature
+revision
+latest_final_version
+finalized_at
+created_at
+updated_at
+```
+
+`revision`은 API 낙관적 동시성 제어용이며, 최종 보고 version과 다르다.
+
+상태:
+
+```text
+draft      작성 중
+reviewed   검토 완료
+final      최신 최종 snapshot과 동일하며 잠긴 상태
+```
+
+### 7.5 BriefingVersion
+
+CEO에게 최종 보고한 불변 snapshot이다.
+
+```text
+id
+briefing_id
+version
+source_revision
+snapshot_json
+report_html_path
+finalized_at
+created_at
+```
+
+- `(briefing_id, version)`은 UNIQUE다.
+- 재확정할 때 기존 snapshot을 덮어쓰지 않고 version을 증가시킨다.
+- `/report/{date}`는 가장 높은 최종 version을 선택한다.
+
+### 7.6 BriefingArticle
+
+기사 원본과 보고일별 편집 상태를 연결한다. 선택 해제해도 row와 메모를 보존한다.
+
+```text
+briefing_id
+article_id
+selected
+starred
+note
+dismissed
+sort_order
+created_at
+updated_at
+```
+
+- 선택 해제: `selected=false`
+- 목록 숨김: `dismissed=true`, 동시에 `selected=false`
+- UI의 일반 동작에서 row를 DELETE하지 않는다.
+
+### 7.7 BriefingIssue
+
+이슈를 현재 작업본에 어떤 순서와 문구로 넣을지 저장한다.
+
+```text
+briefing_id
+issue_id
+selected
+sort_order
+management_impact
+action_required
+editor_note
+created_at
+updated_at
+```
+
+### 7.8 CollectionRun
+
+전체 수집 실행 요약이다.
+
+```text
+id
+report_date
+started_at
+finished_at
+status              success | partial | failed
+lookback_hours
+raw_count
+accepted_count
+unique_count
+stale_reused_count
+warning_count
+error_count
+```
+
+### 7.9 CollectionRunProvider
+
+provider 또는 provider+검색그룹별 실행 결과다.
+
+```text
+id
+collection_run_id
+provider
+query_group_id
+status
+started_at
+finished_at
+raw_count
+accepted_count
+duplicate_count
+stale_reused_count
+warning_message
+error_code
+error_message
+```
+
+### 7.10 ArticleObservation
+
+수집원이 반환한 개별 원본 관측이다. 동일 기사로 병합돼도 provider·수집 run 이력을 잃지 않는다.
+
+```text
+id
+article_id
+collection_run_provider_id
+provider
+provider_item_key
+query_group_id
+raw_url
+raw_title
+raw_source
+raw_published_at
+raw_description
+raw_payload_json
+observed_at
+dedup_method
+dedup_score
+```
+
+`Article.source`는 발행 언론사이고 `ArticleObservation.provider`는 발견 경로다.
+
+### 7.11 ClusterRun과 membership override
+
+```text
+cluster_runs
+issue_auto_articles
+issue_membership_overrides
+```
+
+재군집화는 proposal을 먼저 만들고 apply 단계에서 자동 필드만 갱신한다. 담당자 `editor_*` 값과 수동 add/remove는 유지한다.
+
+### 7.12 AiRun
+
+AI 분석의 재현성과 실패 추적을 위한 기록이다.
+
+```text
+id
+briefing_id
+model
+prompt_version
+input_signature
+status
+request_json
+response_json
+evidence_json
+error_message
+started_at
+finished_at
+```
+
+`evidence_json`은 실행 당시 `A01 → article_id` 매핑을 보존한다.
+
+
+## 8. SQLite 스키마 원칙
+
+최소 테이블:
+
+```text
+schema_migrations
+articles
+article_observations
+article_assessments
+issues
+issue_auto_articles
+issue_membership_overrides
+cluster_runs
+briefings
+briefing_versions
+briefing_articles
+briefing_issues
+collection_runs
+collection_run_providers
+ai_runs
+settings
+```
+
+필수 제약:
+
+- `articles.content_key` UNIQUE
+- `article_assessments.article_id` UNIQUE
+- `briefings.report_date` UNIQUE
+- `briefing_versions(briefing_id, version)` UNIQUE
+- `briefing_articles(briefing_id, article_id)` UNIQUE
+- `briefing_issues(briefing_id, issue_id)` UNIQUE
+- `issue_auto_articles(issue_id, article_id, cluster_run_id)` UNIQUE
+- `issue_membership_overrides(issue_id, article_id)` UNIQUE
+- 모든 연결 테이블에 foreign key 적용
+- SQLite 시작 시 `PRAGMA foreign_keys = ON`
+- 운영 DB는 WAL 모드 사용
+- migration 실행 전 자동 백업
+
+업무 데이터 삭제 원칙:
+
+- 기사 선택 해제는 `briefing_articles.selected=false`다.
+- UI 휴지통은 `dismissed=true`이며 메모와 중요 표시를 보존한다.
+- 수동 추가 기사 물리 삭제는 최종 snapshot이나 다른 브리핑에서 참조되지 않을 때만 허용한다.
+- 최종 snapshot은 수정·삭제하지 않는다.
+- API·삭제 조건의 상세 계약은 `docs/API_DATA_CONTRACTS.md` 1~3장을 따른다.
+
+
+## 9. 설정 구조
+
+### 9.1 파일과 DB의 역할
+
+```text
+config/*.yaml      버전 관리되는 기본 업무 규칙
+.env               포트·경로·Ollama 주소 같은 기술 설정
+settings 테이블    화면에서 변경한 사용자 override
+```
+
+시작 시 병합 순서:
+
+```text
+코드 기본값
+→ config 파일
+→ SQLite 사용자 override
+```
+
+“기본값 복원”은 사용자 override를 삭제하고 config 값으로 되돌린다.
+
+### 9.2 설정 파일
+
+- `sources.yaml`: 수집원 주소, 사용 여부, 우선순위, fallback 여부
+- `search_rules.yaml`: 검색 그룹과 검색식
+- `classification_rules.yaml`: 위험어, 예방 문맥, 예외 문구, 점수
+- `editorial_policy.yaml`: 보고필수 기준, 최대 선정 건수, Top Issue 수
+- `briefing_style_guide.md`: AI 문체, 금지사항, 근거 표기 규칙
+
+---
+
+## 10. 기사 처리 파이프라인
+
+```text
+1. Collect
+2. Parse
+3. Normalize
+4. Eligibility filter
+5. Exact deduplication
+6. Fuzzy duplicate detection
+7. Classification
+8. Issue clustering
+9. Persist
+10. Return summary to UI
+```
+
+### 10.1 Collect
+
+각 provider는 공통 인터페이스를 따른다.
+
+```python
+class NewsProvider(Protocol):
+    async def collect(self, query, since, limit) -> list[RawArticle]: ...
+```
+
+수집원 하나가 실패해도 전체 실행을 실패시키지 않는다. 성공한 결과는 저장하고 실패한 provider를 `CollectionRun`에 기록한다.
+
+### 10.2 Normalize
+
+- HTML 제거
+- 유니코드 NFKC 정규화
+- 제목 뒤 매체명 제거
+- 추적 query string 제거
+- Google 뉴스 중계 URL과 원문 URL 구분
+- 매체명 표준화
+- UTC 시각 저장
+
+### 10.3 Exact deduplication
+
+- canonical URL 동일
+- content key 동일
+- 표준 제목 완전 동일
+- 동일 원문으로 확정되는 매우 높은 유사도
+
+provider 응답은 먼저 `article_observations`에 기록한다. 완전 중복은 하나의 `articles` row로 연결하되 각 observation과 collection run 이력은 보존한다.
+
+### 10.4 Fuzzy duplicate detection
+
+완전 중복과 동일 이슈 군집화를 구분한다.
+
+- 동일 원문의 재게시·중계: 하나의 Article + 여러 observation
+- 같은 사건을 별도 취재·작성: 별도 Article + 같은 Issue
+
+초기 방식:
+
+- 한국어 문자 n-gram 제목 유사도
+- 보도시각 차이
+- 핵심 숫자·지역·기관 문자열 겹침
+- 판정 방법과 score를 observation에 기록
+
+### 10.5 Classification
+
+서로 다른 축을 분리한다.
+
+```text
+관련도 점수: relevance_score 0~100
+심각도 점수: severity_score 0~100
+확산도 점수: spread_score 0~100(이슈 단계)
+보도 성격: accident / prevention / management_risk / policy / achievement / community / general / mixed
+보고 우선도: required / review / reference
+```
+
+관련도만으로 `required`를 만들지 않는다. 기본 점수식, `required=75`, `review=45` 임계값, hard floor·cap, 예방·사고 충돌 순서는 `docs/API_DATA_CONTRACTS.md` 4장과 `config/classification_rules.yaml`을 따른다.
+
+필수 예외 fixture:
+
+```text
+전기화재 예방 캠페인   → prevention / reference
+감전 예방 교육         → prevention / reference
+화재로 인명피해        → accident / required 또는 review
+감사패 전달            → achievement / reference
+감사원 감사 결과       → management_risk / review 또는 required
+정전 예방 특별점검     → prevention / reference
+대규모 정전 발생       → accident / required 또는 review
+```
+
+### 10.6 Issue clustering
+
+1차 구현은 외부 임베딩 서버 없이 동작해야 한다.
+
+- 제목+요약 문자 n-gram TF-IDF
+- 최근 72시간 후보만 비교
+- 시간 차이 가중치
+- 공통 지역·기관·사고 유형 가중치
+- 일정 threshold 이상이면 기존 open issue 후보로 제안
+
+재군집화는 `cluster_run` proposal과 apply 두 단계로 처리한다. `editor_title`, `editor_status`, `editor_priority`, 수동 add/remove membership은 자동 결과로 덮어쓰지 않는다. 상세 계약은 `docs/API_DATA_CONTRACTS.md` 6장을 따른다.
+
+
+## 11. API 계약
+
+응답 공통 형태:
+
+```json
+{
+  "ok": true,
+  "data": {},
+  "error": null,
+  "meta": {
+    "revision": 12
+  }
+}
+```
+
+오류 응답:
+
+```json
+{
+  "ok": false,
+  "data": null,
+  "error": {
+    "code": "BRIEFING_REVISION_CONFLICT",
+    "message": "다른 화면에서 브리핑이 변경됐습니다.",
+    "details": {}
+  }
+}
+```
+
+상세 선택·삭제·근거·재군집화 계약은 `docs/API_DATA_CONTRACTS.md`가 우선한다.
+
+### 11.1 상태
+
+```text
+GET /api/health
+```
+
+반환:
+
+- app 상태
+- DB 연결
+- Ollama 연결
+- 사용 가능 모델
+- 앱 버전
+- 마지막 정상 수집 시각
+
+### 11.2 설정
+
+```text
+GET  /api/settings
+PUT  /api/settings
+POST /api/settings/reset
+```
+
+### 11.3 수집
+
+```text
+POST /api/collections
+GET  /api/collections/latest?report_date=YYYY-MM-DD
+GET  /api/collections/{collection_run_id}
+```
+
+반환에는 전체 status(`success|partial|failed`), provider별 성공·실패, stale 재사용 수, 중복 통계를 포함한다.
+
+### 11.4 기사
+
+```text
+GET    /api/articles?report_date=YYYY-MM-DD&include_dismissed=false
+POST   /api/articles
+PATCH  /api/articles/{article_id}/assessment
+PATCH  /api/briefings/{date}/articles/{article_id}
+DELETE /api/articles/{article_id}?confirm=true
+```
+
+- 선택 해제와 UI 휴지통은 PATCH다.
+- `DELETE /api/briefings/{date}/articles/{article_id}`는 두지 않는다.
+- 물리 삭제는 미참조 수동 기사만 허용한다.
+
+### 11.5 이슈·재군집화
+
+```text
+GET   /api/issues?report_date=YYYY-MM-DD
+PATCH /api/issues/{issue_id}
+PATCH /api/briefings/{date}/issues/{issue_id}
+POST  /api/cluster-runs
+GET   /api/cluster-runs/{cluster_run_id}
+POST  /api/cluster-runs/{cluster_run_id}/apply
+```
+
+재군집화 첫 요청은 diff proposal을 만들고, apply 시 자동 필드만 갱신한다.
+
+### 11.6 브리핑 작업본·최종본
+
+```text
+GET  /api/briefings/{date}
+PUT  /api/briefings/{date}
+GET  /api/briefings/{date}/versions
+GET  /api/briefings/{date}/versions/{version}
+POST /api/briefings/{date}/rule-summary
+POST /api/briefings/{date}/analyze
+POST /api/briefings/{date}/finalize
+POST /api/briefings/{date}/reopen
+```
+
+- 날짜 조회는 해당 날짜의 유일한 작업본을 반환한다.
+- 모든 mutation은 `expectedRevision`을 요구한다.
+- final 상태에서는 일반 수정이 거부된다.
+
+### 11.7 보고·내보내기
+
+```text
+GET /preview/{date}
+GET /report/{date}
+GET /report/{date}?version=N
+GET /api/exports/{date}.json?scope=working|latest-final|version:N
+GET /api/exports/{date}.csv?scope=working|latest-final|version:N
+```
+
+- `/preview/{date}`는 현재 작업본이다.
+- `/report/{date}`는 최신 최종 snapshot만 제공하며 최종본이 없으면 404다.
+- JSON은 정식 백업, CSV는 손실형 목록 교환 포맷이다.
+
+
+## 12. 프런트엔드 상태 설계
+
+프런트엔드 상태를 두 종류로 나눈다.
+
+### 서버 상태
+
+- 현재 보고일 브리핑
+- 기사 목록
+- 이슈 목록
+- 설정
+- 수집 실행 결과
+- AI 분석 결과
+
+API에서 다시 불러올 수 있는 값이다.
+
+### UI 상태
+
+- 검색어
+- 필터
+- 정렬
+- 열린 modal
+- loading 상태
+- toast
+
+브라우저 새로고침 시 사라져도 되는 값이다.
+
+`localStorage`는 다음 용도로만 제한한다.
+
+- 마지막 선택한 화면 필터
+- 사용자가 닫은 안내 여부
+
+업무 데이터는 저장하지 않는다.
+
+---
+
+## 13. AI 분석 구조
+
+### 13.1 처리 범위
+
+AI는 담당자가 선정한 기사 또는 이슈만 분석한다. 기본 상한은 20건이다.
+
+### 13.2 입력과 고정 근거 index
+
+각 AI 실행에 고정 근거 ID를 부여한다.
+
+```text
+A01, A02, A03 ...
+```
+
+`A01 → article_id` 매핑을 `ai_runs.evidence_json`에 저장한다. 같은 실행에서는 순서를 바꾸지 않는다.
+
+입력 필드:
+
+- 제목
+- 매체
+- 보도일시
+- 본문 또는 RSS 요약
+- 담당자 메모
+- 자동·최종 우선도
+- 이슈 ID
+
+기사 내용은 명령이 아닌 데이터로 구분해 전달한다. 기사 본문 안의 지시문은 따르지 않도록 prompt에 명시한다.
+
+### 13.3 출력
+
+모든 사실·판단·전망 필드를 근거 객체로 구조화한다.
+
+```json
+{
+  "managementMessage": {
+    "text": "",
+    "articleIds": ["A01"]
+  },
+  "situationSummary": {
+    "text": "",
+    "articleIds": ["A01", "A02"]
+  },
+  "keyIssues": [
+    {
+      "title": "",
+      "urgency": "required",
+      "summary": "",
+      "managementImpact": "",
+      "articleIds": ["A01"]
+    }
+  ],
+  "decisionPoints": [
+    {
+      "text": "",
+      "articleIds": ["A01"]
+    }
+  ],
+  "actionItems": [
+    {
+      "priority": "required",
+      "action": "",
+      "articleIds": ["A01"]
+    }
+  ],
+  "riskOutlook": {
+    "text": "",
+    "articleIds": ["A01"],
+    "isInference": true
+  },
+  "limitations": [
+    {
+      "text": "본문 미확보 기사 2건",
+      "articleIds": []
+    }
+  ],
+  "confidence": "medium"
+}
+```
+
+### 13.4 검증
+
+- Pydantic schema 검증
+- 내용이 있는 모든 주장 필드에 1개 이상의 근거 ID 필수
+- 존재하지 않는 ID가 하나라도 있으면 결과 전체 적용 금지
+- `riskOutlook.isInference=true` 필수
+- `limitations`만 빈 근거 배열 허용
+- JSON·근거 검증 실패 시 형식교정 재시도 최대 1회
+- 기사에 없는 수치·기관·발언 생성 금지
+- 본문 미확보 건수와 분석 한계 표시
+
+### 13.5 수동 수정 보존
+
+AI 생성 직후 `summary_mode = ai`다. 담당자가 수정하면 `ai-edited`로 바뀐다.
+
+기사 선택, 메모, 모델이 바뀌면 기존 분석은 삭제하지 않고 `stale`로 표시한다. 재생성은 담당자가 직접 실행한다. 검증 실패 시 기존 결과와 수동 수정본을 유지한다.
+
+
+## 14. 보고 화면
+
+### 14.1 편집 화면 `/`
+
+- 수집 상태
+- 기사·이슈 필터
+- 선정·중요 표시·메모
+- 자동 판정 수정
+- AI 분석
+- 종합상황 직접 편집
+- CEO 참고·지시사항
+
+### 14.2 CEO 보고 화면 `/report/{date}`
+
+편집 컨트롤을 전혀 포함하지 않는다.
+
+권장 순서:
+
+1. 보고일과 작성자
+2. 오늘의 언론상황
+3. 핵심 이슈 최대 3건
+4. 이슈별 공사 영향
+5. 확인·지시 필요사항
+6. 공사 직접 보도
+7. 선정 기사 별첨
+
+### 14.3 최종 확정
+
+최종 확정 시 다음을 수행한다.
+
+- 작업본의 `expectedRevision`을 검증한다.
+- `briefing_versions`에 version N의 불변 JSON snapshot을 추가한다.
+- `reports/YYYY/MM/`에 같은 version의 읽기 전용 HTML을 저장한다.
+- 작업본 상태를 `final`로 잠근다.
+- DB 백업을 실행한다.
+
+수정이 필요하면 `reopen`으로 작업본을 다시 열고, 기존 version은 보존한다. 재확정 시 N+1 snapshot을 만든다. `/report/{date}`는 최신 최종 version을, `/preview/{date}`는 현재 작업본을 사용한다.
+
+---
+
+## 15. 장애·복구 설계
+
+### 수집 실패
+
+- 기존 기사 유지
+- 실패한 provider만 표시
+- 마지막 정상 수집 시각 표시
+- 동일 provider 즉시 반복호출 제한
+
+### Ollama 실패
+
+- AI 버튼 비활성 또는 오류 표시
+- 기존 AI 결과와 담당자 수정본 유지
+- 기본 규칙 요약은 계속 사용 가능
+
+### DB 오류
+
+- 쓰기 실패 시 사용자에게 명확히 표시
+- 앱 시작 시 DB integrity check
+- migration 전 백업
+- 최근 정상 backup 선택 복구 스크립트 제공
+
+### 앱 중복 실행
+
+`start_kesco_briefing.command`는 8787 포트를 확인한다.
+
+- 이미 정상 서버가 있으면 새 서버를 띄우지 않고 브라우저만 연다.
+- 비정상 프로세스가 포트를 점유하면 로그 위치와 조치 방법을 표시한다.
+
+---
+
+## 16. 실행·배포 구조
+
+### 최초 1회
+
+```text
+setup_kesco_briefing.command
+```
+
+역할:
+
+- Python 확인
+- `.venv` 생성
+- 의존성 설치
+- DB migration
+- 필수 디렉터리 생성
+- 실행권한 설정
+
+### 매일 실행
+
+```text
+start_kesco_briefing.command
+```
+
+역할:
+
+1. 기존 서버 확인
+2. Ollama 상태 확인
+3. FastAPI 실행
+4. health 확인
+5. 기본 브라우저에서 화면 열기
+6. 로그 기록
+
+의존성 설치나 migration을 매일 무조건 반복하지 않는다.
+
+### 자동 수집
+
+기능 안정화 후에만 `launchd`를 추가한다. 자동수집이 실패해도 수동 `오늘 기사 검색`은 유지한다.
+
+---
+
+## 17. 로그·백업
+
+### 로그
+
+```text
+logs/app.log
+logs/collection.log
+logs/ai.log
+```
+
+운영 로그에는 API key나 전체 기사 원문을 남기지 않는다. 단, 이 프로젝트는 외부 보안보다는 오류 추적과 저장공간 관리가 목적이다.
+
+### 백업
+
+```text
+backups/db/YYYY-MM-DD_HHMMSS.db
+backups/briefing/YYYY-MM-DD_vN.json
+reports/YYYY/MM/KESCO_일일언론브리핑_YYYY-MM-DD_vN.html
+```
+
+보존 기본값:
+
+- DB 자동백업: 최근 30개
+- 최종 브리핑 snapshot: 삭제하지 않음
+- 로그: 크기 기반 회전
+
+---
+
+## 18. 테스트 전략
+
+### 단위 테스트
+
+- URL·제목·날짜 정규화
+- provider observation 보존
+- 완전·유사 중복 판정
+- 부분 provider 실패 시 기존 후보 보존
+- 예방/사고 문맥 구분
+- 감사/감사패 구분
+- 관련도·심각도 점수 breakdown과 required/review 임계값
+- hard floor·cap 충돌 순서
+- 브리핑 최종값 우선 규칙
+- 선택 해제 후 메모·중요 표시 보존
+- 이슈 재군집화 후 editor override 보존
+- AI JSON schema와 모든 근거 ID 검증
+
+### 통합 테스트
+
+- fixture RSS → observation → article 저장 전체 파이프라인
+- provider 일부 실패 → `partial` run → stale 기존 기사 유지
+- SQLite migration
+- 보고일별 단일 작업본과 revision conflict
+- finalize → version 1 → reopen → version 2
+- JSON export/import 의미상 왕복
+- CSV 손실형 import 경고와 formula escape
+- AI fake client의 잘못된 A99 근거 거부
+- cluster proposal/apply와 수동 membership override
+- 최종 report HTML이 snapshot으로 재생성됨
+
+### 수동 회귀 테스트
+
+Phase 0·1은 `docs/MANUAL_REGRESSION_CHECKLIST.md`를 사용한다. 현행 로직 위험은 `docs/KNOWN_RISKS.md`에 기록하고 Phase 1에서 임의 수정하지 않는다.
+
+### 외부 연결 테스트
+
+기본 테스트에서는 실제 뉴스 사이트와 Ollama를 호출하지 않는다. 별도 `manual` 또는 `live` 표식이 있는 테스트로 분리한다.
+
+### 필수 한국어 분류 fixture
+
+```text
+전기화재 예방 캠페인 확대
+감전 예방 교육 실시
+공장 전기화재로 2명 사상
+감사패 전달
+감사패 전달 뒤 감사원 감사 착수
+감사원 감사 결과 발표
+정전 예방 특별점검
+대규모 정전 발생
+전기안전공사 관련 허위정보 확산
+```
+
+
+## 19. 단계별 구현 순서
+
+### Phase 0. 기준선 고정
+
+- `.gitignore` 적용 및 `.DS_Store` 제거
+- 원본 HTML 보관·실행 확인
+- `docs/MANUAL_REGRESSION_CHECKLIST.md` 수행
+- `docs/KNOWN_RISKS.md` 기준 위험 등록
+- Git 최초 커밋
+
+완료 기준: 원본을 언제든 실행할 수 있고, 의도한 파일만 추적되며, 수동 회귀 기준이 기록돼 있다.
+
+### Phase 1. 프런트엔드 파일 분리
+
+- CSS 분리
+- JavaScript ES Module 분리
+- 화면·기능 변경 금지
+
+완료 기준: 원본과 기능이 동일하다.
+
+### Phase 2. FastAPI 골격
+
+- 정적 파일 제공
+- `/api/health`
+- 원클릭 실행
+- 로그
+
+완료 기준: `.command` 실행으로 화면과 health가 열린다.
+
+### Phase 3. 수집 백엔드 이전
+
+- RSS/GDELT 호출을 Python으로 이동
+- 프런트엔드 공개 CORS proxy 제거
+- `collection_runs`, `collection_run_providers`, `article_observations` 도입
+- provider 일부 실패 시 기존 후보 보존
+
+완료 기준: 브라우저에 수집 business logic이 남지 않고, 부분 실패가 기존 자동 기사를 제거하지 않으며 provider별 이력을 조회할 수 있다.
+
+### Phase 4. SQLite 이전
+
+- DB migration
+- 보고일별 단일 작업본·revision·최종 snapshot 도입
+- 기사 선택/숨김 상태를 PATCH로 저장
+- 기존 JSON import와 versioned JSON round-trip
+- CSV를 손실형 교환 포맷으로 명시
+
+완료 기준: 브라우저 저장소를 지워도 업무 데이터가 보존되고, 선택 해제 후 메모·중요 표시가 유지되며 JSON 백업이 왕복 복원된다.
+
+### Phase 5. 판정 로직 재구축
+
+- ArticleAssessment
+- 관련도·심각도·우선도 점수 분리
+- required/review 임계값과 hard floor·cap
+- 예방·사고·감사 문맥 충돌 순서
+- 자동값/최종값 분리
+- fixture 테스트
+
+완료 기준: 점수 breakdown과 적용 rule을 설명할 수 있고 대표 오분류 테스트를 모두 통과한다.
+
+### Phase 6. 이슈 군집화
+
+- 기사와 Issue 분리
+- cluster run proposal/apply
+- 자동 필드와 editor override 분리
+- 수동 add/remove membership 보존
+- 신규·지속·확산 계산
+
+완료 기준: 동일 사건 기사 여러 건을 원본 보존 상태로 볼 수 있고 재군집화가 담당자 제목·상태·구성을 덮어쓰지 않는다.
+
+### Phase 7. AI 분석 안정화
+
+- Ollama client 단일화
+- 모든 주장 필드의 구조화 근거 schema
+- decisionPoints·riskOutlook 포함 전체 근거 검증
+- 존재하지 않는 ID 거부와 1회 교정 재시도
+- stale 판정
+
+완료 기준: 잘못된 근거 ID가 하나라도 있는 결과는 적용되지 않고 수동 수정이 보존된다.
+
+### Phase 8. CEO 보고 분리
+
+- 읽기 전용 report route
+- 최종확정·version·snapshot
+- 인쇄 품질 조정
+
+완료 기준: 편집 화면과 무관하게 동일 데이터로 재생성할 수 있다.
+
+### Phase 9. 자동화·운영 안정화
+
+- 백업
+- `launchd`
+- 장애 복구
+- 실사용 병행 테스트
+
+완료 기준: 1~2주 병행운영에서 데이터 손실과 중대한 누락이 없다.
+
+---
+
+## 20. 아키텍처 결정 기록
+
+### ADR-001: 프런트엔드 프레임워크를 사용하지 않는다
+
+로컬 단독 업무도구이고 기존 HTML 자산이 충분하다. 빌드 시스템과 Node 의존성을 추가할 실익이 현재는 낮다.
+
+### ADR-002: FastAPI를 로컬 애플리케이션 경계로 사용한다
+
+브라우저 CORS 문제를 없애고 수집·SQLite·Ollama를 한 프로세스에서 관리한다.
+
+### ADR-003: SQLite와 repository 계층을 사용한다
+
+단일 사용자·단일 Mac 환경에 적합하고 별도 DB 서버가 필요 없다. 업무 규칙은 SQL과 분리한다.
+
+### ADR-004: 기사·이슈·브리핑을 별도 모델로 둔다
+
+중복 기사와 동일 이슈를 구분하고, 날짜별 선정 상태가 원본 기사를 오염시키지 않게 한다.
+
+### ADR-005: 규칙 파일은 Git, 사용자 수정은 DB override로 관리한다
+
+기본 규칙의 변경이력을 보존하면서 화면 편집도 가능하게 한다.
+
+### ADR-006: AI는 구조화 결과와 근거 ID를 필수로 한다
+
+문체 품질보다 재현성·검증 가능성을 우선한다.
+
+### ADR-007: 최종 보고는 읽기 전용 HTML snapshot으로 남긴다
+
+브라우저 UI 변경 이후에도 과거 보고를 동일하게 열 수 있게 한다.
+
+### ADR-008: 보고일별 작업본은 하나이고 최종 version은 snapshot으로 분리한다
+
+날짜 기반 API의 version 선택 모호성을 없애고 편집 revision과 최종 보고 version을 분리한다.
+
+### ADR-009: 기사 선택 해제는 DELETE가 아니다
+
+선택 상태 변경으로 메모·중요 표시가 사라지지 않게 `briefing_articles` row를 보존한다.
+
+### ADR-010: provider 응답은 observation으로 보존한다
+
+완전 중복을 하나의 기사로 병합해도 어느 수집 run과 provider에서 발견됐는지 추적한다.
+
+### ADR-011: 재군집화는 proposal/apply이며 editor override를 덮지 않는다
+
+자동 군집 품질을 개선해도 담당자의 제목·상태·구성 편집은 우선한다.
+
+---
+
+## 21. 구현 시 금지할 과잉 설계
+
+- 초기부터 마이크로서비스로 분리
+- Redis, Celery, PostgreSQL 도입
+- Docker 필수화
+- 외부 인증
+- 이벤트 버스
+- 복잡한 CQRS
+- 모든 기사에 LLM 분류 실행
+- 최초 단계에서 임베딩 DB 도입
+- 단일 사용자 도구에 다중조직 권한 모델 추가
+- 기존 HTML을 React로 전면 재작성
+
+---
+
+## 22. 첫 Codex 작업 지시
+
+```text
+현재 저장소의 `legacy/kesco_media_briefing_original.html`을 회귀 기준으로 삼아라.
+
+Phase 1 전에 Phase 0을 완료한다.
+1. `.gitignore`를 적용하고 모든 `.DS_Store`를 삭제한다.
+2. `docs/MANUAL_REGRESSION_CHECKLIST.md`로 원본을 수동 검증한다.
+3. `docs/KNOWN_RISKS.md`의 기존 위험을 Phase 1에서 임의로 수정하지 않는다.
+4. 의도한 파일만 포함해 최초 Git commit을 만든다.
+
+그 다음 작업 범위는 Phase 1만이다.
+1. 화면 디자인과 기능을 변경하지 않는다.
+2. 인라인 CSS를 `frontend/css`로 분리한다.
+3. 인라인 JavaScript를 ES Module로 분리한다.
+4. 아직 RSS 수집, localStorage, AI 호출 로직은 동작 위치를 바꾸지 않는다.
+5. 원본과 분리본을 수동 체크리스트로 비교한다.
+6. 신규 프레임워크와 신규 기능을 추가하지 않는다.
+7. 완료 후 수정 파일, 함수 이동표, 테스트 결과, 남은 위험을 보고한다.
+```
