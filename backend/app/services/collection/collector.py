@@ -5,17 +5,21 @@ from datetime import datetime
 from typing import Any
 
 from backend.app.core.clock import SEOUL_TZ, now_iso, today_seoul
+from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import run_repository as run_repo
+from backend.app.repositories.database import get_connection
 from backend.app.services.classification.rule_engine import infer_category, should_exclude
-from backend.app.services.classification.service import classify_article, relevance_sort_key
+from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article, relevance_sort_key
 from backend.app.services.collection.custom_endpoint import fetch_custom_endpoint
 from backend.app.services.collection.gdelt import fetch_gdelt_combined
 from backend.app.services.collection.google_news import fetch_google_rss
 from backend.app.services.collection.http import CollectionHttpError
 from backend.app.services.collection.rss_parser import RssParseError
 from backend.app.services.collection.yonhap import fetch_yonhap_rss
-from backend.app.services.deduplication.service import deduplicate_detailed, same_article
+from backend.app.services.deduplication.service import deduplicate_detailed
 from backend.app.services.extraction.cleaner import clean_text
-from backend.app.services.normalization.dates import date_value
+from backend.app.services.normalization.dates import date_value, since_bound_iso
+from backend.app.services.normalization.url import canonical_article_url
 
 Article = dict[str, Any]
 
@@ -63,6 +67,60 @@ def fetch_query(
     return {"items": items, "provider": "Google 뉴스 RSS"}
 
 
+def _persist_provider_results(
+    connection, run_id: str, provider_tasks: list[dict[str, Any]], started_at: str, finished_at: str
+) -> dict[str, str]:
+    provider_id_by_label: dict[str, str] = {}
+    for task in provider_tasks:
+        provider_id_by_label[task["label"]] = run_repo.add_provider_result(
+            connection,
+            run_id=run_id,
+            provider=task.get("provider") or task["label"],
+            query_group_id=task.get("query_group_id"),
+            status=task["status"],
+            started_at=started_at,
+            finished_at=finished_at,
+            raw_count=task.get("raw_count", 0),
+            accepted_count=0,
+            duplicate_count=0,
+            warning_message=task.get("warning_message"),
+            error_code=None,
+            error_message=task.get("error_message"),
+        )
+    return provider_id_by_label
+
+
+def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]:
+    """content_key/제목 fuzzy 매칭으로 기존 기사와 병합하거나 새 기사를 만든다. (article_id, dedup_method, matched) 반환."""
+    pub_date = item.get("pubDate")
+    since = since_bound_iso(pub_date, 96)
+    match = article_repo.find_matching_article(
+        connection, url=item.get("url"), title=item.get("title"), published_at=pub_date, since_iso=since
+    )
+    if match is not None:
+        article_id = match["id"]
+        new_description = item.get("description") or ""
+        if len(new_description) > len(match["description"] or ""):
+            article_repo.touch_article(connection, article_id, description=new_description)
+        else:
+            article_repo.touch_article(connection, article_id)
+        canonical = canonical_article_url(item.get("url"))
+        dedup_method = "canonical_url" if canonical and canonical == match["canonical_url"] else "fuzzy_same_copy"
+        return article_id, dedup_method, True
+
+    article_id = article_repo.create_article(
+        connection,
+        url=item.get("url"),
+        title=item.get("title") or "제목 없음",
+        source=item.get("source"),
+        published_at=pub_date,
+        description=item.get("description"),
+        category_hint=item.get("category"),
+        manual=False,
+    )
+    return article_id, "new", False
+
+
 async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     report_date = payload.get("reportDate") or today_seoul()
     lookback_hours = int(payload.get("lookbackHours") or 48)
@@ -75,10 +133,11 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     positive_keywords = payload.get("positiveKeywords") or []
     exclude_keywords = payload.get("excludeKeywords") or []
     endpoint = payload.get("endpoint") or ""
-    existing_articles: list[Article] = payload.get("existingArticles") or []
 
     def within_lookback(pub_date: str | None) -> bool:
         return _within_lookback(pub_date, report_date, lookback_hours)
+
+    started_at = now_iso()
 
     tasks: list[tuple[str, str]] = []
     coros = []
@@ -95,82 +154,189 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     providers: list[str] = []
     failures: list[str] = []
     warnings: list[str] = []
+    provider_tasks: list[dict[str, Any]] = []
 
     for (label, category), result in zip(tasks, results):
+        query_group_id = None if category == "auto" else category
         if isinstance(result, BaseException):
             failures.append(f"{label}: {friendly_error(result)}")
+            provider_tasks.append(
+                {
+                    "label": label,
+                    "provider": label,
+                    "query_group_id": query_group_id,
+                    "status": "failed",
+                    "raw_count": 0,
+                    "error_message": friendly_error(result),
+                }
+            )
             continue
-        for item in result["items"]:
+        items = result["items"]
+        for item in items:
             assigned_category = infer_category(item) if category == "auto" else category
-            collected.append({**item, "category": assigned_category})
+            collected.append({**item, "category": assigned_category, "_task_label": label, "_query_group_id": query_group_id})
         provider_label = result.get("provider")
         if provider_label and provider_label not in providers:
             providers.append(provider_label)
         warning = result.get("warning")
         if warning:
             warnings.append(f"{label}: {warning}")
+        provider_tasks.append(
+            {
+                "label": label,
+                "provider": provider_label,
+                "query_group_id": query_group_id,
+                "status": "success",
+                "raw_count": len(items),
+                "warning_message": warning,
+            }
+        )
 
     network_succeeded = bool(providers)
     if not collected and failures:
         try:
             gdelt_items = await asyncio.to_thread(fetch_gdelt_combined, core_keywords, lookback_hours, max_records)
             for item in gdelt_items:
-                collected.append({**item, "category": infer_category(item)})
+                collected.append(
+                    {**item, "category": infer_category(item), "_task_label": "GDELT", "_query_group_id": None}
+                )
             if "GDELT" not in providers:
                 providers.append("GDELT")
             network_succeeded = True
             warnings.extend(f"RSS 보조 전환: {f}" for f in failures)
+            provider_tasks.append(
+                {
+                    "label": "GDELT",
+                    "provider": "GDELT",
+                    "query_group_id": None,
+                    "status": "success",
+                    "raw_count": len(gdelt_items),
+                }
+            )
             failures = []
         except Exception as gdelt_error:  # noqa: BLE001
             failures.append(f"GDELT 보조: {friendly_error(gdelt_error)}")
+            provider_tasks.append(
+                {
+                    "label": "GDELT",
+                    "provider": "GDELT",
+                    "query_group_id": None,
+                    "status": "failed",
+                    "raw_count": 0,
+                    "error_message": friendly_error(gdelt_error),
+                }
+            )
 
     eligible = [
         article
         for article in collected
         if not should_exclude(article, exclude_keywords) and within_lookback(article.get("pubDate"))
     ]
-    first_pass_items, first_pass_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
+    first_pass_items, duplicates_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
 
-    fresh: list[Article] = []
-    for raw in first_pass_items:
-        classified = classify_article(raw, risk_keywords, positive_keywords)
-        old = next((a for a in existing_articles if same_article(a, classified)), None)
-        fresh.append(
-            {
-                **classified,
-                "included": bool(old.get("included")) if old else False,
-                "starred": bool(old.get("starred")) if old else False,
-                "note": (old.get("note") if old else "") or "",
-            }
-        )
-    fresh.sort(key=relevance_sort_key)
-    fresh = fresh[:collection_limit]
+    classified_items = [classify_article(raw, risk_keywords, positive_keywords) for raw in first_pass_items]
+    classified_items.sort(key=relevance_sort_key)
+    classified_items = classified_items[:collection_limit]
 
     finished_at = now_iso()
+    raw_count = len(collected)
+    accepted_count = len(eligible)
 
-    if network_succeeded:
-        manual = [a for a in existing_articles if a.get("manual")]
-        final_items, final_removed = deduplicate_detailed(manual + fresh, risk_keywords, positive_keywords)
-        final_items.sort(key=relevance_sort_key)
-        status = "success" if not failures else "partial"
-        return {
-            "status": status,
-            "provider": " + ".join(providers),
-            "articles": final_items,
-            "rawCollectedCount": len(collected),
-            "duplicatesRemoved": first_pass_removed + final_removed,
-            "fetchedAt": finished_at,
-            "errors": [],
-            "warnings": [*warnings, *(f"일부 검색 실패: {f}" for f in failures)],
-        }
+    connection = get_connection()
+    try:
+        with connection:
+            run_id = run_repo.create_run(
+                connection, report_date=report_date, started_at=started_at, lookback_hours=lookback_hours
+            )
+            provider_id_by_label = _persist_provider_results(connection, run_id, provider_tasks, started_at, finished_at)
+
+            if not network_succeeded:
+                run_repo.finish_run(
+                    connection,
+                    run_id,
+                    status="failed",
+                    finished_at=finished_at,
+                    raw_count=raw_count,
+                    accepted_count=0,
+                    unique_count=0,
+                    stale_reused_count=len(run_repo.unrefreshed_candidate_ids(connection, report_date, run_id)),
+                    warning_count=len(warnings),
+                    error_count=len(failures),
+                )
+                return {
+                    "status": "failed",
+                    "provider": "수집 실패",
+                    "rawCollectedCount": raw_count,
+                    "uniqueCount": 0,
+                    "duplicatesRemoved": 0,
+                    "fetchedAt": finished_at,
+                    "errors": failures or ["데이터 제공 경로에서 응답을 받지 못했습니다."],
+                    "warnings": warnings,
+                    "collectionRunId": run_id,
+                }
+
+            new_count = 0
+            matched_count = 0
+            for item in classified_items:
+                article_id, dedup_method, matched = _upsert_article_for_item(connection, item)
+                if matched:
+                    matched_count += 1
+                else:
+                    new_count += 1
+                article_repo.insert_observation(
+                    connection,
+                    article_id=article_id,
+                    collection_run_provider_id=provider_id_by_label.get(item.get("_task_label")),
+                    provider=item.get("provider") or item.get("_task_label") or "unknown",
+                    provider_item_key=None,
+                    query_group_id=item.get("_query_group_id"),
+                    raw_url=item.get("url"),
+                    raw_title=item.get("title"),
+                    raw_source=item.get("source"),
+                    raw_published_at=item.get("pubDate"),
+                    raw_description=item.get("description"),
+                    raw_payload_json=None,
+                    dedup_method=dedup_method,
+                    dedup_score=None,
+                )
+                article_repo.upsert_assessment(
+                    connection,
+                    article_id=article_id,
+                    auto_category=item.get("category"),
+                    auto_risk=item.get("risk"),
+                    auto_risk_score=item.get("riskScore"),
+                    auto_sentiment=item.get("sentiment"),
+                    auto_reasons=item.get("matchedKeywords"),
+                    classifier_version=CLASSIFIER_VERSION,
+                )
+
+            status = "success" if not failures else "partial"
+            stale_reused_count = len(run_repo.unrefreshed_candidate_ids(connection, report_date, run_id))
+            run_repo.finish_run(
+                connection,
+                run_id,
+                status=status,
+                finished_at=finished_at,
+                raw_count=raw_count,
+                accepted_count=accepted_count,
+                unique_count=len(classified_items),
+                stale_reused_count=stale_reused_count,
+                warning_count=len(warnings),
+                error_count=len(failures),
+            )
+    finally:
+        connection.close()
 
     return {
-        "status": "failed",
-        "provider": "수집 실패",
-        "articles": [],
-        "rawCollectedCount": len(collected),
-        "duplicatesRemoved": 0,
+        "status": status,
+        "provider": " + ".join(providers),
+        "rawCollectedCount": raw_count,
+        "uniqueCount": len(classified_items),
+        "newCount": new_count,
+        "matchedCount": matched_count,
+        "duplicatesRemoved": duplicates_removed,
         "fetchedAt": finished_at,
-        "errors": failures or ["데이터 제공 경로에서 응답을 받지 못했습니다."],
-        "warnings": warnings,
+        "errors": [],
+        "warnings": [*warnings, *(f"일부 검색 실패: {f}" for f in failures)],
+        "collectionRunId": run_id,
     }

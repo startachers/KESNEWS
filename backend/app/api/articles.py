@@ -9,13 +9,12 @@ from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.core.clock import now_iso
 from backend.app.repositories import article_repository as articles_repo
 from backend.app.repositories import briefing_repository as briefings_repo
+from backend.app.repositories import run_repository as runs_repo
 from backend.app.repositories.database import get_connection
-from backend.app.services.classification.service import classify_article
+from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 
 router = APIRouter()
-
-_CLASSIFIER_VERSION = "phase3-rules-v1"
 
 
 class ManualArticleRequest(BaseModel):
@@ -38,9 +37,23 @@ async def list_articles(
     connection = get_connection()
     try:
         items = articles_repo.list_candidates(connection, report_date, include_dismissed)
+        meta: dict[str, Any] = {"failedProviders": [], "lastGoodCollectionAt": None}
+        latest_run = runs_repo.get_latest_run(connection, report_date)
+        if latest_run is not None:
+            meta["lastGoodCollectionAt"] = runs_repo.get_last_successful_finished_at(connection, report_date)
+            if latest_run["status"] != "success":
+                meta["failedProviders"] = runs_repo.failed_providers(connection, latest_run["id"])
+                stale_ids = runs_repo.unrefreshed_candidate_ids(connection, report_date, latest_run["id"])
+                for item in items:
+                    if item["id"] in stale_ids:
+                        item["stale"] = True
+                        item["staleReason"] = "provider_failed"
+        for item in items:
+            item.setdefault("stale", False)
+            item.setdefault("staleReason", None)
     finally:
         connection.close()
-    return ok_envelope({"articles": items})
+    return ok_envelope({"articles": items}, meta=meta)
 
 
 @router.post("/api/articles")
@@ -112,7 +125,7 @@ async def create_manual_article(request: ManualArticleRequest) -> Any:
                 auto_risk_score=classified["riskScore"],
                 auto_sentiment=classified["sentiment"],
                 auto_reasons=classified["matchedKeywords"],
-                classifier_version=_CLASSIFIER_VERSION,
+                classifier_version=CLASSIFIER_VERSION,
             )
             briefings_repo.mark_selected(connection, briefing["id"], article_id)
     finally:

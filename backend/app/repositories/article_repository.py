@@ -230,19 +230,27 @@ def upsert_assessment(
     )
 
 
-_CANDIDATE_UNION_SQL = """
-WITH candidate_ids AS (
-    SELECT ao.article_id AS article_id
-    FROM article_observations ao
-    JOIN collection_run_providers crp ON crp.id = ao.collection_run_provider_id
-    JOIN collection_runs cr ON cr.id = crp.collection_run_id
-    WHERE cr.report_date = :report_date
-    UNION
-    SELECT ba.article_id AS article_id
-    FROM briefing_articles ba
-    JOIN briefings b ON b.id = ba.briefing_id
-    WHERE b.report_date = :report_date
-),
+CANDIDATE_IDS_SQL = """
+SELECT ao.article_id AS article_id
+FROM article_observations ao
+JOIN collection_run_providers crp ON crp.id = ao.collection_run_provider_id
+JOIN collection_runs cr ON cr.id = crp.collection_run_id
+WHERE cr.report_date = :report_date
+UNION
+SELECT ba.article_id AS article_id
+FROM briefing_articles ba
+JOIN briefings b ON b.id = ba.briefing_id
+WHERE b.report_date = :report_date
+"""
+
+
+def list_candidate_article_ids(connection: sqlite3.Connection, report_date: str) -> set[str]:
+    rows = connection.execute(CANDIDATE_IDS_SQL, {"report_date": report_date}).fetchall()
+    return {row["article_id"] for row in rows}
+
+
+_CANDIDATE_UNION_SQL = f"""
+WITH candidate_ids AS ({CANDIDATE_IDS_SQL}),
 latest_observation AS (
     SELECT article_id, raw_url, provider
     FROM (

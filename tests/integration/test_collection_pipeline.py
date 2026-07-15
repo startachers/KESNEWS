@@ -6,13 +6,13 @@ from backend.app.main import app
 client = TestClient(app)
 
 
-def _yonhap_result(**overrides):
+def _yonhap_result(url, pub_date, **overrides):
     item = {
         "id": "raw-yonhap-1",
         "title": "한국전기안전공사 국정감사서 지적",
         "source": "연합뉴스",
-        "url": "https://www.yna.co.kr/view/AKR2026071500001",
-        "pubDate": "2026-07-15T09:00:00Z",
+        "url": url,
+        "pubDate": pub_date,
         "description": "국정감사에서 안전관리 실태가 지적됐다.",
         "provider": "연합뉴스 RSS",
     }
@@ -20,13 +20,13 @@ def _yonhap_result(**overrides):
     return {"items": [item], "provider": "연합뉴스 RSS"}
 
 
-def _google_result(**overrides):
+def _google_result(url, pub_date, **overrides):
     item = {
         "id": "raw-google-1",
         "title": "전기화재 예방 캠페인 실시",
         "source": "조선일보",
-        "url": "https://www.chosun.com/national/2026/07/15/example/",
-        "pubDate": "2026-07-15T08:00:00Z",
+        "url": url,
+        "pubDate": pub_date,
         "description": "전기화재 예방을 위한 캠페인이 실시됐다.",
         "provider": "Google 뉴스 RSS",
     }
@@ -36,7 +36,7 @@ def _google_result(**overrides):
 
 def _base_payload(**overrides):
     payload = {
-        "reportDate": "2026-07-15",
+        "reportDate": "2025-01-15",
         "lookbackHours": 48,
         "maxRecordsPerQuery": 50,
         "collectionLimit": 200,
@@ -47,69 +47,125 @@ def _base_payload(**overrides):
         "positiveKeywords": [],
         "excludeKeywords": ["채용공고"],
         "endpoint": "",
-        "existingArticles": [],
     }
     payload.update(overrides)
     return payload
 
 
-def test_collections_merges_providers_and_returns_success(monkeypatch):
-    monkeypatch.setattr(collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result())
-    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: _google_result()["items"])
+def _articles(report_date: str, **params):
+    response = client.get("/api/articles", params={"report_date": report_date, **params})
+    assert response.status_code == 200
+    return response.json()
 
-    response = client.post("/api/collections", json=_base_payload())
+
+def test_collections_merges_providers_and_returns_success(monkeypatch):
+    report_date = "2025-01-15"
+    yonhap_url = "https://www.yna.co.kr/view/AKR2026071500001-merge"
+    google_url = "https://www.chosun.com/national/2026/07/15/merge/"
+    monkeypatch.setattr(
+        collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result(yonhap_url, f"{report_date}T09:00:00Z", title="병합 테스트 국정감사 기사")
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: _google_result(google_url, f"{report_date}T08:00:00Z", title="병합 테스트 전기화재 캠페인")["items"],
+    )
+
+    response = client.post("/api/collections", json=_base_payload(reportDate=report_date))
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
     data = body["data"]
     assert data["status"] == "success"
-    titles = {article["title"] for article in data["articles"]}
-    assert "한국전기안전공사 국정감사서 지적" in titles
-    assert "전기화재 예방 캠페인 실시" in titles
     assert data["rawCollectedCount"] == 2
+    assert data["uniqueCount"] == 2
+    assert "articles" not in data
+
+    listed = _articles(report_date)
+    urls = {article["url"] for article in listed["data"]["articles"]}
+    assert yonhap_url in urls
+    assert google_url in urls
 
 
-def test_collections_preserves_manual_and_existing_selection_state(monkeypatch):
-    monkeypatch.setattr(collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result())
+def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
+    report_date = "2025-01-16"
+    yonhap_url = "https://www.yna.co.kr/view/AKR2026071600001-repeat"
+    monkeypatch.setattr(
+        collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result(yonhap_url, f"{report_date}T09:00:00Z", title="반복 테스트 국정감사 기사")
+    )
     monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
 
-    existing = [
-        {
-            "id": "existing-yonhap",
-            "title": "한국전기안전공사 국정감사서 지적",
-            "source": "연합뉴스",
-            "url": "https://www.yna.co.kr/view/AKR2026071500001",
-            "pubDate": "2026-07-15T09:00:00Z",
-            "description": "국정감사에서 안전관리 실태가 지적됐다.",
-            "risk": "watch",
-            "included": True,
-            "starred": True,
-            "note": "담당자 메모",
-            "manual": False,
-        },
-        {
-            "id": "manual-1",
-            "title": "직접 등록한 사내 소식",
-            "source": "사내소식",
-            "url": "https://intra.example.com/news/1",
-            "pubDate": "2026-07-15T07:00:00Z",
-            "description": "수동으로 등록한 기사.",
-            "risk": "routine",
-            "included": True,
-            "starred": False,
-            "note": "",
-            "manual": True,
-        },
-    ]
+    first = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert first["newCount"] == 1
+    second = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert second["matchedCount"] == 1
+    assert second["newCount"] == 0
 
-    response = client.post("/api/collections", json=_base_payload(existingArticles=existing))
-    assert response.status_code == 200
-    data = response.json()["data"]
-    matched = next(a for a in data["articles"] if a["url"] == "https://www.yna.co.kr/view/AKR2026071500001")
-    assert matched["included"] is True
-    assert matched["starred"] is True
-    assert matched["note"] == "담당자 메모"
-    assert any(a["id"] == "manual-1" for a in data["articles"])
+    listed = _articles(report_date)["data"]["articles"]
+    matching = [a for a in listed if a["url"] == yonhap_url]
+    assert len(matching) == 1
+
+
+def test_manual_selection_state_survives_recollection(monkeypatch):
+    report_date = "2025-01-17"
+    yonhap_url = "https://www.yna.co.kr/view/AKR2026071700001-manual"
+    monkeypatch.setattr(
+        collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result(yonhap_url, f"{report_date}T09:00:00Z", title="수동 보존 테스트 국정감사 기사")
+    )
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+
+    client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
+    client.post("/api/collections", json=_base_payload(reportDate=report_date))
+
+    listed = _articles(report_date)["data"]["articles"]
+    article_id = next(a["id"] for a in listed if a["url"] == yonhap_url)
+
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": briefing["revision"], "selected": True, "starred": True, "note": "담당자 메모"},
+    )
+
+    # 재수집 — LEG-001/P3-002 해소: 수집은 selected/starred/note를 건드리지 않는다.
+    client.post("/api/collections", json=_base_payload(reportDate=report_date))
+
+    reloaded = _articles(report_date)["data"]["articles"]
+    reloaded_article = next(a for a in reloaded if a["id"] == article_id)
+    assert reloaded_article["included"] is True
+    assert reloaded_article["starred"] is True
+    assert reloaded_article["note"] == "담당자 메모"
+
+
+def test_partial_failure_preserves_previously_collected_articles(monkeypatch):
+    report_date = "2025-01-18"
+    yonhap_url = "https://www.yna.co.kr/view/AKR2026071800001-partial"
+    google_url = "https://www.chosun.com/national/2026/07/18/partial/"
+    monkeypatch.setattr(
+        collector_module, "fetch_yonhap_rss", lambda *a, **k: _yonhap_result(yonhap_url, f"{report_date}T09:00:00Z", title="부분실패 테스트 국정감사 기사")
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: _google_result(google_url, f"{report_date}T08:00:00Z", title="부분실패 테스트 전기화재 캠페인")["items"],
+    )
+    first = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert first["status"] == "success"
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("검색식 연결 실패")
+
+    monkeypatch.setattr(collector_module, "fetch_google_rss", _raise)
+    second = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert second["status"] == "partial"
+
+    listed = _articles(report_date)
+    items = listed["data"]["articles"]
+    yonhap_article = next(a for a in items if a["url"] == yonhap_url)
+    google_article = next(a for a in items if a["url"] == google_url)
+    assert yonhap_article["stale"] is False
+    assert google_article["stale"] is True
+    assert google_article["staleReason"] == "provider_failed"
+    assert listed["meta"]["failedProviders"]
 
 
 def test_collections_returns_failed_status_when_all_providers_fail(monkeypatch):
@@ -120,16 +176,17 @@ def test_collections_returns_failed_status_when_all_providers_fail(monkeypatch):
     monkeypatch.setattr(collector_module, "fetch_google_rss", _raise)
     monkeypatch.setattr(collector_module, "fetch_gdelt_combined", _raise)
 
-    response = client.post("/api/collections", json=_base_payload())
+    response = client.post("/api/collections", json=_base_payload(reportDate="2025-01-19"))
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["status"] == "failed"
-    assert body["data"]["articles"] == []
     assert body["data"]["errors"]
 
 
 def test_collections_falls_back_to_gdelt_when_rss_providers_fail(monkeypatch):
+    report_date = "2025-01-20"
+
     def _raise(*args, **kwargs):
         raise RuntimeError("연결 실패")
 
@@ -138,7 +195,7 @@ def test_collections_falls_back_to_gdelt_when_rss_providers_fail(monkeypatch):
         "title": "한국전기안전공사 관련 GDELT 기사",
         "source": "example.com",
         "url": "https://example.com/gdelt/1",
-        "pubDate": "2026-07-15T09:30:00Z",
+        "pubDate": f"{report_date}T09:30:00Z",
         "description": "GDELT로 수집된 기사.",
         "provider": "GDELT",
     }
@@ -146,19 +203,22 @@ def test_collections_falls_back_to_gdelt_when_rss_providers_fail(monkeypatch):
     monkeypatch.setattr(collector_module, "fetch_google_rss", _raise)
     monkeypatch.setattr(collector_module, "fetch_gdelt_combined", lambda *a, **k: [gdelt_item])
 
-    response = client.post("/api/collections", json=_base_payload())
+    response = client.post("/api/collections", json=_base_payload(reportDate=report_date))
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["status"] == "success"
     assert data["provider"] == "GDELT"
     assert any("RSS 보조 전환" in w for w in data["warnings"])
 
+    listed = _articles(report_date)["data"]["articles"]
+    assert any(a["url"] == "https://example.com/gdelt/1" for a in listed)
+
 
 def test_collections_rejects_request_without_any_source():
     response = client.post(
         "/api/collections", json=_base_payload(enableYonhap=False, queries=[])
     )
-    assert response.status_code == 200
+    assert response.status_code == 400
     body = response.json()
     assert body["ok"] is False
     assert body["error"]["code"] == "COLLECTION_NO_SOURCE"

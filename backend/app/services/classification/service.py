@@ -14,6 +14,8 @@ from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
 
+CLASSIFIER_VERSION = "phase3-rules-v1"
+
 _HEAVY_WEIGHTS = {
     "사망": 6,
     "중대재해": 6,
