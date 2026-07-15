@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.collections import router as collections_router
+from backend.app.repositories.database import get_connection, init_db
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -31,6 +32,25 @@ logger = logging.getLogger("kesco.app")
 app = FastAPI(title="KESCO Media Briefing")
 
 
+@app.on_event("startup")
+async def _run_migrations_on_startup() -> None:
+    applied_migrations = await asyncio.to_thread(init_db)
+    if applied_migrations:
+        logger.info("DB migration 적용: %s", ", ".join(applied_migrations))
+
+
+def _check_db_connected() -> bool:
+    try:
+        connection = get_connection()
+        try:
+            connection.execute("SELECT 1")
+            return True
+        finally:
+            connection.close()
+    except OSError:
+        return False
+
+
 def _fetch_ollama_tags() -> tuple[list[dict], str]:
     """Ollama는 선택 의존성이다. 실패해도 /api/health 자체는 정상으로 응답한다."""
     try:
@@ -49,7 +69,8 @@ def _fetch_ollama_tags() -> tuple[list[dict], str]:
 @app.get("/api/health")
 async def health() -> dict:
     models, default_model = await asyncio.to_thread(_fetch_ollama_tags)
-    return {"ok": True, "models": models, "defaultModel": default_model, "error": None}
+    db_connected = await asyncio.to_thread(_check_db_connected)
+    return {"ok": True, "models": models, "defaultModel": default_model, "dbConnected": db_connected, "error": None}
 
 
 app.include_router(collections_router)
