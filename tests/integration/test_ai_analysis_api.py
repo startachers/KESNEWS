@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.services.ai.ollama_client import OllamaError
+from backend.app.services.extraction.article_body import BodyFetchResult
 
 client = TestClient(app)
 
@@ -36,7 +37,7 @@ class FakeOllama:
         return json.dumps(response, ensure_ascii=False) if isinstance(response, dict) else response
 
 
-def setup_selected_article(report_date: str):
+def setup_selected_article(report_date: str, *, title: str | None = None):
     briefing = client.put(
         f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}}
     ).json()["data"]
@@ -44,7 +45,7 @@ def setup_selected_article(report_date: str):
         "/api/articles",
         json={
             "reportDate": report_date,
-            "title": f"AI 분석 기사 {report_date}",
+            "title": title or f"AI 분석 기사 {report_date}",
             "source": "테스트일보",
             "url": f"https://example.com/ai/{report_date}",
             "description": "한국전기안전공사 관련 확인된 기사 설명",
@@ -75,6 +76,41 @@ def test_valid_result_persists_fixed_evidence_and_structured_response():
     assert data["summaryMode"] == "ai"
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
     assert loaded["aiState"]["lastSuccessfulRun"]["response"]["analysis"]["confidence"] == "medium"
+
+
+def test_selected_article_full_text_is_fetched_and_used(monkeypatch):
+    report_date = "2025-03-09"
+    _, article_id = setup_selected_article(
+        report_date, title="전문 수집 성공 여부를 확인하는 고유한 전기안전 현장 기사"
+    )
+    full_text = "전문에만 포함된 현장 안전점검 세부 내용입니다. " * 20
+    monkeypatch.setattr(
+        "backend.app.api.analysis.article_body.fetch_article_body",
+        lambda url: BodyFetchResult(full_text, "full_text"),
+    )
+    response = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    assert response.status_code == 200
+    evidence_article = response.json()["data"]["run"]["request"]["articles"][0]
+    assert evidence_article["content"] == full_text
+    assert evidence_article["bodyStatus"] == "full_text"
+    assert evidence_article["bodyError"] == ""
+
+
+def test_body_fetch_failure_keeps_rss_summary_and_records_error(monkeypatch):
+    report_date = "2025-03-10"
+    setup_selected_article(
+        report_date, title="언론사 차단 시 RSS 폴백을 확인하는 고유한 경영 현안 기사"
+    )
+    monkeypatch.setattr(
+        "backend.app.api.analysis.article_body.fetch_article_body",
+        lambda url: BodyFetchResult("", "missing", "언론사 응답 HTTP 403"),
+    )
+    response = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    assert response.status_code == 200
+    evidence_article = response.json()["data"]["run"]["request"]["articles"][0]
+    assert evidence_article["content"] == "한국전기안전공사 관련 확인된 기사 설명"
+    assert evidence_article["bodyStatus"] == "summary_only"
+    assert evidence_article["bodyError"] == "언론사 응답 HTTP 403"
 
 
 def test_unknown_a99_is_corrected_once_then_applied():

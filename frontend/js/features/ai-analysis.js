@@ -240,7 +240,7 @@ export async function generateAiManagementSummary() {
       title: article.title,
       source: article.source,
       basis: article.bodyStatus,
-      error: ""
+      error: article.bodyError || ""
     })) : [];
     state.summary = data.situationSummary;
     state.summaryEdited = data.summaryMode === "ai-edited";
@@ -251,7 +251,13 @@ export async function generateAiManagementSummary() {
     state.summaryContextLength = run.request?.contextLength || 0;
     state.summarySelectedCount = selected.length;
     state.summaryEvidenceIds = Object.keys(run.evidence || {});
-    state.summaryCoverage = { selected: selected.length, summaryCount: state.summaryEvidenceMap.filter(article => article.basis !== "missing").length };
+    state.summaryCoverage = {
+      selected: selected.length,
+      bodyCount: state.summaryEvidenceMap.filter(article => article.basis === "full_text").length,
+      rssOnlyCount: state.summaryEvidenceMap.filter(article => article.basis === "summary_only").length,
+      titleOnlyCount: state.summaryEvidenceMap.filter(article => article.basis === "missing" && !article.error).length,
+      failedCount: state.summaryEvidenceMap.filter(article => article.error).length
+    };
     state.summaryError = "";
     state.aiStale = false;
     state.aiRunId = run.id || "";

@@ -28,6 +28,7 @@ EXPECTED_MIGRATIONS = [
     "0002_article_assessment_phase5.sql",
     "0003_issue_clustering_phase6.sql",
     "0004_ai_analysis_phase7.sql",
+    "0005_article_body_extraction.sql",
 ]
 
 
@@ -115,6 +116,16 @@ def test_phase7_migration_adds_ai_run_evidence_and_error_columns(tmp_path):
         connection.close()
 
 
+def test_article_body_migration_adds_text_status_and_failure_detail(tmp_path):
+    connection = get_connection(tmp_path / "body.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(articles)")}
+        assert {"body_text", "body_status", "body_fetched_at", "body_error"}.issubset(columns)
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -159,6 +170,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0002_article_assessment_phase5.sql",
         "0003_issue_clustering_phase6.sql",
         "0004_ai_analysis_phase7.sql",
+        "0005_article_body_extraction.sql",
     ]
     upgraded = get_connection(db_path)
     try:

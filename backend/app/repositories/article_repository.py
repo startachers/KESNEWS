@@ -143,6 +143,26 @@ def touch_article(
         )
 
 
+def update_article_body(
+    connection: sqlite3.Connection,
+    article_id: str,
+    *,
+    body_text: str,
+    body_status: str,
+    body_error: str,
+    fetched_at: str | None = None,
+) -> None:
+    now = now_iso()
+    connection.execute(
+        """
+        UPDATE articles
+        SET body_text = ?, body_status = ?, body_fetched_at = ?, body_error = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (body_text, body_status, fetched_at or now, body_error, now, article_id),
+    )
+
+
 def insert_observation(
     connection: sqlite3.Connection,
     *,
@@ -343,6 +363,10 @@ SELECT
     a.source AS source,
     a.published_at AS published_at,
     a.description AS description,
+    a.body_text AS body_text,
+    a.body_status AS body_status,
+    a.body_fetched_at AS body_fetched_at,
+    a.body_error AS body_error,
     a.category_hint AS category_hint,
     a.manual AS manual,
     lo.raw_url AS url,
@@ -401,6 +425,10 @@ def list_candidates(
                 "url": row["url"] or "",
                 "pubDate": row["published_at"],
                 "description": row["description"] or "",
+                "bodyText": row["body_text"] or "",
+                "bodyStatus": row["body_status"] or "missing",
+                "bodyFetchedAt": row["body_fetched_at"],
+                "bodyError": row["body_error"] or "",
                 "category": effective_category,
                 "manual": bool(row["manual"]),
                 "risk": {"required": "critical", "review": "watch", "reference": "routine"}.get(effective_priority, row["auto_risk"]),

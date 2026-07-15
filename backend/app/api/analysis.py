@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -21,6 +22,7 @@ from backend.app.services.ai.analyzer import (
     build_evidence_input,
     format_analysis,
     input_signature,
+    select_articles,
 )
 from backend.app.services.ai.ollama_client import (
     DEFAULT_CONTEXT_LENGTH,
@@ -33,6 +35,7 @@ from backend.app.services.ai.runtime import (
     analysis_registry,
 )
 from backend.app.services.ai.prompt_builder import PROMPT_VERSION
+from backend.app.services.extraction import article_body
 
 router = APIRouter()
 ANALYSIS_TIMEOUT_SECONDS = max(30, int(os.environ.get("KESCO_AI_TIMEOUT_SECONDS", "300")))
@@ -54,6 +57,48 @@ def _issue_map(connection, report_date: str) -> dict[str, list[str]]:
 def _inputs(connection, report_date: str) -> tuple[list[dict[str, Any]], dict[str, str]]:
     articles = articles_repo.list_candidates(connection, report_date, include_dismissed=False)
     return build_evidence_input(articles, _issue_map(connection, report_date))
+
+
+def _refresh_selected_bodies(report_date: str) -> None:
+    connection = get_connection()
+    try:
+        selected = select_articles(
+            articles_repo.list_candidates(connection, report_date, include_dismissed=False)
+        )
+        pending = [item for item in selected if not item.get("bodyText")]
+        if not pending:
+            return
+
+        results: dict[str, article_body.BodyFetchResult] = {}
+        with ThreadPoolExecutor(max_workers=min(8, len(pending))) as executor:
+            futures = {
+                executor.submit(article_body.fetch_article_body, item.get("url") or ""): item
+                for item in pending
+            }
+            for future in as_completed(futures):
+                item = futures[future]
+                try:
+                    results[item["id"]] = future.result()
+                except Exception as exc:  # 개별 언론사 파서 실패가 전체 분석을 막지 않는다.
+                    results[item["id"]] = article_body.BodyFetchResult(
+                        "", "missing", f"기사 전문 수집 실패: {exc}"
+                    )
+
+        with connection:
+            for item in pending:
+                result = results[item["id"]]
+                status = result.status
+                if not result.body_text and item.get("description"):
+                    status = "summary_only"
+                articles_repo.update_article_body(
+                    connection,
+                    item["id"],
+                    body_text=result.body_text,
+                    body_status=status,
+                    body_error=result.error,
+                )
+    finally:
+        connection.close()
 
 
 def ai_state(
@@ -137,6 +182,14 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
     connection = get_connection()
     registered = False
     try:
+        briefing = briefings_repo.get_by_date(connection, report_date)
+        if briefing is None:
+            return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+        if briefing["status"] == "final":
+            return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 분석할 수 없습니다.")
+        if briefing["revision"] != body.expectedRevision:
+            return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
+        await asyncio.to_thread(_refresh_selected_bodies, report_date)
         connection.execute("BEGIN IMMEDIATE")
         orphan = ai_runs_repo.latest_running(connection)
         if orphan is not None:

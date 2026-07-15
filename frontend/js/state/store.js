@@ -96,8 +96,14 @@ export async function loadDailyState(date) {
       summaryContextLength: successfulRun?.request?.contextLength || 0,
       summarySelectedCount: evidenceArticles.length,
       summaryEvidenceIds: Object.keys(successfulRun?.evidence || {}),
-      summaryEvidenceMap: evidenceArticles.map(article => ({ id: article.id, title: article.title, source: article.source, basis: article.bodyStatus, error: "" })),
-      summaryCoverage: successfulRun ? { selected: evidenceArticles.length, summaryCount: evidenceArticles.filter(article => article.content).length } : null,
+      summaryEvidenceMap: evidenceArticles.map(article => ({ id: article.id, title: article.title, source: article.source, basis: article.bodyStatus, error: article.bodyError || "" })),
+      summaryCoverage: successfulRun ? {
+        selected: evidenceArticles.length,
+        bodyCount: evidenceArticles.filter(article => article.bodyStatus === "full_text").length,
+        rssOnlyCount: evidenceArticles.filter(article => article.bodyStatus === "summary_only").length,
+        titleOnlyCount: evidenceArticles.filter(article => article.bodyStatus === "missing" && !article.bodyError).length,
+        failedCount: evidenceArticles.filter(article => article.bodyError).length
+      } : null,
       summaryError: briefing.aiState?.currentError ? `최근 AI 실행 실패: ${briefing.aiState.currentError} · 마지막 정상 결과는 유지됩니다.` : "",
       aiStale: !!successfulRun?.stale,
       aiAnalysis: analysis,

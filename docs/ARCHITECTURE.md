@@ -415,6 +415,8 @@ last_observed_at
 description
 body_text
 body_status
+body_fetched_at
+body_error
 category_hint
 manual
 created_at
@@ -1012,6 +1014,11 @@ API에서 다시 불러올 수 있는 값이다.
 
 AI는 담당자가 선정한 기사 또는 이슈만 분석한다. 기본 상한은 20건이다.
 
+분석 시작 시 선정 기사(상한 20건)의 전문을 병렬 수집한다. 확보한 전문은 `articles.body_text`에
+저장해 다음 실행에서 재사용한다. 언론사 차단·유료벽·본문 식별 실패는 `body_error`에 기록하고
+기존 RSS 요약으로 폴백한다. 전문 수집 실패가 전체 AI 분석 실패로 위장되거나 기존 요약을
+삭제해서는 안 된다. 내부망 URL은 수집하지 않으며 리다이렉트된 주소도 같은 검증을 적용한다.
+
 AI 분석은 단일 Mac의 GPU 과점유를 막기 위해 앱 전체에서 한 번에 하나만 실행한다. 프런트의 취소 버튼, 브라우저 연결 종료, 5분 총 제한은 모두 같은 취소 token으로 Ollama 스트리밍 연결을 닫는다. 앱 시작 시 `running`으로 남은 고아 실행은 `AI_INTERRUPTED` 실패로 복구한다.
 
 `gemma4:31b`는 모델 선택지로 유지하되 기본 16K context, 최대 2,048 출력 token, thinking 비활성화, JSON schema structured output을 사용한다. 분석 종료 뒤 모델을 메모리에서 내려 다음 작업의 GPU·열 점유를 남기지 않는다. 일반 모델의 context 기본값은 기존 64K 계약을 유지한다.
@@ -1256,8 +1263,9 @@ reports/YYYY/MM/KESCO_일일언론브리핑_YYYY-MM-DD_vN.html
 - 최종 브리핑 snapshot: 삭제하지 않음
 - 로그: 크기 기반 회전
 
-구현 기본값은 DB 최근 30개, 로그 파일당 5 MiB와 과거 파일 5개다. 최종 확정 시 정식
-schemaVersion JSON을 `backups/briefing/YYYY-MM-DD_vN.json`에도 저장하며 최종 snapshot과
+구현 기본값은 DB 최근 30개, 로그 파일당 5 MiB와 과거 파일 5개다. 현재 정식 백업은
+schemaVersion 5이며 기사 전문·전문 수집 상태까지 왕복한다. 최종 확정 시 JSON을
+`backups/briefing/YYYY-MM-DD_vN.json`에도 저장하며 최종 snapshot과
 HTML은 자동 삭제하지 않는다. 운영 상태는 `GET /api/operations/status`에서 DB 무결성,
 최근 백업, 마지막 수집과 마지막 정상 수집을 함께 확인한다.
 

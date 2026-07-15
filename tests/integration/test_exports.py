@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.repositories.database import get_connection
+from backend.app.services.extraction.article_body import BodyFetchResult
 
 client = TestClient(app)
 
@@ -40,7 +42,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 4
+    assert payload["schemaVersion"] == 5
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -110,7 +112,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 4
+    assert payload["schemaVersion"] == 5
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -123,7 +125,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
     assert restored_issue["membershipOverrides"][0]["action"] == "add"
 
 
-def test_json_schema_v4_round_trip_preserves_ai_run():
+def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch):
     import json
 
     from backend.app.main import app
@@ -145,6 +147,11 @@ def test_json_schema_v4_round_trip_preserves_ai_run():
 
     report_date = "2025-02-11"
     _setup_briefing_with_article(report_date)
+    full_text = "정식 JSON 백업으로 보존할 기사 전문입니다. " * 20
+    monkeypatch.setattr(
+        "backend.app.api.analysis.article_body.fetch_article_body",
+        lambda url: BodyFetchResult(full_text, "full_text"),
+    )
     app.state.ollama_client = FakeOllama()
     briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
     analyzed = client.post(
@@ -153,8 +160,20 @@ def test_json_schema_v4_round_trip_preserves_ai_run():
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 4
+    assert payload["schemaVersion"] == 5
     assert payload["aiRuns"][0]["evidence"]
+    assert payload["articles"][0]["bodyText"] == full_text
+
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "UPDATE articles SET body_text = '', body_status = 'missing', body_error = '' "
+                "WHERE id = ?",
+                (payload["articles"][0]["id"],),
+            )
+    finally:
+        connection.close()
 
     target_date = "2025-02-12"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -162,6 +181,8 @@ def test_json_schema_v4_round_trip_preserves_ai_run():
     assert imported.json()["data"]["aiRunsImported"] == 1
     restored = client.get(f"/api/exports/{target_date}.json").json()["data"]
     assert restored["aiRuns"][0]["response"]["analysis"] == payload["aiRuns"][0]["response"]["analysis"]
+    assert restored["articles"][0]["bodyText"] == full_text
+    assert restored["articles"][0]["bodyStatus"] == "full_text"
 
 
 def test_csv_export_escapes_formula_prefixed_cells():

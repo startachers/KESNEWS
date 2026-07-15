@@ -72,8 +72,15 @@ def build_evidence_input(
                 "title": article.get("title") or "",
                 "source": article.get("source") or "",
                 "publishedAt": article.get("pubDate"),
-                "content": article.get("description") or "",
-                "bodyStatus": "summary_only" if article.get("description") else "missing",
+                "content": article.get("bodyText") or article.get("description") or "",
+                "bodyStatus": (
+                    "full_text"
+                    if article.get("bodyText")
+                    else "summary_only"
+                    if article.get("description")
+                    else "missing"
+                ),
+                "bodyError": article.get("bodyError") or "",
                 "editorNote": article.get("note") or "",
                 "priority": article.get("priority") or article.get("risk") or "reference",
                 "issueIds": issue_ids_by_article.get(article_id, []),

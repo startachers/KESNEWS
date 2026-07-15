@@ -16,8 +16,8 @@ from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 4
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4}
+SCHEMA_VERSION = 5
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -233,6 +233,18 @@ def import_export(
         }
         if final_patch:
             article_repo.patch_final_assessment(connection, article_id, final_patch)
+        if any(
+            key in article
+            for key in ("bodyText", "bodyStatus", "bodyFetchedAt", "bodyError")
+        ):
+            article_repo.update_article_body(
+                connection,
+                article_id,
+                body_text=article.get("bodyText") or "",
+                body_status=article.get("bodyStatus") or "missing",
+                body_error=article.get("bodyError") or "",
+                fetched_at=article.get("bodyFetchedAt"),
+            )
         briefing_repo.set_article_state(
             connection,
             briefing["id"],

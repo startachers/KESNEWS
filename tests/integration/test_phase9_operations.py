@@ -80,7 +80,7 @@ def test_finalize_writes_immutable_snapshot_json_backup():
     path = storage.BRIEFING_BACKUPS_DIR / f"{report_date}_v1.json"
     assert path.is_file()
     backup = json.loads(path.read_text(encoding="utf-8"))
-    assert backup["schemaVersion"] == 4
+    assert backup["schemaVersion"] == 5
     assert backup["reportDate"] == report_date
     assert backup["briefingVersions"][0]["version"] == 1
     assert backup["briefingVersions"][0]["snapshot"]["reportDate"] == report_date
