@@ -32,8 +32,8 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v3():
-    assert CLASSIFIER_VERSION == "rules-v3"
+def test_classifier_version_is_rules_v4():
+    assert CLASSIFIER_VERSION == "rules-v4"
 
 
 def test_classify_article_critical_risk_from_heavy_keyword():
@@ -80,8 +80,20 @@ def test_infer_category_matches_safety_keyword():
     assert infer_category({"title": "전기화재 발생", "description": ""}) == "electrical_accident"
 
 
-def test_infer_category_defaults_to_direct():
-    assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "kesco_direct"
+def test_infer_category_defaults_to_other():
+    assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "other"
+
+
+def test_official_press_release_without_kesco_mention_is_not_kesco_direct():
+    assert infer_category(
+        {"title": "2026년도 1차 태양광 경쟁입찰 공고", "description": "재생에너지 정책과"}
+    ) != "kesco_direct"
+
+
+def test_electrical_fire_prevention_is_not_labeled_as_accident():
+    assert infer_category(
+        {"title": "폭염 속 냉방기기 전기화재 예방 당부", "description": "안전사용 홍보"}
+    ) == "other"
 
 
 def test_should_exclude_matches_keyword():
@@ -135,6 +147,26 @@ def test_actual_accident_is_not_suppressed_by_prevention_sentence():
     assert result["autoSeverityScore"] == 100
     assert result["autoPriority"] == "required"
     assert "direct_serious_adverse" in result["autoReasons"]["appliedFloors"]
+
+
+def test_died_wording_has_same_severity_and_tone_as_death_wording():
+    result = assess_article({"title": "창녕 대나무밭 화재로 60대 숨져", "description": ""})
+    assert result["autoSeverityScore"] == 100
+    assert result["autoTone"] == "negative"
+
+
+def test_battery_fire_during_charging_is_actual_accident():
+    result = assess_article({"title": "청소 전동차 리튬 배터리 충전 중 화재", "description": ""})
+    assert result["autoEventType"] == "accident"
+    assert result["autoTone"] == "negative"
+
+
+def test_fire_evacuation_call_promotion_is_general_not_accident():
+    result = assess_article(
+        {"title": "노원소방서, 119화재대피안심콜 홍보 강화", "description": "가입 홍보"}
+    )
+    assert result["autoCategory"] == "other"
+    assert result["autoEventType"] == "general"
 
 
 def test_badge_audit_token_is_suppressed_but_audit_office_phrase_survives():

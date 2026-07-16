@@ -24,6 +24,11 @@ _FIRE_SEVERITY_SIGNALS = (
     "대응 2단계",
     "대응 3단계",
 )
+_FIRE_FALSE_POSITIVE_PHRASES = (
+    "삼성화재",
+    "화재보험",
+    "화재대피안심콜",
+)
 _OUTAGE_SIGNALS = (
     "정전",
     "전력 공급 중단",
@@ -146,9 +151,18 @@ def _fire_cause_status(text: str) -> str:
 def detect_incident_sentinel(article: Article) -> dict[str, Any]:
     """중대화재·정전 속보를 수치 유무와 무관하게 판정한다."""
     text = _article_text(article)
-    fire = any(signal in text for signal in _FIRE_SIGNALS) and any(
-        signal in text for signal in _FIRE_SEVERITY_SIGNALS
+    fire_text = text
+    for phrase in _FIRE_FALSE_POSITIVE_PHRASES:
+        fire_text = fire_text.replace(phrase, " ")
+    fire_signal = any(signal in fire_text for signal in _FIRE_SIGNALS)
+    severity_signal = any(
+        signal in fire_text for signal in _FIRE_SEVERITY_SIGNALS if signal != "사상"
+    ) or bool(re.search(r"사상(?!\s*(?:최대|최고|처음|첫))", fire_text))
+    aggregate_statistics = bool(
+        re.search(r"(?:산재|산업재해).{0,24}(?:역대|통계|현황)", fire_text)
+        or re.search(r"(?:역대|통계|현황).{0,24}(?:산재|산업재해)", fire_text)
     )
+    fire = fire_signal and severity_signal and not aggregate_statistics
     if fire:
         return {
             "matched": True,

@@ -5,11 +5,15 @@ import unicodedata
 from typing import Any
 
 from backend.app.services.extraction.cleaner import clean_text
+from backend.app.services.classification.sentinel import detect_incident_sentinel
 
 ORGANIZATION_TERMS = ("한국전기안전공사", "전기안전공사", "KESCO")
 OCCURRENCE_CUES = (
     "발생",
     "사망",
+    "숨져",
+    "숨진",
+    "목숨을 잃",
     "부상",
     "중상",
     "인명피해",
@@ -320,13 +324,26 @@ def sentences(text: str) -> list[str]:
 def has_actual_accident(text: str) -> bool:
     """예방 문구와 분리된 문장에 위해 용어와 발생 신호가 함께 있을 때만 사고로 본다."""
     for sentence in sentences(text):
-        accidents = matched_terms(sentence, ACCIDENT_TERMS)
+        accident_text = (
+            sentence.replace("삼성화재", " ")
+            .replace("화재보험", " ")
+            .replace("화재대피안심콜", " ")
+        )
+        accidents = matched_terms(accident_text, ACCIDENT_TERMS)
         occurrences = matched_terms(sentence, OCCURRENCE_CUES)
+        explicit_occurrence = bool(
+            re.search(
+                r"(?:화재|폭발|감전)(?:가|이|로|으로|해|하여|하면서|\s*중)|"
+                r"(?:작업|운전|가동|충전|사용)?\s*중\s*(?:화재|폭발|감전)|"
+                r"(?:불|불길)(?:이|이\s*)?(?:나|났|붙)",
+                accident_text,
+            )
+        )
         if not accidents and not any(
             term in sentence for term in ("사망", "부상", "중상", "인명피해")
         ):
             continue
-        if occurrences:
+        if occurrences or explicit_occurrence:
             return True
     return False
 
@@ -369,12 +386,19 @@ def infer_category(article: dict[str, Any]) -> str:
         and not has_actual_accident(suppressed)
     ):
         return "kesco_achievement"
+    prevention_only = bool(matched_terms(suppressed, PREVENTION_CUES)) and not has_actual_accident(
+        suppressed
+    )
     for category, required_groups in _CATEGORY_RULES:
+        if prevention_only and category in {"electrical_accident", "major_fire_breaking"}:
+            continue
+        if category == "major_fire_breaking" and not detect_incident_sentinel(article)["matched"]:
+            continue
         if all(
             any(keyword.lower() in suppressed for keyword in group) for group in required_groups
         ):
             return category
-    return "kesco_direct"
+    return "other"
 
 
 def should_exclude(article: dict[str, Any], exclude_keywords: list[str]) -> bool:

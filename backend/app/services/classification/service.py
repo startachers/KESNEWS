@@ -25,7 +25,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v3"
+CLASSIFIER_VERSION = "rules-v4"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -33,6 +33,7 @@ PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 def get_relevance(article: Article) -> dict[str, Any]:
     title, full_text = article_text(article)
     sentinel = article.get("_sentinel") or detect_incident_sentinel(article)
+    sentinel_incident_type = (sentinel.get("incident") or {}).get("incident_type")
 
     def authority_context(text: str) -> list[str]:
         authority_terms = (
@@ -112,8 +113,10 @@ def get_relevance(article: Article) -> dict[str, Any]:
         ),
         (
             3,
-            "power_outage",
-            "③ 정전·전력공급 장애",
+            "major_fire_sentinel" if sentinel_incident_type == "fire" else "power_outage",
+            "③ 중대화재 Sentinel"
+            if sentinel_incident_type == "fire"
+            else "③ 정전·전력공급 장애",
             lambda text: (["사고 Sentinel"] if sentinel["matched"] else []) + re.findall(
                 r"대규모[\s·ㆍ-]*정전|광역[\s·ㆍ-]*정전|일대[\s·ㆍ-]*정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
                 text,
@@ -190,11 +193,11 @@ def get_relevance(article: Article) -> dict[str, Any]:
 
 def _severity(article: Article, event_type: str) -> tuple[int, str, list[str]]:
     _, text = article_text(article)
-    if re.search(r"사망|중상|중대재해|다수\s*인명피해", text):
+    if re.search(r"사망|숨져|숨진|목숨을\s*잃|중상|중대재해|다수\s*인명피해", text):
         return (
             100,
             "death_or_serious_injury",
-            re.findall(r"사망|중상|중대재해|다수\s*인명피해", text),
+            re.findall(r"사망|숨져|숨진|목숨을\s*잃|중상|중대재해|다수\s*인명피해", text),
         )
     if "대규모 정전" in text or (
         has_actual_accident(text) and re.search(r"전기[\s·ㆍ-]*화재|중대\s*화재", text)
@@ -278,7 +281,13 @@ def assess_article(article: Article) -> dict[str, Any]:
     positive_context = (
         bool(matched_terms(full_text, ACHIEVEMENT_TERMS)) or event_type == "community"
     )
-    tone = "negative" if severity_score >= 45 else "positive" if positive_context else "neutral"
+    tone = (
+        "negative"
+        if severity_score >= 45 or event_type in {"accident", "mixed"}
+        else "positive"
+        if positive_context
+        else "neutral"
+    )
     category = infer_category(article)
     reasons = {
         "ruleIds": [*relevance["ruleIds"], *event_rules, severity_rule, *caps, *floors],

@@ -40,6 +40,34 @@ def test_planned_outage_notice_without_actual_accident_is_excluded():
     assert result == {"matched": False, "incident": None}
 
 
+def test_insurance_company_record_earnings_is_not_a_fire_incident():
+    result = detect_incident_sentinel(
+        {"title": "삼성화재, 2분기 사상 최대 실적 전망", "description": "목표가 상향"}
+    )
+    assert result == {"matched": False, "incident": None}
+
+
+def test_fire_evacuation_call_promotion_is_not_a_fire_incident():
+    result = detect_incident_sentinel(
+        {"title": "노원소방서, 119화재대피안심콜 홍보 강화", "description": "가입 홍보"}
+    )
+    assert result == {"matched": False, "incident": None}
+
+
+def test_industrial_accident_statistics_are_not_breaking_fire_incident():
+    result = detect_incident_sentinel(
+        {"title": "산재사망 역대 최저…화재·폭발 제조업선 증가", "description": "상반기 통계"}
+    )
+    assert result == {"matched": False, "incident": None}
+
+
+def test_fire_sentinel_relevance_reason_is_not_power_outage():
+    article = {"title": "공장 화재로 1명 사망", "description": ""}
+    relevance = get_relevance(article)
+    assert relevance["rank"] == 3
+    assert relevance["reasons"] == ["③ 중대화재 Sentinel"]
+
+
 def test_collection_limit_keeps_sentinel_and_rank_one_before_other_articles():
     sentinel = classify_article({"id": "sentinel", "title": "공장 화재 1명 사망", "description": ""})
     direct = classify_article({"id": "direct", "title": "한국전기안전공사 새 소식", "description": ""})

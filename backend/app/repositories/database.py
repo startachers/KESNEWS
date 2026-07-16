@@ -101,17 +101,32 @@ def init_db(db_path: Path = DB_PATH) -> list[str]:
 
 
 def _backfill_phase5_assessments(connection: sqlite3.Connection) -> None:
-    """Phase 4 판정행을 새 축으로 재계산한다. upsert는 final_* 컬럼을 갱신하지 않는다."""
+    """누락됐거나 구버전인 자동 판정을 재계산한다. upsert는 final_* 컬럼을 갱신하지 않는다."""
     from backend.app.repositories import article_repository as article_repo
     from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 
     rows = connection.execute(
         """
-        SELECT a.id, a.title, a.description, aa.auto_category
+        SELECT
+            a.id,
+            a.title,
+            a.description,
+            a.body_text,
+            EXISTS (
+                SELECT 1
+                FROM article_observations ao
+                WHERE ao.article_id = a.id
+                  AND ao.provider IN (
+                      '국무조정실 보도자료',
+                      '기후에너지환경부 보도자료',
+                      '정책브리핑 API'
+                  )
+            ) AS official_government
         FROM articles a
         JOIN article_assessments aa ON aa.article_id = a.id
-        WHERE aa.auto_priority IS NULL
-        """
+        WHERE aa.auto_priority IS NULL OR aa.classifier_version != ?
+        """,
+        (CLASSIFIER_VERSION,),
     ).fetchall()
     with connection:
         for row in rows:
@@ -119,7 +134,8 @@ def _backfill_phase5_assessments(connection: sqlite3.Connection) -> None:
                 {
                     "title": row["title"],
                     "description": row["description"] or "",
-                    "category": row["auto_category"],
+                    "bodyText": row["body_text"] or "",
+                    "_official_government": bool(row["official_government"]),
                 }
             )
             article_repo.upsert_assessment(
