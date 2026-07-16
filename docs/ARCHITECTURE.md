@@ -634,6 +634,10 @@ updated_at
 - 자동 AI 실행은 이 row를 생성하거나 덮어쓰지 않는다.
 - 미리보기와 최종 snapshot은 이 값이 있으면 최신 정상 Gemma 결과보다 우선 사용한다.
 - 기사·전문·편집 태그가 바뀌면 삭제하지 않고 stale로 표시한다.
+- 외부 AI 일반 텍스트의 `언론 동향 시사점`, `언론 동향 분석`, `경영 참고사항` 제목은
+  기존 근거 schema의 `managementMessage`, `situationSummary`, `decisionPoints`로 정규화한다.
+- CEO 보고 화면은 이 세 분석 축을 본문으로 우선 표시하고 선정 기사는 제목·핵심 1줄·언론사
+  중심의 붙임으로 표시한다.
 
 ### 7.8 CollectionRun
 

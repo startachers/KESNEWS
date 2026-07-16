@@ -144,9 +144,11 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert snapshot["evidence"]["A01"]["article"]["title"]
     report = client.get(f"/report/{report_date}").text
     assert f'href="#article-{article_id}"' in report
-    assert "AI 핵심 이슈" in report
-    assert "AI 확인·지시 제안" in report
-    assert "위험 전망(추론)" in report
+    assert "언론 동향 시사점" in report
+    assert "언론 동향 분석" in report
+    assert "경영 참고사항" in report
+    assert "전망" in report
+    assert "선정 기사 요약" in report
 
 
 def test_schema_v4_backup_round_trip_preserves_final_version():

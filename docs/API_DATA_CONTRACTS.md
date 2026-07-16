@@ -633,7 +633,10 @@ GET  /api/briefings/{date}/report-draft
 ```
 
 - validate는 저장하지 않으며 현재 입력 서명을 검증한다. 일반 텍스트 입력은 현재 선정 기사
-  전체를 근거로 연결해 내부 구조로 변환한다. 기존 구조화 JSON 입력도 호환을 위해 허용한다.
+  전체를 근거로 연결해 내부 구조로 변환한다. `언론 동향 시사점`, `언론 동향 분석`,
+  `경영 참고사항` 제목이 있으면 각각 `managementMessage`, `situationSummary`,
+  `decisionPoints`로 분리하고, 제목이 없는 텍스트는 기존처럼 `managementMessage`로 보존한다.
+  기존 구조화 JSON 입력도 호환을 위해 허용한다.
 - PUT은 `expectedRevision`을 요구하고 최종 상태에서는 거부한다.
 - 기사·전문·메모·중요 태그·분류·이슈 구성이 바뀌어 입력 서명이 달라지면
   `REPORT_DRAFT_STALE`로 거부한다.

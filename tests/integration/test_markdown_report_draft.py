@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.services.extraction.article_body import BodyFetchResult
+from backend.app.services.reports.renderer import _analysis_for_display
 
 client = TestClient(app)
 
@@ -54,6 +55,25 @@ def _analysis(evidence_id: str = "A01") -> dict:
     }
 
 
+def test_legacy_single_field_external_analysis_is_split_for_display_only():
+    legacy = _analysis()
+    legacy["managementMessage"]["text"] = (
+        "1. 언론 동향 시사점\n우선 점검합니다.\n\n"
+        "2. 언론 동향 분석\n현장 흐름을 분석합니다.\n\n"
+        "3. 경영 참고사항\n내부 체계를 살펴봅니다."
+    )
+    legacy["situationSummary"] = {"text": "", "articleIds": []}
+    legacy["decisionPoints"] = []
+    legacy["riskOutlook"] = {"text": "", "articleIds": [], "isInference": True}
+
+    displayed = _analysis_for_display(legacy)
+
+    assert displayed["managementMessage"]["text"] == "우선 점검합니다."
+    assert displayed["situationSummary"]["text"] == "현장 흐름을 분석합니다."
+    assert displayed["decisionPoints"][0]["text"] == "내부 체계를 살펴봅니다."
+    assert legacy["managementMessage"]["text"].startswith("1. 언론 동향 시사점")
+
+
 def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypatch):
     report_date = "2098-07-20"
     _selected_article(report_date)
@@ -84,7 +104,11 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
         "reportDate": report_date,
         "inputSignature": exchange["inputSignature"],
         "sourceLabel": "고성능 AI",
-        "text": "외부 AI 경영메시지\n\n외부 AI 언론상황",
+        "text": (
+            "1. 언론 동향 시사점\n외부 AI 경영메시지\n\n"
+            "2. 언론 동향 분석\n외부 AI 언론상황\n\n"
+            "3. 경영 참고사항\n현장 대응 확인"
+        ),
     }
 
     validated = client.post(
@@ -109,10 +133,16 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert preview.status_code == 200
     assert "외부 AI 경영메시지" in preview.text
     assert "외부 AI 언론상황" in preview.text
+    assert "언론 동향 시사점" in preview.text
+    assert "경영 참고사항" in preview.text
+    assert "선정 기사 요약" in preview.text
+    assert "핵심 1줄" in preview.text
     assert "고성능 AI" in preview.text
 
     exported = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert exported["reportDraft"]["content"]["managementMessage"]["text"] == payload["text"]
+    assert exported["reportDraft"]["content"]["managementMessage"]["text"] == "외부 AI 경영메시지"
+    assert exported["reportDraft"]["content"]["situationSummary"]["text"] == "외부 AI 언론상황"
+    assert exported["reportDraft"]["content"]["decisionPoints"][0]["text"] == "현장 대응 확인"
 
     current = client.get(f"/api/briefings/{report_date}").json()["data"]
     finalized = client.post(
@@ -129,7 +159,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     restored_draft = client.get(
         f"/api/briefings/{restored_date}/report-draft"
     ).json()["data"]["draft"]
-    assert restored_draft["content"]["managementMessage"]["text"] == payload["text"]
+    assert restored_draft["content"]["managementMessage"]["text"] == "외부 AI 경영메시지"
 
 
 def test_external_analysis_rejects_unknown_evidence_id():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from typing import Any
@@ -106,11 +107,45 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     normalized = str(text or "").strip()
     if not normalized:
         raise ReportDraftInvalid("붙여넣은 분석 텍스트가 없습니다.")
+    headings = {
+        "implications": re.compile(
+            r"(?im)^\s*(?:\d+[.)]\s*)?(?:언론\s*동향\s*)?시사점\s*$"
+        ),
+        "analysis": re.compile(
+            r"(?im)^\s*(?:\d+[.)]\s*)?(?:언론\s*동향\s*)?분석\s*$"
+        ),
+        "reference": re.compile(
+            r"(?im)^\s*(?:\d+[.)]\s*)?(?:경영\s*)?(?:참고사항|참고\s*사항)\s*$"
+        ),
+    }
+    matches = sorted(
+        (
+            (match.start(), match.end(), section)
+            for section, pattern in headings.items()
+            for match in pattern.finditer(normalized)
+        ),
+        key=lambda item: item[0],
+    )
+    sections: dict[str, str] = {}
+    for index, (_, end, section) in enumerate(matches):
+        next_start = matches[index + 1][0] if index + 1 < len(matches) else len(normalized)
+        value = normalized[end:next_start].strip()
+        if value:
+            sections[section] = value
+
+    implications = sections.get("implications") or normalized
+    analysis = sections.get("analysis") or ""
+    references = sections.get("reference") or ""
     return {
-        "managementMessage": {"text": normalized, "articleIds": evidence_ids},
-        "situationSummary": {"text": "", "articleIds": []},
+        "managementMessage": {"text": implications, "articleIds": evidence_ids},
+        "situationSummary": {
+            "text": analysis,
+            "articleIds": evidence_ids if analysis else [],
+        },
         "keyIssues": [],
-        "decisionPoints": [],
+        "decisionPoints": (
+            [{"text": references, "articleIds": evidence_ids}] if references else []
+        ),
         "actionItems": [],
         "riskOutlook": {"text": "", "articleIds": [], "isInference": True},
         "limitations": [],
