@@ -352,7 +352,9 @@ SELECT ao.article_id AS article_id
 FROM article_observations ao
 JOIN collection_run_providers crp ON crp.id = ao.collection_run_provider_id
 JOIN collection_runs cr ON cr.id = crp.collection_run_id
+JOIN articles collected_article ON collected_article.id = ao.article_id
 WHERE cr.report_date = :report_date
+  AND collected_article.publisher_allowed = 1
 UNION
 SELECT ba.article_id AS article_id
 FROM briefing_articles ba

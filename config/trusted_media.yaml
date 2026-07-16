@@ -5,6 +5,7 @@ media_source_policy:
   use_original_link_domain: true
 
 trusted_media:
+  # 종합·방송·통신·주요 경제/산업 매체
   - { id: yonhap,      name: 연합뉴스,  domains: [yna.co.kr] }
   - { id: news1,       name: 뉴스1,    domains: [news1.kr] }
   - { id: newsis,      name: 뉴시스,   domains: [newsis.com] }
@@ -25,6 +26,40 @@ trusted_media:
   - { id: mk,          name: 매일경제, domains: [mk.co.kr] }
   - { id: hankyung,    name: 한국경제, domains: [hankyung.com] }
   - { id: etnews,      name: 전자신문, domains: [etnews.com] }
+
+  # 경제·지역 주요 매체
+  - { id: einfomax,     name: 연합인포맥스,       domains: [news.einfomax.co.kr] }
+  - { id: yonhapnewstv, name: 연합뉴스TV,         domains: [yonhapnewstv.co.kr] }
+  - { id: heraldbiz,    name: 헤럴드경제,         domains: [heraldcorp.com] }
+  - { id: edaily,       name: 이데일리,           domains: [edaily.co.kr] }
+  - { id: sedaily,      name: 서울경제,           domains: [sedaily.com] }
+  - { id: moneytoday,   name: 머니투데이,         domains: [mt.co.kr] }
+  - { id: fnnews,       name: 파이낸셜뉴스,       domains: [fnnews.com] }
+  - { id: asiae,        name: 아시아경제,         domains: [asiae.co.kr] }
+  - { id: newspim,      name: 뉴스핌,             domains: [newspim.com] }
+  - { id: ajunews,      name: 아주경제,           domains: [ajunews.com] }
+  - { id: wowtv,        name: 한국경제TV,         domains: [wowtv.co.kr] }
+  - { id: mtn,          name: MTN머니투데이방송, domains: [news.mtn.co.kr] }
+  - { id: busan,        name: 부산일보,           domains: [busan.com] }
+  - { id: kookje,       name: 국제신문,           domains: [kookje.co.kr] }
+  - { id: nocutnews,    name: 노컷뉴스,           domains: [nocutnews.co.kr] }
+
+  # 전기·에너지·소방안전 전문 매체
+  - { id: electimes,      name: 전기신문,         domains: [electimes.com] }
+  - { id: energynews,     name: 에너지신문,       domains: [energy-news.co.kr] }
+  - { id: energydaily,    name: 에너지데일리,     domains: [energydaily.co.kr] }
+  - { id: energyplatform, name: 에너지플랫폼뉴스, domains: [e-platform.net] }
+  - { id: e2news,         name: 이투뉴스,         domains: [e2news.com] }
+  - { id: energytimes,    name: 에너지타임즈,     domains: [energytimes.kr] }
+  - { id: ikld,           name: 국토일보,         domains: [ikld.kr] }
+  - { id: keaj,           name: 전기저널,         domains: [keaj.kr] }
+  - { id: elenews,        name: 전기공업신문,     domains: [elenews.co.kr] }
+  - { id: fpn119,         name: 소방방재신문,     domains: [fpn119.co.kr] }
+  - { id: sobangnews,     name: 소방신문,         domains: [sobangnews.kr] }
+  - { id: safetoday,      name: 세이프투데이,     domains: [safetoday.kr] }
+  - { id: esnews,         name: 에너지안전신문,   domains: [esnews.kr] }
+  - { id: energykorea,    name: 에너지코리아뉴스, domains: [energykorea.co.kr] }
+  - { id: epj,            name: 일렉트릭파워,     domains: [epj.co.kr] }
 
 # 중대사고 보조 언론은 { id, name, domains } 형식으로 담당자가 직접 추가한다.
 approved_incident_media: []

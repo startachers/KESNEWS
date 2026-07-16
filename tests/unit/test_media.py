@@ -6,10 +6,28 @@ from backend.app.services.media import (
 )
 
 
-def test_default_allowlist_contains_twenty_publishers():
+def test_default_allowlist_contains_fifty_publishers():
     config = load_trusted_media_config()
-    assert len(config["trusted_media"]) == 20
+    assert len(config["trusted_media"]) == 50
     assert config["trusted_media"][0]["id"] == "yonhap"
+    assert {publisher["id"] for publisher in config["trusted_media"]} >= {
+        "electimes",
+        "energyplatform",
+        "fpn119",
+        "busan",
+    }
+
+
+def test_portals_and_republishers_remain_untrusted():
+    for url in (
+        "https://www.msn.com/ko-kr/news/other/article",
+        "https://news.nate.com/view/20260716n12345",
+        "https://v.daum.net/v/20260716120000000",
+        "https://www.vietnam.vn/ko/example",
+    ):
+        decision = identify_trusted_publisher({"provider": "GDELT", "url": url})
+        assert decision.allowed is False
+        assert decision.reason == "untrusted_media"
 
 
 def test_hostname_normalization_and_domain_boundary():

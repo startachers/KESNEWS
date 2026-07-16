@@ -165,11 +165,15 @@ DELETE /api/articles/{article_id}
 
 `GET /api/articles?report_date=YYYY-MM-DD`는 다음 합집합을 반환한다.
 
-1. 해당 `report_date`에 귀속된 collection run의 observation이 연결된 기사
+1. 해당 `report_date`에 귀속된 collection run의 observation이 연결되고
+   `publisher_allowed=true`인 기사
 2. 해당 날짜의 `briefing_articles` row가 있는 기사
 3. 해당 날짜에 수동 추가된 기사
 
 - 각 기사에는 해당 날짜의 편집 상태(`selected`, `starred`, `topIssue`, `note`, `dismissed`)를 join해 반환한다. row가 없으면 기본 상태를 반환한다.
+- 단계 3 이전 자동수집 기사처럼 `publisher_allowed`가 미판별(`null`)인 기사는 일반
+  후보에서 제외한다. 단, 2번 합집합에 해당하는 기존 담당자 선택·중요·메모·숨김 상태는
+  출처 판별값과 무관하게 계속 보존·표시한다.
 - `include_dismissed=false`면 `dismissed=true` 기사를 제외한다.
 - `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환하며 `briefing_issues`의 수동 상태를 합쳐 반환한다.
 

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from backend.app.repositories.database import get_connection
 from backend.app.services.collection import collector as collector_module
 from backend.app.main import app
 
@@ -119,6 +120,55 @@ def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
     listed = _articles(report_date)["data"]["articles"]
     matching = [a for a in listed if a["url"] == yonhap_url]
     assert len(matching) == 1
+
+
+def test_legacy_unclassified_article_is_hidden_unless_editor_state_exists(monkeypatch):
+    report_date = "2025-01-23"
+    url = "https://www.yna.co.kr/view/AKR2026072300001-legacy"
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: _yonhap_result(
+            url,
+            f"{report_date}T09:00:00Z",
+            title="전환 회귀 한국전기안전공사 국정감사 기사",
+        ),
+    )
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+
+    client.post("/api/collections", json=_base_payload(reportDate=report_date))
+    article = next(a for a in _articles(report_date)["data"]["articles"] if a["url"] == url)
+
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "UPDATE articles SET publisher_id = NULL, publisher_allowed = NULL WHERE id = ?",
+                (article["id"],),
+            )
+    finally:
+        connection.close()
+
+    assert _articles(report_date)["data"]["articles"] == []
+
+    briefing = client.put(
+        f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}}
+    ).json()["data"]
+    patch = client.patch(
+        f"/api/briefings/{report_date}/articles/{article['id']}",
+        json={
+            "expectedRevision": briefing["revision"],
+            "selected": True,
+            "starred": True,
+            "note": "기존 담당자 메모 보존",
+        },
+    )
+    assert patch.status_code == 200
+    preserved = _articles(report_date)["data"]["articles"]
+    assert len(preserved) == 1
+    assert preserved[0]["included"] is True
+    assert preserved[0]["starred"] is True
+    assert preserved[0]["note"] == "기존 담당자 메모 보존"
 
 
 def test_manual_selection_state_survives_recollection(monkeypatch):
