@@ -45,6 +45,8 @@ def input_signature(articles: list[dict[str, Any]]) -> str:
             item.get("relevanceScore"),
             item.get("severityScore"),
             item.get("directMention"),
+            item.get("originType"),
+            item.get("pressReleaseId"),
         ]
         for item in sorted(articles, key=lambda article: article["id"])
     ]
@@ -112,6 +114,11 @@ def _event_anchors(article: dict[str, Any]) -> set[str]:
 def pair_score(
     left: dict[str, Any], right: dict[str, Any], left_vector: dict[str, float], right_vector: dict[str, float]
 ) -> float:
+    if (
+        left.get("pressReleaseId")
+        and left.get("pressReleaseId") == right.get("pressReleaseId")
+    ):
+        return 1.0
     left_time, right_time = date_value(left.get("publishedAt")), date_value(right.get("publishedAt"))
     hours = abs(left_time - right_time) / 3_600_000 if left_time and right_time else 0
     if hours > 72:
@@ -233,6 +240,21 @@ def build_clusters(
     clusters = []
     for indexes in groups:
         members = [articles[index] for index in indexes]
+        press_release_ids = [
+            str(item["pressReleaseId"])
+            for item in members
+            if item.get("pressReleaseId")
+        ]
+        press_release_id = Counter(press_release_ids).most_common(1)[0][0] if press_release_ids else None
+        press_release_title = next(
+            (
+                item.get("pressReleaseTitle")
+                for item in members
+                if item.get("pressReleaseId") == press_release_id
+                and item.get("pressReleaseTitle")
+            ),
+            None,
+        )
         representative = max(
             members,
             key=lambda item: (
@@ -292,6 +314,14 @@ def build_clusters(
                         "weights": {"relevance": 0.4, "severity": 0.4, "spread": 0.2},
                         "score": priority_score,
                     },
+                    "origin": {
+                        "type": "kesco_press_release",
+                        "pressReleaseId": press_release_id,
+                        "pressReleaseTitle": press_release_title,
+                        "matchedArticleCount": press_release_ids.count(press_release_id),
+                    }
+                    if press_release_id
+                    else None,
                 },
             }
         )

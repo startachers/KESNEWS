@@ -21,6 +21,8 @@ EXPECTED_TABLES = {
     "briefing_issues",
     "settings",
     "ai_runs",
+    "kesco_press_releases",
+    "article_origin_assessments",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -34,6 +36,7 @@ EXPECTED_MIGRATIONS = [
     "0008_query_groups_17.sql",
     "0009_trusted_media.sql",
     "0010_provider_item_key_index.sql",
+    "0011_kesco_press_origin.sql",
 ]
 
 
@@ -167,6 +170,31 @@ def test_query_groups_and_trusted_media_migrations_keep_columns_separate(tmp_pat
         connection.close()
 
 
+def test_kesco_press_origin_migration_keeps_source_lineage_separate(tmp_path):
+    connection = get_connection(tmp_path / "kesco-press.db")
+    try:
+        apply_migrations(connection)
+        release_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(kesco_press_releases)")
+        }
+        origin_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(article_origin_assessments)")
+        }
+        assert {"bbs_seq", "title", "published_at", "body_text", "canonical_url"}.issubset(
+            release_columns
+        )
+        assert {
+            "article_id",
+            "auto_origin_type",
+            "auto_press_release_id",
+            "auto_confidence",
+            "final_origin_type",
+            "manual_override",
+        }.issubset(origin_columns)
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -217,6 +245,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0008_query_groups_17.sql",
         "0009_trusted_media.sql",
         "0010_provider_item_key_index.sql",
+        "0011_kesco_press_origin.sql",
     ]
     upgraded = get_connection(db_path)
     try:

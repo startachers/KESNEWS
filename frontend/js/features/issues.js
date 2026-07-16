@@ -38,9 +38,12 @@ export function renderTopIssues() {
     const sourceCount = new Set(articles.map(article => article.source).filter(Boolean)).size;
     const risk = ISSUE_RISK[issue.effectivePriority] || "routine";
     const status = ISSUE_STATUS_LABELS[issue.effectiveStatus] || issue.effectiveStatus || "상태 없음";
-    const reason = issue.articleIds.length > 1
-      ? `같은 사건 기사 ${issue.articleIds.length}건이 묶인 이슈입니다.`
-      : "단일 기사 이슈입니다.";
+    const pressCoverage = issue.autoReasons?.origin?.type === "kesco_press_release";
+    const reason = pressCoverage
+      ? `공사 보도자료에서 파생된 보도 ${issue.articleIds.length}건의 확산 묶음입니다.`
+      : issue.articleIds.length > 1
+        ? `같은 사건 기사 ${issue.articleIds.length}건이 묶인 이슈입니다.`
+        : "단일 기사 이슈입니다.";
     return `<article class="issue-card">
       <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-${risk}">${escapeHtml(status)}</span></div>
       <h3>${escapeHtml(issue.effectiveTitle)}</h3>

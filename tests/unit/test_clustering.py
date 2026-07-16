@@ -69,6 +69,40 @@ def test_unrelated_articles_do_not_cluster():
     }
 
 
+def test_articles_from_same_kesco_press_release_share_one_origin_cluster():
+    clusters = build_clusters(
+        [
+            _article(
+                "a1",
+                title="취약계층 전기안전 협력 확대",
+                description="복지위기가구 무료 점검을 실시한다",
+                pressReleaseId="kesco:171545",
+                pressReleaseTitle="복지 사각지대도 전기안전 지킨다",
+                originType="kesco_republication",
+            ),
+            _article(
+                "a2",
+                title="사회복지협의회와 촘촘한 안전망 구축",
+                description="노후 전기설비 개보수를 지원한다",
+                source="지역일보",
+                pressReleaseId="kesco:171545",
+                pressReleaseTitle="복지 사각지대도 전기안전 지킨다",
+                originType="kesco_based",
+            ),
+        ],
+        AS_OF,
+    )
+
+    assert len(clusters) == 1
+    assert set(clusters[0]["articleIds"]) == {"a1", "a2"}
+    assert clusters[0]["autoReasons"]["origin"] == {
+        "type": "kesco_press_release",
+        "pressReleaseId": "kesco:171545",
+        "pressReleaseTitle": "복지 사각지대도 전기안전 지킨다",
+        "matchedArticleCount": 2,
+    }
+
+
 def test_same_event_clusters_when_headlines_use_different_wording_and_number_units():
     clusters = build_clusters(
         [
@@ -175,6 +209,8 @@ def test_input_signature_covers_values_used_by_clustering():
         ("relevanceScore", 41),
         ("severityScore", 84),
         ("directMention", True),
+        ("originType", "kesco_based"),
+        ("pressReleaseId", "kesco:171545"),
     ):
         changed = {**article, field: value}
         assert input_signature([changed]) != baseline

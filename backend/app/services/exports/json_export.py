@@ -10,14 +10,15 @@ from backend.app.repositories import ai_run_repository as ai_run_repo
 from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories import issue_repository as issue_repo
+from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 6
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6}
+SCHEMA_VERSION = 7
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -266,6 +267,12 @@ def import_export(
                 body_status=article.get("bodyStatus") or "missing",
                 body_error=article.get("bodyError") or "",
                 fetched_at=article.get("bodyFetchedAt"),
+            )
+        if article.get("origin"):
+            press_release_repo.import_origin(
+                connection,
+                article_id,
+                article["origin"],
             )
         briefing_repo.set_article_state(
             connection,

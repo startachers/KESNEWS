@@ -70,6 +70,7 @@ function renderProposal(run) {
   els.clusterProposalList.innerHTML = proposal.length ? proposal.map((issue, index) => {
     const articleIds = issue.articleIds || [];
     const grouped = articleIds.length > 1;
+    const pressCoverage = issue.autoReasons?.origin?.type === "kesco_press_release";
     const members = articleIds.map(articleId => {
       const article = articleById.get(articleId);
       return `<li><strong>${escapeHtml(article?.title || articleId)}</strong>${article?.source ? ` · ${escapeHtml(article.source)}` : ""}</li>`;
@@ -77,7 +78,7 @@ function renderProposal(run) {
     return `<article class="cluster-proposal ${grouped ? "grouped" : ""}">
       <div class="cluster-proposal-head">
         <div><span class="cluster-proposal-rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><h3>${escapeHtml(issue.autoTitle || "제목 없음")}</h3></div>
-        <div class="cluster-badges"><span class="cluster-badge ${grouped ? "grouped" : ""}">${grouped ? `동일 이슈 ${articleIds.length}건` : "단일 기사"}</span><span class="cluster-badge">${escapeHtml(STATUS_LABELS[issue.autoStatus] || issue.autoStatus || "상태 없음")}</span><span class="cluster-badge">${escapeHtml(PRIORITY_LABELS[issue.autoPriority] || issue.autoPriority || "등급 없음")}</span></div>
+        <div class="cluster-badges">${pressCoverage ? '<span class="cluster-badge press-origin">보도자료 확산</span>' : ""}<span class="cluster-badge ${grouped ? "grouped" : ""}">${grouped ? `동일 이슈 ${articleIds.length}건` : "단일 기사"}</span><span class="cluster-badge">${escapeHtml(STATUS_LABELS[issue.autoStatus] || issue.autoStatus || "상태 없음")}</span><span class="cluster-badge">${escapeHtml(PRIORITY_LABELS[issue.autoPriority] || issue.autoPriority || "등급 없음")}</span></div>
       </div>
       <ul class="cluster-members">${members}</ul>
     </article>`;

@@ -14,6 +14,7 @@ os.environ["KESCO_DB_PATH"] = os.path.join(_TEST_DB_DIR, "test.db")
 os.environ["KESCO_BACKUPS_DIR"] = os.path.join(_TEST_DB_DIR, "backups")
 os.environ["KESCO_REPORTS_DIR"] = os.path.join(_TEST_DB_DIR, "reports")
 os.environ["KESCO_BRIEFING_BACKUPS_DIR"] = os.path.join(_TEST_DB_DIR, "briefing-backups")
+os.environ["KESCO_PRESS_REFRESH_ON_STARTUP"] = "0"
 os.environ.pop("NAVER_CLIENT_ID", None)
 os.environ.pop("NAVER_CLIENT_SECRET", None)
 

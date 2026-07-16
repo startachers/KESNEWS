@@ -335,6 +335,26 @@ POST /api/collections
 - 실행별 `source_filter_stats_json`은 `raw_results`, `official_sources`, `trusted_media`, `rejected_untrusted_media`, `unknown_publisher`를 보존한다. `unknown_publisher`는 제외 건수의 부분집합이다.
 - `POST /api/collections`, 최신 실행 조회, 실행 ID 조회는 같은 통계를 `source_filter_stats`로 반환한다.
 
+### 3.7 한국전기안전공사 보도자료 원문 대조
+
+`kesco.or.kr` 홍보센터 보도자료는 언론기사가 아니라 기사 출처를 판별하기 위한 기준 원문이다.
+따라서 일반 후보 기사나 `article_observations`로 저장하지 않고 다음 데이터를 분리해 보존한다.
+
+```text
+kesco_press_releases
+article_origin_assessments
+```
+
+- `POST /api/kesco-press-releases/refresh`는 보도자료 목록과 본문만 별도로 갱신한다. 서버 시작 시에도 같은 갱신을 백그라운드에서 한 번 시도하되 실패가 서버 기동을 막지 않는다.
+- `GET /api/kesco-press-releases?limit=30`은 저장된 제목·게시일·본문·공식 원문 URL을 최근순으로 반환하며 화면의 `공사 보도자료 보기`에서 조회한다.
+- 일반 기사 수집은 공사 사이트를 호출하지 않고 DB에 저장된 최신 원문만 사용한다. 정규화·분류를 마친 각 기사와 제목·본문·발행일을 비교한다.
+- 자동 출처는 `kesco_republication`(보도자료 전재) 또는 `kesco_based`(보도자료 기반)이며, 매칭되지 않은 기사는 기존 기사 판정을 그대로 사용한다.
+- 출처 판정은 관련도·심각도·보고 우선도와 별도 축이다. 공사 보도자료를 기사화했다는 이유만으로 중요 기사나 위험 기사로 올리지 않는다.
+- 같은 `press_release_id`에 연결된 기사들은 서로 다른 언론사의 별도 Article로 보존하되 재군집화에서 같은 이슈로 묶는다.
+- 담당자 최종 출처 판정과 `manual_override=true`는 이후 자동 수집·재판정으로 덮어쓰지 않는다.
+- 보도자료 갱신 실패는 일반 기사 수집과 완전히 분리한다. 직전 정상 원문과 기존 출처 판정을 보존한다.
+- 화면에서는 일반 이슈와 구분해 `공사 보도자료 확산`으로 표시한다.
+
 ---
 
 ## 4. 판정 점수·임계값·규칙 충돌
@@ -657,7 +677,8 @@ JSON은 정식 백업 형식이다.
 
 - `schemaVersion` 필수
 - 작업본, 기사 선정 상태, 중요 표시, 개별 기사 Top 이슈 태그, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
-  이슈 편집값, AI run, action note를 포함한다.
+  보도자료 원문과 기사 출처 판정, 이슈 편집값, AI run, action note를 포함한다.
+- 보도자료 원문·출처 판정을 포함하는 현재 형식은 `schemaVersion=7`이다.
 - 가져오기 전 schema 검증을 수행한다.
 - 내보내기→새 DB 가져오기→다시 내보내기의 의미상 동등성을 통합 테스트한다.
 - 미지원 미래 version은 읽지 않고 명확한 오류를 반환한다.

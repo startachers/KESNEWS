@@ -16,6 +16,14 @@ const manualGroupSelectedKeys = new Set();
 let manualGroupPickerEntries = new Map();
 let manualGroupSearchText = "";
 
+function isKescoPressArticle(article) {
+  return ["kesco_republication", "kesco_based"].includes(article.origin?.effectiveType);
+}
+
+function isKescoPressIssue(issue) {
+  return issue?.autoReasons?.origin?.type === "kesco_press_release";
+}
+
 export function collectionOrderSort(a, b, relatedCounts = new Map()) {
   return (relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)
     || dateValue(a.firstObservedAt) - dateValue(b.firstObservedAt)
@@ -53,6 +61,12 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   }[a.incident?.cause_status];
   if (a.incident?.incident_type === "fire" && causeBadge) badges.unshift(`<span class="badge badge-incident">${causeBadge}</span>`);
   if (isYonhapArticle(a)) badges.unshift('<span class="badge badge-yonhap">연합뉴스 우선</span>');
+  if (isKescoPressArticle(a)) {
+    const originLabel = a.origin.effectiveType === "kesco_republication" ? "보도자료 전재" : "보도자료 기반";
+    const releaseTitle = a.origin.pressRelease?.title || "공사 보도자료";
+    badges.unshift(`<span class="badge badge-press-origin" title="${escapeAttr(releaseTitle)}">${originLabel}</span>`);
+  }
+  if (isKescoPressIssue(issue)) badges.unshift('<span class="badge badge-press-origin">공사 보도자료 확산</span>');
   if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
   if (issue) badges.unshift('<span class="badge badge-same-issue">동일 이슈</span>');
   if (a.topIssue && !issue) badges.push('<span class="badge badge-top-issue">Top 이슈</span>');
@@ -100,7 +114,13 @@ function rememberExpandedIssues() {
 }
 
 function renderMediaGroups(items) {
-  if (!state.issues.length) return items.map(article => renderArticleCard(article)).join("");
+  if (!state.issues.length) {
+    const general = items.filter(article => !isKescoPressArticle(article)).map(article => renderArticleCard(article)).join("");
+    const press = items.filter(isKescoPressArticle).map(article => renderArticleCard(article)).join("");
+    return press
+      ? `${general}<div class="coverage-section-heading"><strong>공사 보도자료 확산</strong><span>공사 원문에서 파생된 기사를 보도자료별 한 묶음으로 표시합니다.</span></div>${press}`
+      : general;
+  }
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
@@ -112,15 +132,19 @@ function renderMediaGroups(items) {
     return { issue, members, position: members[0]?.index };
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, position }) => {
-    if (issue.articleIds.length === 1) return { position, html: renderArticleCard(members[0].article) };
+    if (issue.articleIds.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article) };
     const representative = members[0];
     const related = members.filter(member => member.article.id !== representative.article.id);
-    return { position, html: renderArticleCard(representative.article, issue, related) };
+    return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
   });
   items.forEach((article, index) => {
-    if (!groupedIds.has(article.id)) entries.push({ position: index, html: renderArticleCard(article) });
+    if (!groupedIds.has(article.id)) entries.push({ position: index, press: isKescoPressArticle(article), html: renderArticleCard(article) });
   });
-  return entries.sort((left, right) => left.position - right.position).map(entry => entry.html).join("");
+  const ordered = entries.sort((left, right) => left.position - right.position);
+  const general = ordered.filter(entry => !entry.press).map(entry => entry.html).join("");
+  const press = ordered.filter(entry => entry.press).map(entry => entry.html).join("");
+  if (!press) return general;
+  return `${general}<div class="coverage-section-heading"><strong>공사 보도자료 확산</strong><span>공사 원문에서 파생된 기사를 보도자료별 한 묶음으로 표시합니다.</span></div>${press}`;
 }
 
 export function renderArticles() {

@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.app.core.clock import SEOUL_TZ, now_iso, today_seoul
 from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.classification.rule_engine import infer_category, should_exclude
@@ -18,6 +19,10 @@ from backend.app.services.classification.service import (
     classify_article,
     get_relevance,
     relevance_sort_key,
+)
+from backend.app.services.classification.origin import (
+    CLASSIFIER_VERSION as ORIGIN_CLASSIFIER_VERSION,
+    assess_kesco_origin,
 )
 from backend.app.services.collection.custom_endpoint import fetch_custom_endpoint
 from backend.app.services.collection.gdelt import fetch_gdelt_combined
@@ -544,6 +549,8 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
 
             new_count = 0
             matched_count = 0
+            origin_matched_count = 0
+            origin_releases = press_release_repo.list_recent(connection)
             for item in classified_items:
                 article_id, dedup_method, matched = _upsert_article_for_item(connection, item)
                 if matched:
@@ -589,6 +596,15 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     assessment={**item["assessment"], "autoCategory": item.get("category")},
                     classifier_version=CLASSIFIER_VERSION,
                 )
+                origin = assess_kesco_origin(item, origin_releases)
+                if origin:
+                    press_release_repo.upsert_origin(
+                        connection,
+                        article_id,
+                        origin,
+                        ORIGIN_CLASSIFIER_VERSION,
+                    )
+                    origin_matched_count += 1
 
             status = "success" if not failures else "partial"
             stale_reused_count = len(run_repo.unrefreshed_candidate_ids(connection, report_date, run_id))
@@ -615,6 +631,8 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         "uniqueCount": len(classified_items),
         "newCount": new_count,
         "matchedCount": matched_count,
+        "kescoPressReleaseCount": len(origin_releases),
+        "kescoPressMatchedCount": origin_matched_count,
         "duplicatesRemoved": duplicates_removed,
         "fetchedAt": finished_at,
         "errors": [],

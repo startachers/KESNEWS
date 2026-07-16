@@ -18,9 +18,19 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
     rows = connection.execute(
         f"""
         SELECT a.id, a.title, a.description, a.source, a.published_at,
-               aa.auto_relevance_score, aa.auto_severity_score, aa.auto_reasons_json
+               aa.auto_relevance_score, aa.auto_severity_score, aa.auto_reasons_json,
+               COALESCE(aoa.final_origin_type, aoa.auto_origin_type) AS origin_type,
+               CASE
+                   WHEN aoa.final_origin_type = 'independent' THEN NULL
+                   ELSE COALESCE(aoa.final_press_release_id, aoa.auto_press_release_id)
+               END AS press_release_id,
+               kpr.title AS press_release_title
         FROM articles a
         LEFT JOIN article_assessments aa ON aa.article_id = a.id
+        LEFT JOIN article_origin_assessments aoa ON aoa.article_id = a.id
+        LEFT JOIN kesco_press_releases kpr ON kpr.id = COALESCE(
+            aoa.final_press_release_id, aoa.auto_press_release_id
+        )
         WHERE a.id IN ({placeholders})
         ORDER BY a.published_at, a.id
         """,  # noqa: S608 - placeholders count only
@@ -39,6 +49,9 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
                 "relevanceScore": row["auto_relevance_score"] or 0,
                 "severityScore": row["auto_severity_score"] or 0,
                 "directMention": bool(reasons.get("directMention")),
+                "originType": row["origin_type"],
+                "pressReleaseId": row["press_release_id"],
+                "pressReleaseTitle": row["press_release_title"],
             }
         )
     return result

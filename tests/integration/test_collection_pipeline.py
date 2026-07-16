@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.core.clock import now_iso, today_seoul
 from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection import collector as collector_module
@@ -245,6 +246,53 @@ def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
     listed = _articles(report_date)["data"]["articles"]
     matching = [a for a in listed if a["url"] == yonhap_url]
     assert len(matching) == 1
+
+
+def test_collection_links_media_article_to_kesco_press_release(monkeypatch):
+    report_date = "2025-01-29"
+    title = "복지 사각지대도 전기안전 지킨다 한국전기안전공사 협력"
+    connection = get_connection()
+    try:
+        with connection:
+            press_release_repo.upsert_release(
+                connection,
+                {
+                    "id": "kesco:171545",
+                    "bbsSeq": "171545",
+                    "title": title,
+                    "publishedAt": f"{report_date}T00:00:00Z",
+                    "bodyText": "한국사회복지협의회와 협약해 취약계층 무료 전기안전 점검을 실시한다.",
+                    "url": "https://www.kesco.or.kr/bbs/pr/selectBbs.do?bbs_code=MKB00002&bbs_seq=171545",
+                    "fetchedAt": f"{report_date}T00:05:00Z",
+                },
+            )
+    finally:
+        connection.close()
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: _yonhap_result(
+            "https://www.yna.co.kr/view/AKR202501290001",
+            f"{report_date}T03:00:00Z",
+            title="복지 사각지대도 전기안전 지킨다…전기안전공사 협력",
+            description="한국사회복지협의회와 협약해 취약계층 무료 전기안전 점검을 실시한다.",
+        ),
+    )
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+
+    response = client.post(
+        "/api/collections",
+        json=_base_payload(reportDate=report_date),
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["kescoPressReleaseCount"] >= 1
+    assert data["kescoPressMatchedCount"] == 1
+    article = _articles(report_date)["data"]["articles"][0]
+    assert article["origin"]["effectiveType"] == "kesco_republication"
+    assert article["origin"]["pressReleaseId"] == "kesco:171545"
+    assert article["origin"]["pressRelease"]["title"] == title
 
 
 def test_naver_and_google_same_article_create_two_observations(monkeypatch):

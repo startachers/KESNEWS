@@ -103,6 +103,21 @@ export function getLatestCollection(date) {
   return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
 }
 
+export function getKescoPressStatus() {
+  return request(`/kesco-press-releases/status`);
+}
+
+export function listKescoPress(limit = 30) {
+  return request(`/kesco-press-releases?limit=${encodeURIComponent(limit)}`);
+}
+
+export function refreshKescoPress(maxRecords = 30) {
+  return request(`/kesco-press-releases/refresh`, {
+    method: "POST",
+    body: JSON.stringify({ maxRecords }),
+  }, 60000);
+}
+
 export function restartServer() {
   return request(`/operations/restart`, {
     method: "POST",

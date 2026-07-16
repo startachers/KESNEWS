@@ -4,6 +4,7 @@ import io
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.extraction.article_body import BodyFetchResult
 
@@ -45,7 +46,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 6
+    assert payload["schemaVersion"] == 7
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -60,6 +61,81 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     assert reexported["articles"][0]["note"] == "중요 메모"
     assert reexported["articles"][0]["starred"] is True
     assert reexported["articles"][0]["included"] == payload["articles"][0]["included"]
+
+
+def test_json_schema_v7_round_trip_preserves_kesco_press_origin():
+    source_date = "2025-02-18"
+    article_id = _setup_briefing_with_article(source_date)
+    connection = get_connection()
+    try:
+        with connection:
+            press_release_repo.upsert_release(
+                connection,
+                {
+                    "id": "kesco:991825",
+                    "bbsSeq": "991825",
+                    "title": "복지 사각지대도 전기안전 지킨다",
+                    "publishedAt": "2025-02-18T00:00:00Z",
+                    "bodyText": "정식 백업으로 보존할 공사 보도자료 원문입니다.",
+                    "url": "https://www.kesco.or.kr/bbs/pr/selectBbs.do?bbs_code=MKB00002&bbs_seq=991825",
+                    "fetchedAt": "2025-02-18T00:05:00Z",
+                },
+            )
+            press_release_repo.upsert_origin(
+                connection,
+                article_id,
+                {
+                    "originType": "kesco_based",
+                    "pressReleaseId": "kesco:991825",
+                    "confidence": 0.81,
+                    "reasons": {"titleSimilarity": 0.72},
+                },
+                "test-origin-v1",
+            )
+    finally:
+        connection.close()
+
+    payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
+    assert payload["schemaVersion"] == 7
+    assert payload["articles"][0]["origin"]["pressRelease"]["bodyText"].startswith(
+        "정식 백업"
+    )
+
+    target_date = "2025-02-19"
+    imported = client.post(f"/api/exports/{target_date}.json", json=payload)
+    assert imported.status_code == 200
+    restored = client.get(
+        "/api/articles", params={"report_date": target_date}
+    ).json()["data"]["articles"][0]
+    assert restored["origin"]["effectiveType"] == "kesco_based"
+    assert restored["origin"]["pressReleaseId"] == "kesco:991825"
+    assert restored["origin"]["pressRelease"]["bodyText"].startswith("정식 백업")
+
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                """
+                UPDATE article_origin_assessments
+                SET final_origin_type = 'independent', final_press_release_id = NULL,
+                    manual_override = 1
+                WHERE article_id = ?
+                """,
+                (article_id,),
+            )
+    finally:
+        connection.close()
+
+    manual_payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
+    manual_date = "2025-02-20"
+    imported = client.post(f"/api/exports/{manual_date}.json", json=manual_payload)
+    assert imported.status_code == 200
+    manual_restored = client.get(
+        "/api/articles", params={"report_date": manual_date}
+    ).json()["data"]["articles"][0]
+    assert manual_restored["origin"]["effectiveType"] == "independent"
+    assert manual_restored["origin"]["pressReleaseId"] is None
+    assert manual_restored["origin"]["manualOverride"] is True
 
 
 def test_json_import_conflicts_without_replace_mode():
@@ -100,7 +176,7 @@ def test_json_schema_v6_round_trip_preserves_incident_and_accepts_v5():
     )
 
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 6
+    assert payload["schemaVersion"] == 7
     assert payload["articles"][0]["incident"]["incident_type"] == "fire"
     assert payload["articles"][0]["incident"]["cause_status"] == "unknown"
     assert payload["articles"][0]["incident"]["property_damage_krw"] is None
@@ -150,7 +226,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 6
+    assert payload["schemaVersion"] == 7
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -198,7 +274,7 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 6
+    assert payload["schemaVersion"] == 7
     assert payload["aiRuns"][0]["evidence"]
     assert payload["articles"][0]["bodyText"] == full_text
 

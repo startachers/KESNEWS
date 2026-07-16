@@ -49,6 +49,8 @@
     <div class="phase-actions-inner">
       <p class="briefing-state" id="briefingState">작성 중 · 아직 최종 확정되지 않았습니다.</p>
       <button class="btn btn-subtle" id="historyBtn">지난 브리핑</button>
+      <button class="btn btn-subtle" id="viewKescoPressBtn">공사 보도자료 보기</button>
+      <button class="btn btn-subtle" id="refreshKescoPressBtn" title="공사 홍보센터의 최신 보도자료 원문을 별도로 저장합니다">공사 보도자료 갱신</button>
       <button class="btn btn-subtle" id="reclusterBtn" data-testid="recluster-issues" disabled>이슈 재군집화</button>
       <button class="btn btn-subtle" id="previewBtn">CEO 미리보기</button>
       <button class="btn btn-primary" id="finalizeBtn">최종 확정</button>
@@ -236,6 +238,14 @@
         <p class="history-helper">저장된 작업본을 다시 열거나, 날짜별로 확정된 CEO 보고서를 읽기 전용 문서로 조회할 수 있습니다.</p>
         <div class="history-list" id="historyList"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="kescoPressOverlay" role="dialog" aria-modal="true" aria-labelledby="kescoPressTitle">
+    <div class="modal press-release-modal">
+      <div class="modal-header"><div><h2 id="kescoPressTitle">공사 보도자료 원문</h2><p id="kescoPressMeta">저장된 원문을 불러오는 중입니다.</p></div><button class="close-btn" data-close="kescoPressOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body"><div class="press-release-list" id="kescoPressList"></div></div>
+      <div class="modal-footer"><button class="btn" data-close="kescoPressOverlay">닫기</button><button class="btn btn-primary" id="refreshKescoPressModalBtn">최신 보도자료 가져오기</button></div>
     </div>
   </div>
 

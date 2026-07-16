@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from backend.app.core.clock import now_iso
+from backend.app.repositories.press_release_repository import serialize_origin_row
 from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.content_key import make_content_key
@@ -446,6 +447,20 @@ SELECT
     aa.manual_override AS manual_override,
     aa.classifier_version AS classifier_version,
     aa.incident_json AS incident_json,
+    aoa.auto_origin_type AS origin_auto_type,
+    aoa.auto_press_release_id AS origin_auto_release_id,
+    aoa.auto_confidence AS origin_confidence,
+    aoa.auto_reasons_json AS origin_reasons_json,
+    aoa.final_origin_type AS origin_final_type,
+    aoa.final_press_release_id AS origin_final_release_id,
+    aoa.manual_override AS origin_manual_override,
+    kpr.id AS press_release_id,
+    kpr.bbs_seq AS press_release_bbs_seq,
+    kpr.title AS press_release_title,
+    kpr.published_at AS press_release_published_at,
+    kpr.body_text AS press_release_body_text,
+    kpr.canonical_url AS press_release_url,
+    kpr.fetched_at AS press_release_fetched_at,
     mq.query_group_ids AS query_group_ids,
     ba.selected AS selected,
     ba.starred AS starred,
@@ -457,6 +472,10 @@ FROM candidate_ids ci
 JOIN articles a ON a.id = ci.article_id
 LEFT JOIN latest_observation lo ON lo.article_id = a.id
 LEFT JOIN article_assessments aa ON aa.article_id = a.id
+LEFT JOIN article_origin_assessments aoa ON aoa.article_id = a.id
+LEFT JOIN kesco_press_releases kpr ON kpr.id = COALESCE(
+    aoa.final_press_release_id, aoa.auto_press_release_id
+)
 LEFT JOIN matched_queries mq ON mq.article_id = a.id
 LEFT JOIN briefings b ON b.report_date = :report_date
 LEFT JOIN briefing_articles ba ON ba.briefing_id = b.id AND ba.article_id = a.id
@@ -534,6 +553,7 @@ def list_candidates(
                 "priorityScore": row["auto_priority_score"],
                 "assessment": assessment,
                 "incident": assessment["incident"] if assessment else None,
+                "origin": serialize_origin_row(row),
                 "matchedQueryIds": sorted(
                     query_id for query_id in (row["query_group_ids"] or "").split(",") if query_id
                 ),

@@ -10,6 +10,7 @@ import { persistAndRender, handleArticleChange, handleArticleInput, handleArticl
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
+import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
@@ -25,6 +26,7 @@ async function init() {
   }
   autoResize(els.summaryEditor);
   window.setTimeout(checkAiServer, 120);
+  window.setTimeout(loadKescoPressStatus, 160);
 
   const today = localDateKey();
   const skipAutoRun = new URLSearchParams(location.search).has("noauto");
@@ -41,6 +43,9 @@ async function init() {
 function bindEvents() {
   $("settingsBtn").addEventListener("click", openSettings);
   $("historyBtn").addEventListener("click", openBriefingHistory);
+  $("viewKescoPressBtn").addEventListener("click", openKescoPressViewer);
+  $("refreshKescoPressBtn").addEventListener("click", refreshKescoPressReleases);
+  $("refreshKescoPressModalBtn").addEventListener("click", refreshKescoPressFromModal);
   els.historyList.addEventListener("click", handleHistoryClick);
   $("editKeywordsBtn").addEventListener("click", openSettings);
   $("saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
