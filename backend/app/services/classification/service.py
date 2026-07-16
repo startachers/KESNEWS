@@ -24,7 +24,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v2"
+CLASSIFIER_VERSION = "rules-v3"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -32,26 +32,150 @@ PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 def get_relevance(article: Article) -> dict[str, Any]:
     title, full_text = article_text(article)
 
+    def authority_context(text: str) -> list[str]:
+        authority_terms = (
+            "대통령실",
+            "대통령",
+            "국무총리",
+            "총리실",
+            "국무조정실",
+            "기후에너지환경부",
+            "국무회의",
+            "국정현안관계장관회의",
+            "경제관계장관회의",
+            "공공기관운영위원회",
+            "에너지위원회",
+            "전력정책심의회",
+            "국회",
+            "국정감사",
+            "국정조사",
+            "현안질의",
+        )
+        authorities = matched_terms(
+            text,
+            authority_terms,
+        )
+        context = text
+        for term in authority_terms:
+            context = context.replace(term, " ")
+        energy = matched_terms(
+            context,
+            (
+                "전기안전",
+                "전력",
+                "전력망",
+                "전력수급",
+                "전기설비",
+                "전기화재",
+                "감전",
+                "정전",
+                "에너지",
+                "ess",
+                "전기차 충전",
+            ),
+        )
+        return [*authorities, *energy] if authorities and energy else []
+
+    def new_industry_or_strategy(text: str) -> list[str]:
+        industry = matched_terms(text, ("ess", "에너지저장장치", "배터리", "전기차 충전"))
+        safety = matched_terms(text, ("화재", "감전", "폭발", "사고", "안전점검", "결함", "리콜"))
+        strategy = matched_terms(
+            text,
+            ("전력망", "송전망", "배전망", "분산에너지", "데이터센터", "재생에너지", "전력수요"),
+        )
+        strategy_context = matched_terms(
+            text, ("전기안전", "안전관리", "전기설비", "화재", "정전", "검사", "규제", "기본계획")
+        )
+        if industry and safety:
+            return [*industry, *safety]
+        if strategy and strategy_context:
+            return [*strategy, *strategy_context]
+        return []
+
     criteria = [
-        (1, "direct_mention", "① 공사 직접 거론", lambda text: matched_terms(text, ORGANIZATION_TERMS)),
-        (2, "electrical_fire", "② 전기화재", lambda text: re.findall(r"전기[\s·ㆍ-]*화재", text)),
-        (3, "electric_shock", "③ 감전사고", lambda text: re.findall(r"감전[\s·ㆍ-]*사고", text)),
-        (4, "ministry_policy_context", "④ 기후에너지환경부+에너지/전기", lambda text: ["기후에너지환경부"] if "기후에너지환경부" in text and re.search(r"에너지|전기", text.replace("기후에너지환경부", " ")) else []),
-        (5, "renewable_energy", "⑤ 재생에너지", lambda text: re.findall(r"재생[\s·ㆍ-]*에너지", text)),
+        (
+            1,
+            "direct_mention",
+            "① 공사 직접 거론",
+            lambda text: matched_terms(text, ORGANIZATION_TERMS),
+        ),
+        (
+            2,
+            "electrical_accident",
+            "② 전기화재·감전 사고",
+            lambda text: re.findall(
+                r"전기[\s·ㆍ-]*화재|누전[\s·ㆍ-]*화재|전기적 요인|감전[\s·ㆍ-]*(?:사고|사망)|배전반[\s·ㆍ-]*화재|변압기[\s·ㆍ-]*화재",
+                text,
+            ),
+        ),
+        (
+            3,
+            "power_outage",
+            "③ 정전·전력공급 장애",
+            lambda text: re.findall(
+                r"대규모[\s·ㆍ-]*정전|광역[\s·ㆍ-]*정전|일대[\s·ㆍ-]*정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
+                text,
+            ),
+        ),
+        (4, "government_energy_context", "④ 정부·국회+전기·에너지 문맥", authority_context),
+        (
+            5,
+            "law_standard_plan",
+            "⑤ 전기 관련 법령·기준·기본계획",
+            lambda text: re.findall(
+                r"전기안전관리법|전기사업법|한국전기설비규정|\bkec\b|전기설비기술기준|전기안전관리 기본계획|전력수급기본계획",
+                text,
+            ),
+        ),
+        (
+            6,
+            "public_management",
+            "⑥ 공공기관 경영평가·운영정책",
+            lambda text: re.findall(
+                r"공공기관 경영실적 평가|공공기관 경영평가|경영평가편람|경영평가 결과|경영실적 평가결과|공공기관운영위원회|예산운용지침|총인건비|직무급|성과급|안전관리등급|경영공시|\balio\b",
+                text,
+            ),
+        ),
+        (7, "new_industry_or_strategy", "⑦ 신산업 설비안전·전략동향", new_industry_or_strategy),
     ]
-    matches = [(rank, rule, reason, finder(full_text)) for rank, rule, reason, finder in criteria if finder(full_text)]
+    matches = [
+        (rank, rule, reason, finder(full_text))
+        for rank, rule, reason, finder in criteria
+        if finder(full_text)
+    ]
     if not matches:
-        return {"rank": 99, "score": 15, "label": "낮음", "tier": "low", "directMention": False, "titleMatch": False, "matchCount": 0, "matchedTerms": [], "ruleIds": ["relevance_low"], "reasons": ["지정 관련도 기준 미일치"]}
+        return {
+            "rank": 99,
+            "score": 15,
+            "label": "낮음",
+            "tier": "low",
+            "directMention": False,
+            "titleMatch": False,
+            "matchCount": 0,
+            "matchedTerms": [],
+            "ruleIds": ["relevance_low"],
+            "reasons": ["지정 관련도 기준 미일치"],
+        }
     primary_rank, primary_rule, _, primary_terms = matches[0]
     primary_finder = criteria[primary_rank - 1][3]
     title_match = bool(primary_finder(title))
-    base_score = {1: 100, 2: 85, 3: 70, 4: 55, 5: 40}[primary_rank]
-    score = 100 if primary_rank == 1 else min(99, base_score + (7 if title_match else 0) + min(5, (len(matches) - 1) * 2))
+    base_score = {1: 100, 2: 88, 3: 80, 4: 65, 5: 55, 6: 45, 7: 40}[primary_rank]
+    score = (
+        100
+        if primary_rank == 1
+        else min(99, base_score + (7 if title_match else 0) + min(5, (len(matches) - 1) * 2))
+    )
     direct = primary_rank == 1
     return {
         "rank": primary_rank,
         "score": score,
-        "label": "매우 높음" if direct else "높음" if primary_rank <= 3 else "보통" if primary_rank == 4 else "관심",
+        "label": "매우 높음"
+        if direct
+        else "높음"
+        if primary_rank <= 3
+        else "보통"
+        if primary_rank <= 5
+        else "관심",
         "tier": "direct" if direct else "related" if score >= 40 else "low",
         "directMention": direct,
         "titleMatch": title_match,
@@ -65,8 +189,14 @@ def get_relevance(article: Article) -> dict[str, Any]:
 def _severity(article: Article, event_type: str) -> tuple[int, str, list[str]]:
     _, text = article_text(article)
     if re.search(r"사망|중상|중대재해|다수\s*인명피해", text):
-        return 100, "death_or_serious_injury", re.findall(r"사망|중상|중대재해|다수\s*인명피해", text)
-    if "대규모 정전" in text or (has_actual_accident(text) and re.search(r"전기[\s·ㆍ-]*화재|중대\s*화재", text)):
+        return (
+            100,
+            "death_or_serious_injury",
+            re.findall(r"사망|중상|중대재해|다수\s*인명피해", text),
+        )
+    if "대규모 정전" in text or (
+        has_actual_accident(text) and re.search(r"전기[\s·ㆍ-]*화재|중대\s*화재", text)
+    ):
         return 85, "major_fire_or_outage", matched_terms(text, (*ACCIDENT_TERMS, "중대화재"))
     if re.search(r"수사|압수수색", text):
         return 80, "investigation_or_raid", re.findall(r"수사|압수수색", text)
@@ -77,7 +207,11 @@ def _severity(article: Article, event_type: str) -> tuple[int, str, list[str]]:
     if event_type in {"prevention", "general", "policy"}:
         return 10, "prevention_or_routine", matched_terms(text, PREVENTION_CUES)
     if event_type in {"achievement", "community"}:
-        return 5, "achievement_or_community", matched_terms(text, (*ACHIEVEMENT_TERMS, *COMMUNITY_TERMS))
+        return (
+            5,
+            "achievement_or_community",
+            matched_terms(text, (*ACHIEVEMENT_TERMS, *COMMUNITY_TERMS)),
+        )
     return 10, "prevention_or_routine", []
 
 
@@ -118,9 +252,7 @@ def assess_article(article: Article) -> dict[str, Any]:
         re.search(r"전기[\s·ㆍ-]*화재|감전|누전|대규모\s*정전|정전\s*발생", text)
     )
     electrical_casualty = (
-        electrical_domain_accident
-        and event_type in {"accident", "mixed"}
-        and severity_score >= 85
+        electrical_domain_accident and event_type in {"accident", "mixed"} and severity_score >= 85
     )
     if serious_direct:
         priority = _raise_priority(priority, "required")
@@ -134,7 +266,9 @@ def assess_article(article: Article) -> dict[str, Any]:
         floors.append("electrical_safety_casualty")
 
     _, full_text = article_text(article)
-    positive_context = bool(matched_terms(full_text, ACHIEVEMENT_TERMS)) or event_type == "community"
+    positive_context = (
+        bool(matched_terms(full_text, ACHIEVEMENT_TERMS)) or event_type == "community"
+    )
     tone = "negative" if severity_score >= 45 else "positive" if positive_context else "neutral"
     category = infer_category(article)
     reasons = {
@@ -142,16 +276,39 @@ def assess_article(article: Article) -> dict[str, Any]:
         "matchedTerms": list(dict.fromkeys([*relevance["matchedTerms"], *severity_terms])),
         "relevanceTier": relevance["tier"],
         "directMention": relevance["directMention"],
-        "breakdown": {"relevanceScore": relevance["score"], "severityScore": severity_score, "articleWeights": {"relevance": 0.55, "severity": 0.45}, "priorityScore": priority_score},
+        "relevanceRank": relevance["rank"],
+        "relevanceLabel": relevance["label"],
+        "relevanceTitleMatch": relevance["titleMatch"],
+        "relevanceMatchCount": relevance["matchCount"],
+        "relevanceReasons": relevance["reasons"],
+        "breakdown": {
+            "relevanceScore": relevance["score"],
+            "severityScore": severity_score,
+            "articleWeights": {"relevance": 0.55, "severity": 0.45},
+            "priorityScore": priority_score,
+        },
         "appliedCaps": caps,
         "appliedFloors": floors,
     }
-    return {"autoCategory": category, "autoEventType": event_type, "autoRelevanceScore": relevance["score"], "autoSeverityScore": severity_score, "autoPriorityScore": priority_score, "autoPriority": priority, "autoTone": tone, "autoReasons": reasons}
+    return {
+        "autoCategory": category,
+        "autoEventType": event_type,
+        "autoRelevanceScore": relevance["score"],
+        "autoSeverityScore": severity_score,
+        "autoPriorityScore": priority_score,
+        "autoPriority": priority,
+        "autoTone": tone,
+        "autoReasons": reasons,
+    }
 
 
-def classify_article(raw: Article, risk_keywords: list[str] | None = None, positive_keywords: list[str] | None = None) -> Article:
+def classify_article(
+    raw: Article, risk_keywords: list[str] | None = None, positive_keywords: list[str] | None = None
+) -> Article:
     assessment = assess_article(raw)
-    legacy_risk = {"required": "critical", "review": "watch", "reference": "routine"}[assessment["autoPriority"]]
+    legacy_risk = {"required": "critical", "review": "watch", "reference": "routine"}[
+        assessment["autoPriority"]
+    ]
     return {
         **raw,
         "id": raw.get("id") or make_id(),

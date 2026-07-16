@@ -1,8 +1,39 @@
+import pytest
+
 from backend.app.services.classification.rule_engine import infer_category, should_exclude
-from backend.app.services.classification.service import assess_article, classify_article, get_relevance
+from backend.app.services.classification.service import (
+    CLASSIFIER_VERSION,
+    assess_article,
+    classify_article,
+    get_relevance,
+)
 
 RISK_KEYWORDS = ["사망", "화재", "감전", "국정감사", "감사"]
 POSITIVE_KEYWORDS = ["캠페인", "수상"]
+
+
+@pytest.mark.parametrize(
+    ("description", "rank", "score", "category"),
+    [
+        ("한국전기안전공사 새 소식", 1, 100, "kesco_direct"),
+        ("작업자가 감전 사고를 당했다", 2, 88, "electrical_accident"),
+        ("아파트 일대 정전이 발생했다", 3, 80, "power_outage"),
+        ("대통령이 전력망 확충을 주문했다", 4, 65, "presidential_message"),
+        ("전기안전관리법 개정이 발표됐다", 5, 55, "law_standard_plan"),
+        ("공공기관 경영평가 결과가 발표됐다", 6, 45, "public_evaluation"),
+        ("ESS 배터리 화재 안전대책이 나왔다", 7, 40, "new_industry_safety"),
+    ],
+)
+def test_rules_v3_relevance_rank_and_category(description, rank, score, category):
+    article = {"title": "관련 소식", "description": description}
+    relevance = get_relevance(article)
+    assert relevance["rank"] == rank
+    assert relevance["score"] == score
+    assert infer_category(article) == category
+
+
+def test_classifier_version_is_rules_v3():
+    assert CLASSIFIER_VERSION == "rules-v3"
 
 
 def test_classify_article_critical_risk_from_heavy_keyword():
@@ -44,11 +75,11 @@ def test_classify_article_respects_explicit_included_false():
 
 
 def test_infer_category_matches_safety_keyword():
-    assert infer_category({"title": "전기화재 발생", "description": ""}) == "safety"
+    assert infer_category({"title": "전기화재 발생", "description": ""}) == "electrical_accident"
 
 
 def test_infer_category_defaults_to_direct():
-    assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "direct"
+    assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "kesco_direct"
 
 
 def test_should_exclude_matches_keyword():
@@ -73,6 +104,7 @@ def test_prevention_phrase_does_not_become_accident():
         {"title": "한국전기안전공사, 전기화재 예방 캠페인", "description": "안전점검 교육을 실시했다."}
     )
     assert result["autoEventType"] == "prevention"
+    assert result["autoCategory"] == "kesco_achievement"
     assert result["autoPriority"] != "required"
     assert "positive_context_cap" in result["autoReasons"]["appliedCaps"]
 
@@ -99,7 +131,7 @@ def test_badge_audit_token_is_suppressed_but_audit_office_phrase_survives():
         {"title": "한국전기안전공사 감사패 전달 뒤 감사원 감사 착수", "description": "감사가 시작됐다."}
     )
     assert audit["autoEventType"] == "management_risk"
-    assert audit["autoCategory"] == "management"
+    assert audit["autoCategory"] == "kesco_governance"
     assert audit["autoPriority"] == "required"
     assert "direct_audit_or_legal" in audit["autoReasons"]["appliedFloors"]
 

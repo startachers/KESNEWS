@@ -108,7 +108,7 @@ def _article_cards(
 ) -> str:
     articles = snapshot.get("articles") or []
     if direct_only:
-        articles = [item for item in articles if item.get("category") == "direct"]
+        articles = [item for item in articles if item.get("category") in {"direct", "kesco_direct"}]
     if not articles:
         return '<p class="empty">해당 기사가 없습니다.</p>'
     cards = []

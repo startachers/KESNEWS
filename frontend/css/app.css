@@ -472,6 +472,9 @@ a { color: inherit; }
 .toggle-line strong { display: block; color: var(--navy); font-size: 11px; }
 .toggle-line small { display: block; color: var(--muted); font-size: 9px; }
 .query-list { display: grid; gap: 8px; }
+.query-group { display: grid; gap: 8px; padding-top: 5px; }
+.query-group + .query-group { margin-top: 6px; border-top: 1px solid var(--line); }
+.query-group h4 { margin: 0; padding: 5px 2px 0; color: var(--teal-dark); font-size: 10px; }
 .query-row { display: grid; grid-template-columns: 22px 82px 1fr; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; }
 .query-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--teal); }
 .query-row label { color: var(--navy); font-size: 10px; font-weight: 800; }

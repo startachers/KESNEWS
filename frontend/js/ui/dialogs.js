@@ -33,7 +33,18 @@ export function openSettings() {
 }
 
 export function renderQuerySettings(queries) {
-  els.querySettings.innerHTML = queries.map(q => `<div class="query-row" data-query-id="${escapeAttr(q.id)}"><input type="checkbox" ${q.enabled ? "checked" : ""} aria-label="${escapeAttr(q.label)} 사용"><label>${escapeHtml(q.label)}</label><input type="text" value="${escapeAttr(q.query)}" aria-label="${escapeAttr(q.label)} 검색식"></div>`).join("");
+  const groups = [
+    ["기관·평판", ["kesco_direct", "kesco_reputation"]],
+    ["정부 메시지", ["presidential_message", "prime_minister_message", "climate_minister_message", "government_meeting"]],
+    ["공공기관 경영", ["public_evaluation", "public_operations", "kesco_governance", "assembly_law"]],
+    ["사고·안전", ["electrical_accident", "power_outage", "major_fire_breaking", "new_industry_safety"]],
+    ["제도·성과·전략", ["law_standard_plan", "kesco_achievement", "strategic_trend"]]
+  ];
+  const byId = new Map(queries.map(query => [query.id, query]));
+  els.querySettings.innerHTML = groups.map(([label, ids]) => {
+    const rows = ids.map(id => byId.get(id)).filter(Boolean).map(q => `<div class="query-row" data-query-id="${escapeAttr(q.id)}"><input type="checkbox" ${q.enabled ? "checked" : ""} aria-label="${escapeAttr(q.label)} 사용"><label>${escapeHtml(q.label)}</label><input type="text" value="${escapeAttr(q.query)}" aria-label="${escapeAttr(q.label)} 검색식"></div>`).join("");
+    return `<section class="query-group"><h4>${escapeHtml(label)}</h4>${rows}</section>`;
+  }).join("");
 }
 
 export function saveSettingsFromForm() {
@@ -85,7 +96,7 @@ export async function addManualArticle(e) {
     url: $("manualUrl").value.trim(),
     pubDate: parseDate($("manualDate").value),
     description: $("manualDescription").value.trim(),
-    category: $("manualCategory").value || "direct",
+    category: $("manualCategory").value || "kesco_direct",
     forcedRisk: $("manualRisk").value,
     riskKeywords: settings.riskKeywords,
     positiveKeywords: settings.positiveKeywords

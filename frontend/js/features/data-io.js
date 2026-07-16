@@ -17,10 +17,10 @@ import { flushArticleChanges } from "./articles.js?v=20260716-11";
 export function loadSample() {
   const base = new Date();
   const samples = [
-    { title: "전기안전 취약시설 합동점검 확대…선제적 화재 예방", source: "샘플경제", description: "전통시장과 사회복지시설을 대상으로 계절별 안전점검과 예방 활동을 확대한다는 내용입니다.", category: "safety", hours: 2, risk: "watch", sentiment: "neutral" },
-    { title: "지역 에너지 복지 향상 위한 기관 간 업무협약", source: "샘플일보", description: "지역사회 안전망 강화와 취약계층 지원을 위한 협력 체계를 구축했습니다.", category: "community", hours: 5, risk: "routine", sentiment: "positive" },
-    { title: "전기설비 안전관리 기준 개선 논의…현장 의견 수렴", source: "샘플뉴스", description: "제도 개선 과정에서 산업계와 현장의 의견을 반영하는 간담회가 열렸습니다.", category: "policy", hours: 9, risk: "routine", sentiment: "neutral" },
-    { title: "배터리 설비 화재 사고 이후 안전점검 실효성 논란", source: "샘플방송", description: "사고 예방 점검 체계와 후속 대응을 두고 개선 필요성이 제기됐습니다.", category: "industry", hours: 12, risk: "critical", sentiment: "negative" }
+    { title: "전기안전 취약시설 합동점검 확대…선제적 화재 예방", source: "샘플경제", description: "전통시장과 사회복지시설을 대상으로 계절별 안전점검과 예방 활동을 확대한다는 내용입니다.", category: "kesco_achievement", hours: 2, risk: "watch", sentiment: "neutral" },
+    { title: "지역 에너지 복지 향상 위한 기관 간 업무협약", source: "샘플일보", description: "지역사회 안전망 강화와 취약계층 지원을 위한 협력 체계를 구축했습니다.", category: "kesco_achievement", hours: 5, risk: "routine", sentiment: "positive" },
+    { title: "전기설비 안전관리 기준 개선 논의…현장 의견 수렴", source: "샘플뉴스", description: "제도 개선 과정에서 산업계와 현장의 의견을 반영하는 간담회가 열렸습니다.", category: "law_standard_plan", hours: 9, risk: "routine", sentiment: "neutral" },
+    { title: "배터리 설비 화재 사고 이후 안전점검 실효성 논란", source: "샘플방송", description: "사고 예방 점검 체계와 후속 대응을 두고 개선 필요성이 제기됐습니다.", category: "new_industry_safety", hours: 12, risk: "critical", sentiment: "negative" }
   ];
   state.articles = samples.map((s, i) => ({
     id: `sample-${i}`, title: s.title, source: s.source, description: s.description, category: s.category,

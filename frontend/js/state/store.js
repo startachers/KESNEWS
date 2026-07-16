@@ -4,7 +4,7 @@ import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
-  settingsVersion: 2,
+  settingsVersion: 3,
   autoRun: true,
   enableYonhap: true,
   lookback: 48,
@@ -17,16 +17,34 @@ export const DEFAULT_SETTINGS = {
   positiveKeywords: ["수상", "협약", "성과", "혁신", "봉사", "지원", "캠페인", "예방", "확대", "우수", "개선", "안전문화"],
   excludeKeywords: ["채용공고"],
   queries: [
-    { id: "direct", label: "기관 직접", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO")' },
-    { id: "safety", label: "전기화재·감전", enabled: true, query: '("전기화재" OR "전기 화재" OR "감전사고" OR "감전 사고")' },
-    { id: "policy", label: "기후·에너지 정책", enabled: true, query: '"기후에너지환경부" (에너지 OR 전기)' },
-    { id: "management", label: "경영·감사", enabled: true, query: '("한국전기안전공사" OR "전기안전공사") (사장 OR 감사 OR 국정감사 OR 경영평가 OR 인사)' },
-    { id: "community", label: "지역·상생", enabled: true, query: '("한국전기안전공사" OR "전기안전공사") (협약 OR 봉사 OR 지원 OR 캠페인 OR 지역)' },
-    { id: "industry", label: "재생에너지", enabled: true, query: '("재생에너지" OR "신재생에너지")' }
+    { id: "kesco_direct", label: "공사 직접 보도", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO")' },
+    { id: "kesco_reputation", label: "공사 위기·평판", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO") (사망 OR 사고 OR 화재 OR 감전 OR 정전 OR 중대재해 OR 부실점검 OR 허위점검 OR 위반 OR 논란 OR 수사 OR 고발 OR 압수수색 OR 징계 OR 비위 OR 해킹 OR "정보 유출" OR 민원)' },
+    { id: "presidential_message", label: "대통령·대통령실 메시지", enabled: true, query: '("대통령실" OR "대통령"{OR_current_president}) ("전기안전" OR 전력망 OR 전력수급 OR 전기설비 OR 전기화재 OR 감전 OR 정전 OR ESS OR "전기차 충전") (지시 OR 주문 OR 당부 OR 강조 OR 브리핑 OR 업무보고 OR 대책)' },
+    { id: "prime_minister_message", label: "국무총리·총리실 메시지", enabled: true, query: '("국무총리" OR "총리실" OR "국무조정실"{OR_current_prime_minister}) ("전기안전" OR 전력망 OR 전력수급 OR 전기설비 OR 전기화재 OR 감전 OR 정전) (지시 OR 주문 OR 당부 OR 강조 OR 회의 OR 현안조정 OR 대책)' },
+    { id: "climate_minister_message", label: "기후에너지환경부 장관 메시지", enabled: true, query: '("기후에너지환경부"{OR_current_climate_minister}) (전기안전 OR 전력망 OR 전력수급 OR 전기설비 OR 전기화재 OR 감전 OR 정전 OR ESS OR "전기차 충전" OR 재생에너지) (발언 OR 지시 OR 주문 OR 당부 OR 브리핑 OR 업무보고 OR 현장점검 OR 대책)' },
+    { id: "government_meeting", label: "국무회의·관계장관회의·정부위원회", enabled: true, query: '("국무회의" OR "국정현안관계장관회의" OR "경제관계장관회의" OR "공공기관운영위원회" OR "에너지위원회" OR "전력정책심의회") (전기안전 OR 전력 OR 전력망 OR 전력수급 OR 전기설비 OR 정전 OR 공공기관)' },
+    { id: "public_evaluation", label: "공공기관 경영평가", enabled: true, query: '("공공기관 경영실적 평가" OR "공공기관 경영평가" OR "경영평가편람" OR "경영평가 결과" OR "경영실적 평가결과")' },
+    { id: "public_operations", label: "공공기관 운영정책", enabled: true, query: '("공공기관" OR "공기업" OR "준정부기관") ("공공기관운영위원회" OR "예산운용지침" OR 총인건비 OR 직무급 OR 성과급 OR "안전관리등급" OR 경영공시 OR ALIO)' },
+    { id: "kesco_governance", label: "공사 경영·거버넌스", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO") (경영평가 OR 경영공시 OR 국정감사 OR 감사원 OR 이사회 OR 기관장 OR 사장 OR 상임감사 OR 임원 OR 인사 OR 노사 OR 노조 OR 파업 OR 예산 OR 총인건비 OR 직무급 OR 성과급)' },
+    { id: "assembly_law", label: "국회·국정감사·법안", enabled: true, query: '(국회 OR 국정감사 OR 국정조사 OR 법안 OR 개정안 OR 입법예고 OR 현안질의) (전기안전 OR 전기화재 OR 감전 OR 정전 OR 전력망 OR 전기설비 OR "한국전기안전공사")' },
+    { id: "electrical_accident", label: "전기화재·감전 사고", enabled: true, query: '("전기화재" OR "전기 화재" OR "누전 화재" OR "전기적 요인" OR "감전사고" OR "감전 사고" OR "감전 사망" OR "배전반 화재" OR "변압기 화재")' },
+    { id: "power_outage", label: "정전·전력공급 장애", enabled: true, query: '("대규모 정전" OR "광역 정전" OR "일대 정전" OR "전력 공급 중단" OR "전력망 장애" OR "계통 장애" OR 블랙아웃 OR "변전소 고장" OR "송전선로 고장" OR "배전선로 고장")' },
+    { id: "major_fire_breaking", label: "중대화재·원인 미상 속보", enabled: true, query: '(화재 OR 폭발 OR 큰불) (사망 OR 숨져 OR 사상 OR 중상 OR 심정지 OR 실종 OR 전소 OR 대피 OR "대응 1단계" OR "대응 2단계" OR "대응 3단계")' },
+    { id: "new_industry_safety", label: "ESS·배터리·충전시설 등 신산업 설비안전", enabled: true, query: '(ESS OR "에너지저장장치" OR 배터리 OR "전기차 충전") (화재 OR 감전 OR 폭발 OR 사고 OR 안전점검 OR 결함 OR 리콜)' },
+    { id: "law_standard_plan", label: "법령·기준·기본계획", enabled: true, query: '("전기안전관리법" OR "전기사업법" OR "한국전기설비규정" OR KEC OR "전기설비기술기준" OR "전기안전관리 기본계획" OR "전력수급기본계획") (개정 OR 시행 OR 입법예고 OR 행정예고 OR 고시 OR 확정 OR 발표)' },
+    { id: "kesco_achievement", label: "공사 성과·상생·예방활동", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO") (업무협약 OR 협약 OR 수상 OR 혁신 OR 합동점검 OR 특별점검 OR 예방점검 OR 캠페인 OR 봉사 OR 기부 OR 상생 OR 안전문화 OR 취약계층)' },
+    { id: "strategic_trend", label: "전력망·분산에너지·데이터센터 등 전략동향", enabled: true, query: '("전력망" OR "송전망" OR "배전망" OR "분산에너지" OR "데이터센터" OR "재생에너지" OR "전력수요") (전기안전 OR 안전관리 OR 전기설비 OR 화재 OR 정전 OR 검사 OR 규제 OR 기본계획)' }
   ]
 };
 
-export const CATEGORY_COLORS = { direct: "#326c9c", safety: "#b64242", policy: "#70539b", management: "#c97a16", community: "#087f76", industry: "#397b62" };
+export const CATEGORY_COLORS = {
+  kesco_direct: "#326c9c", kesco_reputation: "#9f3434", presidential_message: "#6548a6",
+  prime_minister_message: "#7654ad", climate_minister_message: "#087f76", government_meeting: "#536b92",
+  public_evaluation: "#b46a12", public_operations: "#9a7218", kesco_governance: "#8b5a2b",
+  assembly_law: "#596481", electrical_accident: "#b64242", power_outage: "#b0533f",
+  major_fire_breaking: "#8f3030", new_industry_safety: "#b05c75", law_standard_plan: "#70539b",
+  kesco_achievement: "#087f76", strategic_trend: "#397b62"
+};
 export const RISK_LABELS = { critical: "긴급", watch: "주의", routine: "일상" };
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
 export const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
@@ -48,20 +66,25 @@ export function loadSettings() {
     const merged = { ...structuredClone(DEFAULT_SETTINGS), ...saved, queries: Array.isArray(saved.queries) ? saved.queries : structuredClone(DEFAULT_SETTINGS.queries) };
     if (Number(saved.settingsVersion || 0) < DEFAULT_SETTINGS.settingsVersion) {
       const savedById = new Map((Array.isArray(saved.queries) ? saved.queries : []).map(query => [query.id, query]));
-      merged.maxRecords = Math.min(100, Math.max(50, Number(saved.maxRecords || 0)));
-      merged.collectionLimit = Math.max(200, Number(saved.collectionLimit || 0));
       merged.queries = structuredClone(DEFAULT_SETTINGS.queries).map(query => ({
         ...query,
         enabled: savedById.has(query.id) ? savedById.get(query.id).enabled !== false : query.enabled
       }));
       merged.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+      settingsMigrationNotice = true;
     }
     delete merged.proxy;
-    const direct = merged.queries.find(q => q.id === "direct");
-    if (direct && !direct.query.trim().startsWith("(")) direct.query = `(${direct.query})`;
     return merged;
   } catch { return structuredClone(DEFAULT_SETTINGS); }
+}
+
+let settingsMigrationNotice = false;
+
+export function consumeSettingsMigrationNotice() {
+  const shouldNotify = settingsMigrationNotice;
+  settingsMigrationNotice = false;
+  return shouldNotify;
 }
 
 export async function loadDailyState(date) {

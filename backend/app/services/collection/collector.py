@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from backend.app.core.clock import SEOUL_TZ, now_iso, today_seoul
@@ -22,6 +24,44 @@ from backend.app.services.normalization.dates import date_value, since_bound_iso
 from backend.app.services.normalization.url import canonical_article_url
 
 Article = dict[str, Any]
+PEOPLE_CONFIG_PATH = Path(__file__).resolve().parents[4] / "config" / "people.yaml"
+_PEOPLE_KEYS = ("president", "prime_minister", "climate_minister")
+
+
+def _load_people(path: Path | None = None) -> dict[str, str]:
+    """추가 YAML 의존성 없이 people.yaml의 단순 문자열 필드만 읽는다."""
+    config_path = path or PEOPLE_CONFIG_PATH
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return {key: "" for key in _PEOPLE_KEYS}
+    result = {key: "" for key in _PEOPLE_KEYS}
+    for key in _PEOPLE_KEYS:
+        match = re.search(rf"^\s*{key}:\s*(.*?)\s*(?:#.*)?$", raw, re.MULTILINE)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        result[key] = value.replace("\\", "").replace('"', "").strip()
+    return result
+
+
+def replace_people_tokens(
+    queries: list[dict[str, Any]], path: Path | None = None
+) -> list[dict[str, Any]]:
+    people = _load_people(path)
+    replacements = {
+        f"{{OR_current_{key}}}": f' OR "{value}"' if value else ""
+        for key, value in people.items()
+    }
+    replaced = []
+    for query in queries:
+        query_text = str(query.get("query") or "")
+        for token, value in replacements.items():
+            query_text = query_text.replace(token, value)
+        replaced.append({**query, "query": query_text})
+    return replaced
 
 
 def friendly_error(exc: BaseException) -> str:
@@ -127,7 +167,9 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     max_records = int(payload.get("maxRecordsPerQuery") or 50)
     collection_limit = int(payload.get("collectionLimit") or 200)
     enable_yonhap = payload.get("enableYonhap") is not False
-    queries = [q for q in (payload.get("queries") or []) if str(q.get("query") or "").strip()]
+    queries = replace_people_tokens(
+        [q for q in (payload.get("queries") or []) if str(q.get("query") or "").strip()]
+    )
     core_keywords = [k for k in (payload.get("coreKeywords") or []) if k]
     risk_keywords = payload.get("riskKeywords") or []
     positive_keywords = payload.get("positiveKeywords") or []
@@ -173,7 +215,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             continue
         items = result["items"]
         for item in items:
-            assigned_category = infer_category(item) if category == "auto" else category
+            assigned_category = infer_category(item)
             collected.append({**item, "category": assigned_category, "_task_label": label, "_query_group_id": query_group_id})
         provider_label = result.get("provider")
         if provider_label and provider_label not in providers:

@@ -1,3 +1,33 @@
+# 기사 수집 설계 변경 — 다음 작업
+
+`new_rules_news_clip.md` §18의 **단계 1. 17개 검색군 교체**는 2026-07-16에 완료했다.
+다음 작업은 별도 지시가 있을 때에만 **단계 2. 사고 Sentinel + 파이프라인 순서**를
+독립 체크포인트로 구현한다. 단계 3(신뢰 언론사 허용목록)과 단계 4(네이버 뉴스 API)는
+함께 시작하지 않는다.
+
+## 단계 1 완료 상태
+
+- Google News 정본 검색식 17개를 프런트 기본값, 자동수집 설정, 검색 규칙 예시에 반영
+- `settingsVersion: 3` 마이그레이션으로 일반 설정을 보존하고 검색식만 교체
+- 검색 설정 화면을 5개 그룹·17행으로 구성하고 개별 on/off 유지
+- 백엔드 `rules-v3` 7단계 rank와 17개 `primary_category` 판정 적용
+- `config/people.yaml` 인물값을 수집 직전에 `{OR_current_*}` 토큰으로 치환
+- 완료 기준 §17 1~4와 공통 18 자동 회귀 검증 완료
+
+## 다음 구현 범위: 단계 2만
+
+- `backend/app/services/classification/sentinel.py`: §6 중대화재·§7 정전 Sentinel
+- `backend/app/services/collection/yonhap.py`: Sentinel 선행 보존
+- `backend/app/services/collection/collector.py`: Sentinel·rank 1 절단 보호와 파이프라인 순서
+- migration `0008_query_groups_17.sql` 중 `incident_json` 범위
+- §13.2 사고 배지와 §15 내보내기 왕복
+- 완료 기준 §17 5~9, 17, 공통 18 검증
+
+`legacy/kesco_media_briefing_original.html`은 계속 수정하지 않는다. P4-001의 `/api/settings`
+일원화, 언론사 허용목록, Google `<source url>` 판별, 네이버 provider는 단계 2 범위 밖이다.
+
+---
+
 # Phase 9 완료 보고
 
 ## Phase 8 완료 보고

@@ -1,4 +1,4 @@
-import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDailyState, loadDailyState, setState } from "./state/store.js";
+import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDailyState, loadDailyState, setState, consumeSettingsMigrationNotice } from "./state/store.js";
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js";
@@ -20,6 +20,9 @@ async function init() {
   bindEvents();
   populateStaticControls();
   renderAll();
+  if (consumeSettingsMigrationNotice()) {
+    showToast("기사 검색식이 17개 검색군으로 개편되었습니다. 검색 설정에서 확인해 주세요.");
+  }
   autoResize(els.summaryEditor);
   window.setTimeout(checkAiServer, 120);
 
