@@ -722,6 +722,9 @@ settings
 화면의 Media Coverage는 적용된 이슈 군집으로 기사를 묶어 표시한다. Top Issues는 자동 순위가
 아니며 담당자가 군집 또는 개별 기사에 지정한 태그를 합쳐 최대 3개 표시한다. 군집 태그는
 `briefing_issues.selected`, 기사 태그는 `briefing_articles.top_issue`에 서로 독립적으로 저장한다.
+기사별 별도 `군집 선택` 체크박스로 2건 이상을 선택하면 수동 이슈를 생성할 수 있다. 수동
+군집은 `issues.manual_group`과 `issue_membership_overrides`의 add/remove로 저장하며 자동
+재군집화가 선택 기사를 다른 이슈에 중복 포함하지 않도록 적용 후 배타성을 복원한다.
 
 
 ## 9. 설정 구조

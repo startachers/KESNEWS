@@ -115,6 +115,13 @@ export function patchBriefingIssue(reportDate, issueId, expectedRevision, fields
   });
 }
 
+export function createManualIssueGroup(reportDate, articleIds, expectedRevision) {
+  return request("/issues/manual-group", {
+    method: "POST",
+    body: JSON.stringify({ reportDate, articleIds, expectedRevision }),
+  });
+}
+
 export function applyClusterRun(clusterRunId) {
   return request(`/cluster-runs/${encodeURIComponent(clusterRunId)}/apply`, { method: "POST" });
 }

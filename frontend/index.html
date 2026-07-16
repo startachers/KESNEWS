@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
-  <link rel="stylesheet" href="css/app.css?v=20260716-5">
+  <link rel="stylesheet" href="css/app.css?v=20260716-9">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -147,6 +147,9 @@
             <label class="sr-only" for="selectionFilter">선정 상태 필터</label>
             <select id="selectionFilter" class="control-select"><option value="all">전체 기사</option><option value="selected">브리핑 선정만</option><option value="starred">중요 표시만</option><option value="unselected">미선정만</option></select>
             <button type="button" id="selectedOnlyBtn" class="selection-toggle" aria-pressed="false">✓ 선택 기사만 보기 <strong id="selectedOnlyCount">0</strong></button>
+            <button type="button" id="manualGroupModeBtn" class="manual-group-btn">수동 군집 선택</button>
+            <button type="button" id="manualGroupBtn" class="manual-group-btn" hidden disabled>관련기사로 묶기 <strong id="manualGroupCount">0</strong></button>
+            <button type="button" id="manualGroupCancelBtn" class="manual-group-cancel-btn" hidden>취소</button>
             <label class="sr-only" for="sortOrder">정렬</label>
             <select id="sortOrder" class="control-select"><option value="relevance">공사 관련도순</option><option value="priority">위험·중요도순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
             <span class="count-label" id="visibleCount">0건 표시</span>
@@ -314,6 +317,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-5"></script>
+  <script type="module" src="js/app.js?v=20260716-9"></script>
 </body>
 </html>

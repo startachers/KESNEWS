@@ -30,6 +30,7 @@ EXPECTED_MIGRATIONS = [
     "0004_ai_analysis_phase7.sql",
     "0005_article_body_extraction.sql",
     "0006_article_top_issue_tag.sql",
+    "0007_manual_issue_group.sql",
 ]
 
 
@@ -137,6 +138,16 @@ def test_article_top_issue_migration_adds_independent_tag(tmp_path):
         connection.close()
 
 
+def test_manual_issue_group_migration_marks_manual_groups(tmp_path):
+    connection = get_connection(tmp_path / "manual-group.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(issues)")}
+        assert "manual_group" in columns
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -183,6 +194,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0004_ai_analysis_phase7.sql",
         "0005_article_body_extraction.sql",
         "0006_article_top_issue_tag.sql",
+        "0007_manual_issue_group.sql",
     ]
     upgraded = get_connection(db_path)
     try:

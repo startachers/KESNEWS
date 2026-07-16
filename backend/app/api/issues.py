@@ -36,6 +36,12 @@ class ClusterRunRequest(BaseModel):
     similarityThreshold: float = Field(default=0.40, ge=0.20, le=0.70)
 
 
+class ManualGroupRequest(BaseModel):
+    reportDate: str
+    articleIds: list[str] = Field(min_length=2)
+    expectedRevision: int
+
+
 @router.get("/api/issues")
 async def list_issues(report_date: str = Query(...)) -> Any:
     connection = get_connection()
@@ -78,6 +84,45 @@ async def patch_issue(issue_id: str, request: IssuePatchRequest) -> Any:
         return ok_envelope(issues_repo.serialize_one(connection, issue_id))
     finally:
         connection.close()
+
+
+@router.post("/api/issues/manual-group")
+async def create_manual_group(request: ManualGroupRequest) -> Any:
+    article_ids = list(dict.fromkeys(request.articleIds))
+    if len(article_ids) < 2:
+        return error_response(
+            "ISSUE_MANUAL_GROUP_INVALID", "서로 다른 기사를 2건 이상 선택해야 합니다."
+        )
+    connection = get_connection()
+    try:
+        candidate_ids = articles_repo.list_candidate_article_ids(connection, request.reportDate)
+        if not set(article_ids).issubset(candidate_ids):
+            return error_response(
+                "ISSUE_MANUAL_GROUP_INVALID", "현재 보고일의 기사만 묶을 수 있습니다."
+            )
+        with connection:
+            issue_id = issues_repo.create_manual_group(
+                connection, request.reportDate, article_ids
+            )
+            briefing = briefings_repo.patch_issue_state(
+                connection,
+                request.reportDate,
+                issue_id,
+                request.expectedRevision,
+                {},
+            )
+            issue = issues_repo.serialize_one(connection, issue_id)
+    except briefings_repo.BriefingNotFound:
+        return error_response("BRIEFING_NOT_FOUND", "작업본을 찾을 수 없습니다.")
+    except briefings_repo.BriefingFinalized:
+        return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 수정할 수 없습니다.")
+    except briefings_repo.RevisionConflict:
+        return error_response(
+            "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+        )
+    finally:
+        connection.close()
+    return ok_envelope({"issue": issue, "revision": briefing["revision"]})
 
 
 @router.post("/api/cluster-runs")

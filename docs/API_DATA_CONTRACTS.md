@@ -546,6 +546,16 @@ remove    자동 군집에 있어도 제외
 
 재군집화는 즉시 덮어쓰지 않는다.
 
+담당자는 기사별 `군집 선택`을 2건 이상 지정해 다음 API로 수동 군집을 만들 수 있다.
+
+```text
+POST /api/issues/manual-group
+```
+
+요청은 `reportDate`, `articleIds`, `expectedRevision`을 받는다. 선택 기사는 기존 이슈에서
+`remove` 처리되고 새 수동 이슈에는 `add` 처리된다. 수동 이슈는 `manual_group=true`로
+기록하며, 이후 자동 재군집화에서도 해당 수동 구성의 배타성을 다시 적용한다.
+
 ```text
 POST /api/cluster-runs
 POST /api/cluster-runs/{cluster_run_id}/apply

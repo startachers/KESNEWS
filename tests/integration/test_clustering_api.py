@@ -32,8 +32,19 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     articles_feature = client.get("/js/features/articles.js")
     assert articles_feature.status_code == 200
     assert "renderMediaGroups" in articles_feature.text
+    assert "unclustered.map(article => renderArticleCard(article))" in articles_feature.text
+    assert "renderRelatedArticle" in articles_feature.text
+    assert "representativeFor" in articles_feature.text
+    assert "Math.random()" in articles_feature.text
+    assert "관련 기사 ${relatedMembers.length}건" in articles_feature.text
+    assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text
+    assert 'data-action="group-select"' in articles_feature.text
+    assert "enterManualGroupMode" in articles_feature.text
+    assert "createManualIssueGroup" in articles_feature.text
+    assert 'id="manualGroupModeBtn"' in page.text
+    assert 'id="manualGroupCancelBtn"' in page.text
 
 
 def _create_briefing(report_date: str) -> None:
@@ -258,3 +269,60 @@ def test_individual_article_top_issue_tag_persists_independently():
     assert articles[0]["starred"] is False
     # 직접 추가 기사의 기존 브리핑 선정 상태와는 독립적으로 저장된다.
     assert articles[0]["included"] is True
+
+
+def test_manual_group_moves_articles_and_survives_reclustering():
+    report_date = "2026-08-07"
+    _create_briefing(report_date)
+    first = _create_article(
+        report_date, "manual-group-1", "전주 아파트 정전 발생 주민 불편", "연합뉴스",
+        "2026-08-07T05:00:00Z",
+    )
+    second = _create_article(
+        report_date, "manual-group-2", "전주 공동주택 전력 중단 주민 불편", "KBS",
+        "2026-08-07T06:00:00Z",
+    )
+    third = _create_article(
+        report_date, "manual-group-3", "전주 아파트 전력 중단 주민 불편", "지역일보",
+        "2026-08-07T07:00:00Z",
+    )
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    grouped = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": [first, second],
+            "expectedRevision": briefing["revision"],
+        },
+    )
+    assert grouped.status_code == 200
+    manual_issue = grouped.json()["data"]["issue"]
+    assert manual_issue["manualGroup"] is True
+    assert set(manual_issue["articleIds"]) == {first, second}
+    assert {item["action"] for item in manual_issue["membershipOverrides"]} == {"add"}
+
+    rerun = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-07T12:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{rerun['id']}/apply").status_code == 200
+    issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    containing_both = [issue for issue in issues if {first, second}.issubset(issue["articleIds"])]
+    assert len(containing_both) == 1
+    assert containing_both[0]["manualGroup"] is True
+    assert set(containing_both[0]["articleIds"]) == {first, second}
+    assert any(third in issue["articleIds"] for issue in issues if not issue["manualGroup"])
+
+    payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
+    assert any(issue["manualGroup"] for issue in payload["issues"])
+    restored_date = "2026-08-08"
+    imported = client.post(f"/api/exports/{restored_date}.json", json=payload)
+    assert imported.status_code == 200
+    assert imported.json()["data"]["issuesImported"] >= 1
+    restored = client.get(
+        "/api/issues", params={"report_date": restored_date}
+    ).json()["data"]["issues"]
+    restored_manual = next(issue for issue in restored if issue["manualGroup"])
+    assert len(restored_manual["articleIds"]) == 2

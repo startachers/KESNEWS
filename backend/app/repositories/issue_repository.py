@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from typing import Any, Literal
 
@@ -71,6 +72,8 @@ def matching_state(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = connection.execute("SELECT * FROM issues ORDER BY created_at, id").fetchall()
     result = []
     for row in rows:
+        if row["manual_group"]:
+            continue
         override = connection.execute(
             "SELECT 1 FROM issue_membership_overrides WHERE issue_id = ? LIMIT 1", (row["id"],)
         ).fetchone()
@@ -164,6 +167,11 @@ def apply_proposal(
             "UPDATE issues SET last_cluster_run_id = ?, needs_review = ?, updated_at = ? WHERE id = ?",
             (run_id, 1 if needs_review else 0, now, row["id"]),
         )
+    report_date_row = connection.execute(
+        "SELECT report_date FROM cluster_runs WHERE id = ?", (run_id,)
+    ).fetchone()
+    if report_date_row:
+        _enforce_manual_group_exclusivity(connection, report_date_row["report_date"])
     return matched_ids
 
 
@@ -201,6 +209,7 @@ def _serialize_issue(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[s
         "lastSeenAt": row["last_seen_at"],
         "directMention": bool(row["direct_mention"]),
         "needsReview": bool(row["needs_review"]),
+        "manualGroup": bool(row["manual_group"]),
         "articleIds": effective_ids,
         "autoArticleIds": [item["article_id"] for item in automatic],
         "membershipOverrides": [dict(item) for item in memberships],
@@ -259,6 +268,148 @@ def set_membership_override(
     )
 
 
+def _enforce_manual_group_exclusivity(
+    connection: sqlite3.Connection, report_date: str
+) -> None:
+    manual_members = connection.execute(
+        """
+        SELECT imo.issue_id, imo.article_id
+        FROM issue_membership_overrides imo
+        JOIN issues i ON i.id = imo.issue_id
+        JOIN cluster_runs cr ON cr.id = i.last_cluster_run_id
+        WHERE i.manual_group = 1 AND imo.action = 'add' AND cr.report_date = ?
+        """,
+        (report_date,),
+    ).fetchall()
+    issue_ids = [
+        row["id"]
+        for row in connection.execute(
+            """
+            SELECT i.id FROM issues i
+            JOIN cluster_runs cr ON cr.id = i.last_cluster_run_id
+            WHERE cr.report_date = ?
+            """,
+            (report_date,),
+        ).fetchall()
+    ]
+    manual_issue_ids = {row["issue_id"] for row in manual_members}
+    for manual_issue_id in manual_issue_ids:
+        added_ids = {
+            row["article_id"]
+            for row in manual_members
+            if row["issue_id"] == manual_issue_id
+        }
+        automatic_ids = connection.execute(
+            """
+            SELECT iaa.article_id
+            FROM issue_auto_articles iaa
+            JOIN issues i ON i.id = iaa.issue_id
+            WHERE iaa.issue_id = ? AND iaa.cluster_run_id = i.last_cluster_run_id
+            """,
+            (manual_issue_id,),
+        ).fetchall()
+        for automatic in automatic_ids:
+            if automatic["article_id"] not in added_ids:
+                set_membership_override(
+                    connection, manual_issue_id, automatic["article_id"], "remove"
+                )
+    for membership in manual_members:
+        for issue_id in issue_ids:
+            if issue_id == membership["issue_id"]:
+                continue
+            if membership["article_id"] in _effective_article_ids(connection, issue_id):
+                set_membership_override(
+                    connection, issue_id, membership["article_id"], "remove"
+                )
+
+
+def create_manual_group(
+    connection: sqlite3.Connection, report_date: str, article_ids: list[str]
+) -> str:
+    unique_ids = list(dict.fromkeys(article_ids))
+    if len(unique_ids) < 2:
+        raise ValueError("manual group requires at least two articles")
+    placeholders = ",".join("?" for _ in unique_ids)
+    rows = connection.execute(
+        f"""
+        SELECT a.id, a.title, a.published_at,
+               aa.auto_priority, aa.auto_priority_score, aa.auto_reasons_json
+        FROM articles a
+        LEFT JOIN article_assessments aa ON aa.article_id = a.id
+        WHERE a.id IN ({placeholders})
+        """,  # noqa: S608 - placeholders count only
+        unique_ids,
+    ).fetchall()
+    if len(rows) != len(unique_ids):
+        raise ValueError("article not found")
+    representative = secrets.choice(rows)
+    published = [row["published_at"] for row in rows if row["published_at"]]
+    reasons = json.loads(representative["auto_reasons_json"] or "{}")
+    issue_id = make_id()
+    now = now_iso()
+    latest_run = connection.execute(
+        """
+        SELECT id FROM cluster_runs
+        WHERE report_date = ? AND status = 'applied'
+        ORDER BY applied_at DESC, created_at DESC LIMIT 1
+        """,
+        (report_date,),
+    ).fetchone()
+    if latest_run is None:
+        manual_run_id = make_id()
+        connection.execute(
+            """
+            INSERT INTO cluster_runs (
+                id, report_date, status, input_signature, proposal_json, diff_json,
+                algorithm_version, created_at, applied_at
+            ) VALUES (?, ?, 'applied', 'manual-group', '[]', '{}', 'manual-group-v1', ?, ?)
+            """,
+            (manual_run_id, report_date, now, now),
+        )
+        latest_run = {"id": manual_run_id}
+    connection.execute(
+        """
+        INSERT INTO issues (
+            id, representative_article_id, auto_title, auto_status, auto_priority,
+            auto_priority_score, spread_score, auto_reasons_json, first_seen_at,
+            last_seen_at, direct_mention, needs_review, last_cluster_run_id,
+            manual_group, created_at, updated_at
+        ) VALUES (?, ?, ?, 'new', ?, ?, 0, ?, ?, ?, ?, 1, ?, 1, ?, ?)
+        """,
+        (
+            issue_id,
+            representative["id"],
+            representative["title"],
+            representative["auto_priority"] or "reference",
+            representative["auto_priority_score"] or 0,
+            json.dumps({"manualGrouping": True}, ensure_ascii=False),
+            min(published) if published else now,
+            max(published) if published else now,
+            1 if reasons.get("directMention") else 0,
+            latest_run["id"] if latest_run else None,
+            now,
+            now,
+        ),
+    )
+    existing_issue_ids = [
+        row["id"]
+        for row in connection.execute(
+            """
+            SELECT i.id FROM issues i
+            JOIN cluster_runs cr ON cr.id = i.last_cluster_run_id
+            WHERE i.id != ? AND cr.report_date = ?
+            """,
+            (issue_id, report_date),
+        )
+    ]
+    for article_id in unique_ids:
+        for existing_issue_id in existing_issue_ids:
+            if article_id in _effective_article_ids(connection, existing_issue_id):
+                set_membership_override(connection, existing_issue_id, article_id, "remove")
+        set_membership_override(connection, issue_id, article_id, "add")
+    return issue_id
+
+
 def serialize_one(connection: sqlite3.Connection, issue_id: str) -> dict[str, Any] | None:
     row = get(connection, issue_id)
     return _serialize_issue(connection, row) if row else None
@@ -306,8 +457,9 @@ def import_snapshots(
                 id, representative_article_id, auto_title, editor_title, auto_status,
                 editor_status, auto_priority, editor_priority, auto_priority_score,
                 spread_score, auto_reasons_json, first_seen_at, last_seen_at,
-                direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                direct_mention, needs_review, last_cluster_run_id, manual_group,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 issue_id, representative_id, snapshot.get("autoTitle"), snapshot.get("editorTitle"),
@@ -317,7 +469,7 @@ def import_snapshots(
                 json.dumps(snapshot.get("autoReasons") or {}, ensure_ascii=False),
                 snapshot.get("firstSeenAt"), snapshot.get("lastSeenAt"),
                 1 if snapshot.get("directMention") else 0, 1 if snapshot.get("needsReview") else 0,
-                run_id, now, now,
+                run_id, 1 if snapshot.get("manualGroup") else 0, now, now,
             ),
         )
         for article_id in auto_ids:
@@ -337,4 +489,5 @@ def import_snapshots(
                 item["action"],
             )
         imported += 1
+    _enforce_manual_group_exclusivity(connection, report_date)
     return imported

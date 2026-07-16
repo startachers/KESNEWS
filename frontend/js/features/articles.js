@@ -10,14 +10,17 @@ import { showToast } from "../ui/notifications.js";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
 
-const ISSUE_STATUS_LABELS = { new: "신규", expanding: "확산", ongoing: "지속", cooling: "진정", closed: "종료" };
+const expandedIssueIds = new Set();
+const representativeByIssueId = new Map();
+const manualGroupSelection = new Set();
+let manualGroupMode = false;
 
 function topIssueTagCount() {
   return state.issues.filter(issue => issue.selected).length
     + state.articles.filter(article => article.topIssue).length;
 }
 
-function renderArticleCard(a) {
+function renderArticleCard(a, issue = null, relatedMembers = []) {
   const category = settings.queries.find(q => q.id === a.category)?.label || "기타";
   const relevance = getRelevance(a);
   const href = safeUrl(a.url);
@@ -26,29 +29,68 @@ function renderArticleCard(a) {
   const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.risk}">${RISK_LABELS[a.risk]}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
   if (isYonhapArticle(a)) badges.unshift('<span class="badge badge-yonhap">연합뉴스 우선</span>');
   if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
-  if (a.topIssue) badges.push('<span class="badge badge-top-issue">Top 이슈</span>');
+  if (issue) badges.unshift('<span class="badge badge-same-issue">동일 이슈</span>');
+  if (a.topIssue && !issue) badges.push('<span class="badge badge-top-issue">Top 이슈</span>');
   if (a.manual) badges.push('<span class="badge badge-manual">직접 추가</span>');
   if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
   if (a.stale) badges.push('<span class="badge badge-watch" title="이전 수집 실패로 최신 상태를 확인하지 못했습니다">최신 미확인</span>');
-  return `<article class="article-card ${a.included ? "included" : ""}" data-id="${escapeAttr(a.id)}">
-    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
+  const topIssueButton = issue
+    ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="군집을 Top 이슈로 태그" aria-label="군집 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
+    : `<button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="개별 기사를 Top 이슈로 태그" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>`;
+  const relatedArticles = issue ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
+    <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
+    <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article)).join("")}</ul>
+  </details>` : "";
+  const leadingCheckbox = manualGroupMode
+    ? `<input class="include-check group-mode-check" type="checkbox" aria-label="관련기사 선택" title="관련기사 선택" data-action="group-select" data-article-id="${escapeAttr(a.id)}" ${manualGroupSelection.has(a.id) ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`
+    : `<input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`;
+  return `<article class="article-card ${issue ? "grouped-article-card" : ""} ${a.included ? "included" : ""} ${issue?.selected ? "top-tagged" : ""}" data-id="${escapeAttr(a.id)}" ${issue ? `data-issue-id="${escapeAttr(issue.id)}"` : ""}>
+    ${leadingCheckbox}
     <div class="article-main">
-      <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
+      <div class="article-badges">${manualGroupMode ? '<span class="badge badge-group-mode">관련기사 선택 중</span>' : ""}<span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
       ${titleEl}
       <div class="article-meta"><strong>${escapeHtml(a.source || "출처 미상")}</strong><span>${formatDateTime(a.pubDate)}</span><span>${escapeHtml(relevance.reasons.join(" · "))}</span><span>${escapeHtml((a.matchedKeywords || []).slice(0,4).join(" · ") || "키워드 자동 분류")}</span></div>
       ${a.description ? `<p class="article-desc">${escapeHtml(a.description)}</p>` : ""}
       <input class="article-note" data-action="note" value="${escapeAttr(a.note || "")}" aria-label="기사 메모" placeholder="보고 메모 추가 (인쇄에는 포함되지 않음)" ${state.status === "final" ? "disabled" : ""}>
     </div>
     <div class="article-actions">
-      <button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="개별 기사를 Top 이슈로 태그" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>
+      ${topIssueButton}
       <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
       <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제" ${state.status === "final" ? "disabled" : ""}>${ICONS.trash}</button>
     </div>
+    ${relatedArticles}
   </article>`;
 }
 
+function renderRelatedArticle(a) {
+  const href = safeUrl(a.url);
+  const titleEl = href
+    ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
+    : `<span class="related-article-title">${escapeHtml(a.title)}</span>`;
+  const checkbox = manualGroupMode
+    ? `<input class="related-group-check" type="checkbox" data-action="group-select" data-article-id="${escapeAttr(a.id)}" aria-label="관련기사 선택" title="관련기사 선택" ${manualGroupSelection.has(a.id) ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`
+    : "";
+  return `<li class="related-article-row ${manualGroupMode ? "group-mode" : ""}">${checkbox}${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></li>`;
+}
+
+function representativeFor(issue, members) {
+  const savedId = representativeByIssueId.get(issue.id);
+  const saved = members.find(member => member.article.id === savedId);
+  if (saved) return saved;
+  const representative = members[Math.floor(Math.random() * members.length)];
+  representativeByIssueId.set(issue.id, representative.article.id);
+  return representative;
+}
+
+function rememberExpandedIssues() {
+  expandedIssueIds.clear();
+  els.articleList?.querySelectorAll(".related-articles[open]").forEach(details => {
+    expandedIssueIds.add(details.dataset.issueId);
+  });
+}
+
 function renderMediaGroups(items) {
-  if (!state.issues.length) return items.map(renderArticleCard).join("");
+  if (!state.issues.length) return items.map(article => renderArticleCard(article)).join("");
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
@@ -58,20 +100,22 @@ function renderMediaGroups(items) {
   }).filter(group => group.members.length).sort((left, right) => left.position - right.position);
   const unclustered = items.filter(article => !groupedIds.has(article.id));
   const groupedHtml = groups.map(({ issue, members }) => {
-    const status = ISSUE_STATUS_LABELS[issue.effectiveStatus] || issue.effectiveStatus || "상태 없음";
-    return `<section class="media-issue-group ${issue.selected ? "top-tagged" : ""}" data-issue-id="${escapeAttr(issue.id)}">
-      <header class="media-issue-header">
-        <div><span class="media-issue-kicker">동일 이슈 · ${members.length}건 표시</span><h3>${escapeHtml(issue.effectiveTitle)}</h3><p>${escapeHtml(status)} · 전체 구성 기사 ${issue.articleIds.length}건</p></div>
-        <button class="btn btn-subtle media-top-toggle ${issue.selected ? "active" : ""}" type="button" data-action="top-issue" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" ? "disabled" : ""}>${issue.selected ? "✓ Top 이슈" : "+ Top 이슈"}</button>
-      </header>
-      <div class="media-issue-members">${members.map(member => renderArticleCard(member.article)).join("")}</div>
-    </section>`;
+    if (issue.articleIds.length === 1) return members.map(member => renderArticleCard(member.article)).join("");
+    const representative = representativeFor(issue, members);
+    const related = members.filter(member => member.article.id !== representative.article.id);
+    return renderArticleCard(representative.article, issue, related);
   }).join("");
-  const unclusteredHtml = unclustered.length ? `<section class="media-issue-group unclustered"><header class="media-issue-header"><div><span class="media-issue-kicker">미분류</span><h3>재군집화 이후 추가되거나 포함되지 않은 기사</h3><p>${unclustered.length}건</p></div></header><div class="media-issue-members">${unclustered.map(renderArticleCard).join("")}</div></section>` : "";
+  const unclusteredHtml = unclustered.map(article => renderArticleCard(article)).join("");
   return groupedHtml + unclusteredHtml;
 }
 
 export function renderArticles() {
+  rememberExpandedIssues();
+  const currentIds = new Set(state.articles.map(article => article.id));
+  for (const articleId of manualGroupSelection) {
+    if (!currentIds.has(articleId)) manualGroupSelection.delete(articleId);
+  }
+  updateManualGroupControls();
   const selectedCount = state.articles.filter(article => article.included).length;
   const selectedOnlyActive = filters.selection === "selected";
   els.selectedOnlyCount.textContent = selectedCount;
@@ -103,12 +147,20 @@ export function renderArticles() {
   }
 
   els.articleList.innerHTML = renderMediaGroups(items);
+  updateManualGroupControls();
 }
 
 export function handleArticleChange(e) {
   if (state.status === "final") return;
-  const card = e.target.closest(".article-card"); if (!card) return;
-  const article = state.articles.find(a => a.id === card.dataset.id); if (!article) return;
+  if (e.target.dataset.action === "group-select") {
+    const articleId = e.target.dataset.articleId;
+    if (e.target.checked) manualGroupSelection.add(articleId);
+    else manualGroupSelection.delete(articleId);
+    updateManualGroupControls();
+    return;
+  }
+  const item = e.target.closest("[data-id]"); if (!item) return;
+  const article = state.articles.find(a => a.id === item.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
     article.included = e.target.checked;
     afterArticleMutation();
@@ -117,11 +169,60 @@ export function handleArticleChange(e) {
   }
 }
 
+function updateManualGroupControls() {
+  if (!els.manualGroupBtn || !els.manualGroupModeBtn || !els.manualGroupCancelBtn) return;
+  const count = manualGroupSelection.size;
+  els.manualGroupCount.textContent = count;
+  els.manualGroupModeBtn.hidden = manualGroupMode;
+  els.manualGroupBtn.hidden = !manualGroupMode;
+  els.manualGroupCancelBtn.hidden = !manualGroupMode;
+  els.manualGroupBtn.disabled = count < 2 || state.status === "final";
+  els.manualGroupModeBtn.disabled = state.status === "final";
+}
+
+export function enterManualGroupMode() {
+  if (state.status === "final") return;
+  manualGroupMode = true;
+  state.issues.forEach(issue => expandedIssueIds.add(issue.id));
+  renderArticles();
+  showToast("묶을 기사들을 왼쪽 체크박스로 선택하세요.");
+}
+
+export function cancelManualGroupMode() {
+  manualGroupMode = false;
+  manualGroupSelection.clear();
+  renderArticles();
+}
+
+export async function createManualGroup() {
+  if (manualGroupSelection.size < 2 || state.status === "final") return;
+  const articleIds = [...manualGroupSelection];
+  els.manualGroupBtn.disabled = true;
+  try {
+    const result = await api.createManualIssueGroup(state.date, articleIds, state.revision);
+    state.revision = result.data.revision;
+    const issuesResult = await api.listIssues(state.date);
+    state.issues = issuesResult.data.issues || [];
+    manualGroupSelection.clear();
+    manualGroupMode = false;
+    renderAll();
+    showToast(`${articleIds.length}건을 관련기사로 묶었습니다.`, "success");
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      setState(await loadDailyState(state.date));
+      manualGroupSelection.clear();
+      renderAll();
+    }
+    showToast(`관련기사 묶기 실패: ${friendlyError(error)}`, "error");
+    updateManualGroupControls();
+  }
+}
+
 export function handleArticleInput(e) {
   if (state.status === "final") return;
   if (e.target.dataset.action !== "note") return;
-  const card = e.target.closest(".article-card");
-  const article = state.articles.find(a => a.id === card?.dataset.id);
+  const item = e.target.closest("[data-id]");
+  const article = state.articles.find(a => a.id === item?.dataset.id);
   if (article) {
     article.note = e.target.value;
     state.summaryError = "";
@@ -142,7 +243,7 @@ export function handleArticleClick(e) {
   if (!action) return;
   if (state.status === "final") return;
   if (action === "top-issue") {
-    const group = e.target.closest(".media-issue-group");
+    const group = e.target.closest("[data-issue-id]");
     const issue = state.issues.find(item => item.id === group?.dataset.issueId);
     if (!issue) return;
     if (!issue.selected && topIssueTagCount() >= 3) {
@@ -152,8 +253,8 @@ export function handleArticleClick(e) {
     toggleTopIssue(issue);
     return;
   }
-  const card = e.target.closest(".article-card");
-  const article = state.articles.find(a => a.id === card?.dataset.id); if (!article) return;
+  const item = e.target.closest("[data-id]");
+  const article = state.articles.find(a => a.id === item?.dataset.id); if (!article) return;
   if (action === "article-top-issue") {
     if (!article.topIssue && topIssueTagCount() >= 3) {
       showToast("Top Issues는 군집과 개별 기사를 합쳐 최대 3개까지 태그할 수 있습니다.", "error");
