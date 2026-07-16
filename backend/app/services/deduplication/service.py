@@ -65,6 +65,10 @@ def merge_duplicate_articles(left: Article, right: Article) -> Article:
             ]
         )
     )
+    merged["_observations"] = [
+        *(left.get("_observations") or [left]),
+        *(right.get("_observations") or [right]),
+    ]
     return merged
 
 

@@ -39,13 +39,16 @@ def test_automated_and_frontend_defaults_contain_same_21_query_groups():
         config = json.loads(path.read_text(encoding="utf-8"))
         assert [query["id"] for query in config["queries"]] == QUERY_IDS
         by_id = {query["id"]: query for query in config["queries"]}
+        assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
+        assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 63
         assert by_id["macro_economy"]["maxRecords"] == 20
         assert by_id["ai_trend"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
     assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 4" in default_block
+    assert "settingsVersion: 5" in default_block
+    assert default_block.count("naverQueries:") == len(QUERY_IDS)
     assert default_block.count("maxRecords: 20") == 2
 
 

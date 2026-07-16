@@ -1,7 +1,7 @@
 import { state, settings, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
 import { localDateKey, dateValue } from "../utils/dates.js";
 import { cleanText, shortText, friendlyError, safeUrl } from "../utils/strings.js";
-import * as api from "../api/client.js";
+import * as api from "../api/client.js?v=20260716-15";
 import { showToast, setStatus, setSearchButton } from "../ui/notifications.js";
 import { renderSidePanel, renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
@@ -41,7 +41,7 @@ export async function runSearch(auto = false) {
       enableYonhap: !!settings.enableYonhap,
       enableOpmPress: !!settings.enableOpmPress,
       enableMePress: !!settings.enableMePress,
-      queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query, ...(q.maxRecords ? { maxRecords: Number(q.maxRecords) } : {}) })),
+      queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query, naverQueries: q.naverQueries || [], ...(q.maxRecords ? { maxRecords: Number(q.maxRecords) } : {}) })),
       coreKeywords: settings.coreKeywords,
       riskKeywords: settings.riskKeywords,
       positiveKeywords: settings.positiveKeywords,
@@ -54,6 +54,7 @@ export async function runSearch(auto = false) {
     state.rawCollectedCount = result.rawCollectedCount || 0;
     state.duplicatesRemoved = result.duplicatesRemoved || 0;
     state.sourceFilterStats = result.source_filter_stats || null;
+    state.naverStatus = result.naverStatus || "네이버 뉴스 API 미설정";
     state.warnings = result.warnings || [];
 
     if (result.status !== "failed") {

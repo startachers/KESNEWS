@@ -51,10 +51,78 @@
 - 검증: `.venv/bin/python -m pytest -q`(172 passed), `.venv/bin/ruff check .`,
   `tests/unit/test_gov_adapters.py`(실제 페이지 HTML 구조로 만든 fixture 기반).
 
-## 다음 범위
+## 다음 범위: 단계 4. 네이버 뉴스 API provider (2026-07-16 설계 확정)
 
-다음 작업을 시작할 때는 별도 지시를 따른다. `new_rules_news_clip.md`가 정한 다음
-분할 단계는 **단계 4. 네이버 뉴스 API provider**이며, P4-001은 계속 별도 후속이다.
+`new_rules_news_clip.md` §12·§16.2·§17 완료 기준 13~15를 따른다. NC-004 해소 대상이다.
+인증키는 발급 완료되어 프로젝트 루트 `.env`에 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`로
+저장돼 있다.
+
+### 0. 선행 필수: .env 로딩 추가
+
+현재 코드베이스는 `.env`를 읽는 곳이 전혀 없다(전부 `os.environ` 직접 조회).
+python-dotenv 같은 신규 의존성을 추가하지 말고, `KEY=value` 줄만 파싱하는 작은
+로더(`backend/app/core/env.py` 등, 주석·빈 줄 무시, 기존 환경변수 우선)를 만들어
+`scripts/run_server.py`와 `scripts/run_automated_collection.py` 시작 시 호출한다.
+launchd plist에 키를 굽지 않는다(키 교체 시 재설치가 필요해지므로). 기존
+`POLICY_BRIEFING_SERVICE_KEY`도 같은 로더로 읽히게 된다.
+
+### 1. 신규 adapter: backend/app/services/collection/naver_news.py
+
+- `GET https://openapi.naver.com/v1/search/news.json?query={단순검색어}&display=100&start=1&sort=date`
+  헤더 `X-Naver-Client-Id`/`X-Naver-Client-Secret`. 기존 `http.http_get` 사용, timeout 15초.
+- 네이버는 기간 필터가 없으므로 `pubDate`가 lookback 경계를 벗어날 때까지 `start`를
+  100씩 증가시키며 최대 3페이지까지만 조회한다.
+- 정규화(§12.3): `title`/`description`의 `<b>` 등 HTML 태그·엔티티 제거,
+  `pubDate` RFC 1123 → ISO 8601(기존 `parse_date`가 이미 처리),
+  `url = originallink or link`, **`originalLink` 필드에 originallink를 그대로 보존**
+  (media.py:100이 이미 이 camelCase 필드로 언론사를 판별한다), `provider = "네이버 뉴스 API"`.
+- 네이버 항목에는 안정적 게시물 ID가 없으므로 `sourceId`는 넣지 않는다
+  (source_id 매칭은 정부부처 어댑터 전용, canonical URL·fuzzy 매칭이 담당).
+
+### 2. naverQueries 정의 (§12.2 — 기존 검색식을 그대로 보내면 안 된다)
+
+> 구현 시점 코드에는 후속 산업·거시 검색군 4개가 추가되어 총 21개와
+> `settingsVersion: 4`가 존재한다. 이를 되돌리지 않고 21개 모두에 적용하며 버전은 5로 올린다.
+
+- 네이버 query는 불리언 미지원. 검색군마다 공백 AND만 쓰는 단순 검색어
+  `naverQueries: string[]`(군당 최대 3개)를 별도 정의한다.
+- 반영 위치 세 곳: `frontend/js/state/store.js`의 `DEFAULT_SETTINGS.queries`
+  (settingsVersion 올려 기존 localStorage에 병합되게), `config/automated_collection.json`,
+  같은 파일 `.example`. 현재 21개 군 전부에 정의한다. 검색어는 회당 최대 63개이고
+  검색어별 3페이지를 모두 읽는 최악의 경우 HTTP 요청은 회당 189회·2시간 주기 일 2,268회로,
+  일일 한도 25,000 대비 여유가 있다.
+- 프런트는 `runSearch` 요청 바디의 각 query 객체에 `naverQueries`를 실어 보낸다.
+
+### 3. collector.py 배선·우선순위(§12.4)
+
+- 검색군별로 인증키가 있으면 네이버를 먼저 호출하고, 기존 Google RSS 경로도 그대로
+  유지한다(동일 기사는 기존 dedup이 observation 2건으로 병합 — §16.2 표 참조).
+- 네이버 실패(401·429·시간초과)는 전체 수집 실패로 만들지 않는다. 해당 군은 RSS 결과로
+  계속 진행하고 `warnings`에 남긴다. 오류 메시지·로그·내보내기에 키·헤더를 절대 포함하지
+  않는지 테스트로 확인한다(§17 완료 기준 15).
+- 키 미설정이면 네이버 호출 자체를 건너뛴다(현 동작 유지).
+- 응답에 네이버 상태를 실어 화면은 `네이버 뉴스 API 연결됨 / 미설정 / 오류` 3가지만
+  표시한다.
+
+### 4. 언론사 판별(§14 연동)
+
+- `originallink` 도메인으로 허용목록 판별(이미 media.py에 구현됨).
+- `originallink`가 없고 `link`가 `n.news.naver.com`이면 `unknown_publisher`로 제외
+  — `_publisher_url`이 빈 문자열을 돌려주므로 현 로직으로 자동 충족되는지 테스트로 못박는다.
+
+### 5. 테스트(§16.2 표를 그대로 케이스로)
+
+- 단위: 정규화(HTML 태그 제거·날짜 변환), originallink 유무별 판별, 페이지네이션이
+  lookback 경계·3페이지에서 멈추는지, 인증 실패가 warning으로만 남는지.
+- 통합: 네이버+Google 동일 기사 → 기사 1건·observation 2건·query_group 병합.
+- 회귀: 기존 전체 pytest·ruff·node --check·git diff --check.
+
+### 6. 문서
+
+- `docs/KNOWN_RISKS.md` NC-004를 해소로 갱신, `.env` 로딩 방식 기록.
+- `docs/OPERATIONS_RUNBOOK.md`에 키 설정 위치(.env)와 상태 표시 3종 추가.
+
+P4-001(`/api/settings`)은 계속 별도 후속이다.
 
 ## 계속 범위 밖
 

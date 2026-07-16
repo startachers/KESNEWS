@@ -1,8 +1,8 @@
 import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, SETTINGS_KEY } from "../state/store.js";
 import { escapeHtml, escapeAttr, parseKeywordList, friendlyError } from "../utils/strings.js";
 import { parseDate } from "../utils/dates.js";
-import { refreshArticles } from "../features/collection.js";
-import * as api from "../api/client.js?v=20260716-14";
+import { refreshArticles } from "../features/collection.js?v=20260716-15";
+import * as api from "../api/client.js?v=20260716-15";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
 import { persistAndRender } from "../features/articles.js?v=20260716-12";
 import { renderAll } from "./renderers.js";
@@ -86,14 +86,14 @@ export function resetSettingsForm() {
 }
 
 export async function restartServerFromSettings() {
-  if (!window.confirm("서버를 재시작할까요?")) return;
   const button = $("restartServerBtn");
   const originalText = button.textContent;
-  const forcedReload = window.setTimeout(() => window.location.reload(), 12000);
-  button.disabled = true;
-  button.textContent = "재시작 중…";
-  setStatus("busy", "로컬 서버를 재시작하고 있습니다…");
+  let forcedReload = null;
   try {
+    button.disabled = true;
+    button.textContent = "재시작 중…";
+    setStatus("busy", "로컬 서버를 재시작하고 있습니다…");
+    forcedReload = window.setTimeout(() => window.location.reload(), 50000);
     const result = await api.restartServer();
     closeOverlay("settingsOverlay");
     showToast("서버 재시작을 요청했습니다. 연결을 확인하고 있습니다.");
@@ -101,7 +101,7 @@ export async function restartServerFromSettings() {
     window.clearTimeout(forcedReload);
     window.location.reload();
   } catch (error) {
-    window.clearTimeout(forcedReload);
+    if (forcedReload) window.clearTimeout(forcedReload);
     button.disabled = false;
     button.textContent = originalText;
     setStatus("error", "서버 재시작을 확인하지 못했습니다");

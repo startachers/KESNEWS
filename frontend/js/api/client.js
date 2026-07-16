@@ -94,7 +94,7 @@ export function patchArticleAssessment(articleId, fields) {
 }
 
 export function runCollection(payload) {
-  return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 45000);
+  return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 120000);
 }
 
 export function getLatestCollection(date) {
@@ -108,7 +108,7 @@ export function restartServer() {
   });
 }
 
-export async function waitForRestart(previousProcessId, timeoutMs = 10000) {
+export async function waitForRestart(previousProcessId, timeoutMs = 45000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise(resolve => window.setTimeout(resolve, 500));

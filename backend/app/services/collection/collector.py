@@ -24,6 +24,7 @@ from backend.app.services.collection.gdelt import fetch_gdelt_combined
 from backend.app.services.collection.google_news import fetch_google_rss
 from backend.app.services.collection.http import CollectionHttpError
 from backend.app.services.collection.me_press import fetch_me_press
+from backend.app.services.collection.naver_news import NAVER_PROVIDER, fetch_naver_news
 from backend.app.services.collection.opm_press import fetch_opm_press
 from backend.app.services.collection.policy_briefing import fetch_policy_briefing
 from backend.app.services.collection.rss_parser import RssParseError
@@ -123,6 +124,18 @@ def fetch_query(
     return {"items": items, "provider": "Google 뉴스 RSS"}
 
 
+def fetch_naver_query(
+    query_text: str,
+    client_id: str,
+    client_secret: str,
+    within_lookback,
+) -> dict[str, Any]:
+    return {
+        "items": fetch_naver_news(query_text, client_id, client_secret, within_lookback),
+        "provider": NAVER_PROVIDER,
+    }
+
+
 def query_max_records(query: dict[str, Any], default: int) -> int:
     """검색군별 양의 정수 override가 있으면 사용하고, 아니면 전역 기본값을 유지한다."""
     try:
@@ -137,7 +150,7 @@ def _persist_provider_results(
 ) -> dict[str, str]:
     provider_id_by_label: dict[str, str] = {}
     for task in provider_tasks:
-        provider_id_by_label[task["label"]] = run_repo.add_provider_result(
+        provider_id_by_label[task.get("key") or task["label"]] = run_repo.add_provider_result(
             connection,
             run_id=run_id,
             provider=task.get("provider") or task["label"],
@@ -268,6 +281,9 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     enable_me_press = payload.get("enableMePress") is not False
     # 자격정보는 프런트·요청 바디에 노출하지 않는다(NC-004와 동일 원칙). 서버 환경변수로만 읽는다.
     policy_briefing_service_key = os.environ.get("POLICY_BRIEFING_SERVICE_KEY", "").strip()
+    naver_client_id = os.environ.get("NAVER_CLIENT_ID", "").strip()
+    naver_client_secret = os.environ.get("NAVER_CLIENT_SECRET", "").strip()
+    naver_configured = bool(naver_client_id and naver_client_secret)
     queries = replace_people_tokens(
         [q for q in (payload.get("queries") or []) if str(q.get("query") or "").strip()]
     )
@@ -282,24 +298,59 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
 
     started_at = now_iso()
 
-    tasks: list[tuple[str, str]] = []
+    tasks: list[dict[str, Any]] = []
     coros = []
     if enable_yonhap:
-        tasks.append(("연합뉴스", "auto"))
+        tasks.append({"key": "yonhap", "label": "연합뉴스", "category": "auto"})
         coros.append(asyncio.to_thread(fetch_yonhap_rss, within_lookback, collection_limit))
     if enable_opm_press:
-        tasks.append(("국무조정실 보도자료", "auto"))
+        tasks.append(
+            {"key": "opm_press", "label": "국무조정실 보도자료", "category": "auto"}
+        )
         coros.append(asyncio.to_thread(fetch_opm_press, max_records))
     if enable_me_press:
-        tasks.append(("기후에너지환경부 보도자료", "auto"))
+        tasks.append(
+            {"key": "me_press", "label": "기후에너지환경부 보도자료", "category": "auto"}
+        )
         coros.append(asyncio.to_thread(fetch_me_press, max_records))
     if policy_briefing_service_key:
-        tasks.append(("정책브리핑 API", "auto"))
+        tasks.append(
+            {"key": "policy_briefing", "label": "정책브리핑 API", "category": "auto"}
+        )
         coros.append(
             asyncio.to_thread(fetch_policy_briefing, policy_briefing_service_key, "", max_records)
         )
     for query in queries:
-        tasks.append((str(query.get("label") or query.get("id") or "검색식"), str(query.get("id") or "direct")))
+        query_id = str(query.get("id") or "direct")
+        label = str(query.get("label") or query_id or "검색식")
+        if naver_configured:
+            naver_queries = [
+                str(value).strip()
+                for value in (query.get("naverQueries") or [])[:3]
+                if str(value).strip()
+            ]
+            for index, naver_query in enumerate(naver_queries):
+                tasks.append(
+                    {
+                        "key": f"naver:{query_id}:{index}",
+                        "label": f"{label} · 네이버 {index + 1}",
+                        "category": query_id,
+                        "provider": NAVER_PROVIDER,
+                        "optional_failure": True,
+                    }
+                )
+                coros.append(
+                    asyncio.to_thread(
+                        fetch_naver_query,
+                        naver_query,
+                        naver_client_id,
+                        naver_client_secret,
+                        within_lookback,
+                    )
+                )
+        tasks.append(
+            {"key": f"query:{query_id}", "label": label, "category": query_id}
+        )
         coros.append(
             asyncio.to_thread(
                 fetch_query,
@@ -318,25 +369,42 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     warnings: list[str] = []
     provider_tasks: list[dict[str, Any]] = []
 
-    for (label, category), result in zip(tasks, results):
+    naver_had_error = False
+    for task, result in zip(tasks, results):
+        label = task["label"]
+        category = task["category"]
         query_group_id = None if category == "auto" else category
         if isinstance(result, BaseException):
-            failures.append(f"{label}: {friendly_error(result)}")
+            error_message = friendly_error(result)
+            if task.get("optional_failure"):
+                naver_had_error = True
+                warnings.append(f"{label}: 네이버 뉴스 API 오류({error_message})")
+            else:
+                failures.append(f"{label}: {error_message}")
             provider_tasks.append(
                 {
+                    "key": task["key"],
                     "label": label,
-                    "provider": label,
+                    "provider": task.get("provider") or label,
                     "query_group_id": query_group_id,
                     "status": "failed",
                     "raw_count": 0,
-                    "error_message": friendly_error(result),
+                    "error_message": error_message,
                 }
             )
             continue
         items = result["items"]
         for item in items:
             assigned_category = infer_category(item)
-            collected.append({**item, "category": assigned_category, "_task_label": label, "_query_group_id": query_group_id})
+            collected.append(
+                {
+                    **item,
+                    "category": assigned_category,
+                    "_task_label": label,
+                    "_task_key": task["key"],
+                    "_query_group_id": query_group_id,
+                }
+            )
         provider_label = result.get("provider")
         if provider_label and provider_label not in providers:
             providers.append(provider_label)
@@ -345,6 +413,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             warnings.append(f"{label}: {warning}")
         provider_tasks.append(
             {
+                "key": task["key"],
                 "label": label,
                 "provider": provider_label,
                 "query_group_id": query_group_id,
@@ -360,7 +429,13 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             gdelt_items = await asyncio.to_thread(fetch_gdelt_combined, core_keywords, lookback_hours, max_records)
             for item in gdelt_items:
                 collected.append(
-                    {**item, "category": infer_category(item), "_task_label": "GDELT", "_query_group_id": None}
+                    {
+                        **item,
+                        "category": infer_category(item),
+                        "_task_label": "GDELT",
+                        "_task_key": "gdelt",
+                        "_query_group_id": None,
+                    }
                 )
             if "GDELT" not in providers:
                 providers.append("GDELT")
@@ -368,6 +443,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             warnings.extend(f"RSS 보조 전환: {f}" for f in failures)
             provider_tasks.append(
                 {
+                    "key": "gdelt",
                     "label": "GDELT",
                     "provider": "GDELT",
                     "query_group_id": None,
@@ -380,6 +456,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             failures.append(f"GDELT 보조: {friendly_error(gdelt_error)}")
             provider_tasks.append(
                 {
+                    "key": "gdelt",
                     "label": "GDELT",
                     "provider": "GDELT",
                     "query_group_id": None,
@@ -449,6 +526,13 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     "warnings": warnings,
                     "collectionRunId": run_id,
                     "source_filter_stats": source_filter_stats,
+                    "naverStatus": "네이버 뉴스 API 오류"
+                    if naver_had_error
+                    else (
+                        "네이버 뉴스 API 연결됨"
+                        if naver_configured
+                        else "네이버 뉴스 API 미설정"
+                    ),
                 }
 
             new_count = 0
@@ -459,22 +543,39 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     matched_count += 1
                 else:
                     new_count += 1
-                article_repo.insert_observation(
-                    connection,
-                    article_id=article_id,
-                    collection_run_provider_id=provider_id_by_label.get(item.get("_task_label")),
-                    provider=item.get("provider") or item.get("_task_label") or "unknown",
-                    provider_item_key=item.get("sourceId"),
-                    query_group_id=item.get("_query_group_id"),
-                    raw_url=item.get("url"),
-                    raw_title=item.get("title"),
-                    raw_source=item.get("source"),
-                    raw_published_at=item.get("pubDate"),
-                    raw_description=item.get("description"),
-                    raw_payload_json=None,
-                    dedup_method=dedup_method,
-                    dedup_score=None,
-                )
+                observations = item.get("_observations") or [item]
+                representative_url = canonical_article_url(item.get("url"))
+                for index, observation in enumerate(observations):
+                    observation_url = canonical_article_url(observation.get("url"))
+                    observation_method = dedup_method
+                    if index > 0:
+                        observation_method = (
+                            "canonical_url"
+                            if representative_url
+                            and observation_url
+                            and representative_url == observation_url
+                            else "fuzzy_same_copy"
+                        )
+                    article_repo.insert_observation(
+                        connection,
+                        article_id=article_id,
+                        collection_run_provider_id=provider_id_by_label.get(
+                            observation.get("_task_key")
+                        ),
+                        provider=observation.get("provider")
+                        or observation.get("_task_label")
+                        or "unknown",
+                        provider_item_key=observation.get("sourceId"),
+                        query_group_id=observation.get("_query_group_id"),
+                        raw_url=observation.get("url"),
+                        raw_title=observation.get("title"),
+                        raw_source=observation.get("source"),
+                        raw_published_at=observation.get("pubDate"),
+                        raw_description=observation.get("description"),
+                        raw_payload_json=None,
+                        dedup_method=observation_method,
+                        dedup_score=None,
+                    )
                 article_repo.upsert_assessment(
                     connection,
                     article_id=article_id,
@@ -513,4 +614,11 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         "warnings": [*warnings, *(f"일부 검색 실패: {f}" for f in failures)],
         "collectionRunId": run_id,
         "source_filter_stats": source_filter_stats,
+        "naverStatus": "네이버 뉴스 API 오류"
+        if naver_had_error
+        else (
+            "네이버 뉴스 API 연결됨"
+            if naver_configured
+            else "네이버 뉴스 API 미설정"
+        ),
     }

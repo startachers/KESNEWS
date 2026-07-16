@@ -26,7 +26,7 @@ def test_index_html_is_served_at_root():
     assert "text/html" in response.headers["content-type"]
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
-    assert "js/app.js?v=20260716-14" in response.text
+    assert "js/app.js?v=20260716-15" in response.text
 
 
 def test_restart_requires_confirmation_header(monkeypatch):

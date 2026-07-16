@@ -7,11 +7,14 @@ from pathlib import Path
 
 import uvicorn
 
+from backend.app.core.env import load_env
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 LOCK_PATH = BASE_DIR / "data" / "server.lock"
 
 
 def main() -> int:
+    load_env(BASE_DIR / ".env")
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open("a+", encoding="utf-8") as lock_file:
         try:

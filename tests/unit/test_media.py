@@ -56,6 +56,26 @@ def test_google_uses_source_url_and_rejects_missing_source():
     assert unknown.allowed is False
 
 
+def test_naver_uses_original_link_and_rejects_portal_only_link():
+    trusted = identify_trusted_publisher(
+        {
+            "provider": "네이버 뉴스 API",
+            "url": "https://www.yna.co.kr/view/1",
+            "originalLink": "https://www.yna.co.kr/view/1",
+            "naverUrl": "https://n.news.naver.com/article/001/1",
+        }
+    )
+    unknown = identify_trusted_publisher(
+        {
+            "provider": "네이버 뉴스 API",
+            "url": "https://n.news.naver.com/article/001/2",
+            "originalLink": "",
+        }
+    )
+    assert (trusted.publisher_id, trusted.allowed) == ("yonhap", True)
+    assert (unknown.reason, unknown.allowed) == ("unknown_publisher", False)
+
+
 def test_official_and_incident_official_sources_are_exempt():
     president = identify_trusted_publisher(
         {"provider": "GDELT", "url": "https://www.president.go.kr/newsroom"}

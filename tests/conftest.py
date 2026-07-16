@@ -14,6 +14,8 @@ os.environ["KESCO_DB_PATH"] = os.path.join(_TEST_DB_DIR, "test.db")
 os.environ["KESCO_BACKUPS_DIR"] = os.path.join(_TEST_DB_DIR, "backups")
 os.environ["KESCO_REPORTS_DIR"] = os.path.join(_TEST_DB_DIR, "reports")
 os.environ["KESCO_BRIEFING_BACKUPS_DIR"] = os.path.join(_TEST_DB_DIR, "briefing-backups")
+os.environ.pop("NAVER_CLIENT_ID", None)
+os.environ.pop("NAVER_CLIENT_SECRET", None)
 
 # `TestClient(app)`를 `with` 없이 쓰는 기존 테스트들은 FastAPI startup 이벤트를 트리거하지
 # 않으므로, 여기서 미리 migration을 적용해 API 테스트가 실제 서버 기동 여부와 무관하게

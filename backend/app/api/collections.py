@@ -23,6 +23,7 @@ class CollectionQuery(BaseModel):
     id: str = "direct"
     label: str = ""
     query: str = ""
+    naverQueries: list[str] = Field(default_factory=list, max_length=3)
     maxRecords: int | None = Field(default=None, ge=1)
 
 

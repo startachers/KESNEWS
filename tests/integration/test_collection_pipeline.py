@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection import collector as collector_module
+from backend.app.services.collection.http import CollectionHttpError
 from backend.app.main import app
 
 client = TestClient(app)
@@ -122,6 +123,101 @@ def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
     listed = _articles(report_date)["data"]["articles"]
     matching = [a for a in listed if a["url"] == yonhap_url]
     assert len(matching) == 1
+
+
+def test_naver_and_google_same_article_create_two_observations(monkeypatch):
+    report_date = "2025-01-27"
+    url = "https://www.yna.co.kr/view/AKR202501270001"
+    pub_date = f"{report_date}T09:00:00Z"
+    monkeypatch.setenv("NAVER_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_naver_news",
+        lambda *a, **k: [
+            {
+                "title": "한국전기안전공사 안전대책 발표",
+                "source": "yna.co.kr",
+                "url": url,
+                "originalLink": url,
+                "naverUrl": "https://n.news.naver.com/article/001/1",
+                "pubDate": pub_date,
+                "description": "한국전기안전공사가 안전대책을 발표했다.",
+                "provider": "네이버 뉴스 API",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: _google_result(
+            url,
+            pub_date,
+            title="한국전기안전공사 안전대책 발표",
+            source="연합뉴스",
+        )["items"],
+    )
+
+    payload = _base_payload(reportDate=report_date, enableYonhap=False)
+    payload["queries"][0]["naverQueries"] = ["한국전기안전공사"]
+    data = client.post("/api/collections", json=payload).json()["data"]
+    assert data["uniqueCount"] == 1
+    assert data["duplicatesRemoved"] == 1
+    assert data["naverStatus"] == "네이버 뉴스 API 연결됨"
+
+    article_id = _articles(report_date)["data"]["articles"][0]["id"]
+    connection = get_connection()
+    try:
+        observations = connection.execute(
+            "SELECT provider, query_group_id FROM article_observations WHERE article_id = ?",
+            (article_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    assert {(row["provider"], row["query_group_id"]) for row in observations} == {
+        ("네이버 뉴스 API", "direct"),
+        ("Google 뉴스 RSS", "direct"),
+    }
+
+
+def test_naver_auth_failure_is_warning_and_never_exposes_credentials(monkeypatch):
+    report_date = "2025-01-28"
+    client_id = "sensitive-client-id"
+    client_secret = "sensitive-client-secret"
+    monkeypatch.setenv("NAVER_CLIENT_ID", client_id)
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", client_secret)
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_naver_news",
+        lambda *a, **k: (_ for _ in ()).throw(
+            CollectionHttpError("네이버 뉴스 API 응답 401", status=401)
+        ),
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: _google_result(
+            "https://www.chosun.com/national/naver-fallback/",
+            f"{report_date}T09:00:00Z",
+            title="한국전기안전공사 네이버 장애 폴백",
+        )["items"],
+    )
+
+    payload = _base_payload(reportDate=report_date, enableYonhap=False)
+    payload["queries"][0]["naverQueries"] = ["한국전기안전공사"]
+    response = client.post("/api/collections", json=payload)
+    serialized = response.text
+    data = response.json()["data"]
+    assert data["status"] == "success"
+    assert data["uniqueCount"] == 1
+    assert data["naverStatus"] == "네이버 뉴스 API 오류"
+    assert any("응답 401" in warning for warning in data["warnings"])
+    assert client_id not in serialized
+    assert client_secret not in serialized
+    client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
+    exported = client.get(f"/api/exports/{report_date}.json").text
+    assert client_id not in exported
+    assert client_secret not in exported
 
 
 def test_source_id_match_survives_url_change_between_runs(monkeypatch):

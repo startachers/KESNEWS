@@ -8,12 +8,15 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from backend.app.core.env import load_env
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "config" / "automated_collection.json"
 ENDPOINT = "http://127.0.0.1:8787/api/collections"
 
 
 def main() -> int:
+    load_env(BASE_DIR / ".env")
     if not CONFIG_PATH.is_file():
         print(f"자동수집 설정이 없습니다: {CONFIG_PATH}")
         return 2

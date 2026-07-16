@@ -10,6 +10,15 @@ providers:
     fallback_only: false
     timeout_seconds: 15
 
+  naver_news:
+    enabled: true
+    type: naver_news_api
+    priority: 15
+    fallback_only: false
+    timeout_seconds: 15
+    display: 100
+    max_pages: 3
+
   google_news:
     enabled: true
     type: google_news_rss
