@@ -79,12 +79,11 @@ def _render_ai_analysis(analysis: dict[str, Any], evidence: dict[str, Any]) -> s
 def _issue_cards(snapshot: dict[str, Any]) -> str:
     issues = snapshot.get("issues") or []
     if issues:
-        priority = {"required": 0, "review": 1, "reference": 2}
         ordered = sorted(
             issues,
             key=lambda item: (
-                priority.get(item.get("effectivePriority"), 9),
-                -(item.get("autoPriorityScore") or 0),
+                -(item.get("effectiveReviewStars") or 0),
+                item.get("autoReviewRank") or 999999,
                 item.get("id") or "",
             ),
         )[:3]
@@ -92,7 +91,8 @@ def _issue_cards(snapshot: dict[str, Any]) -> str:
             f'<article class="issue"><span>ISSUE {index:02d}</span>'
             f'<h3>{_text(item.get("effectiveTitle"), "제목 없음")}</h3>'
             f'<p>{_text(item.get("effectiveStatus"), "상태 미지정")} · '
-            f'{_text(item.get("effectivePriority"), "reference")}</p></article>'
+            f'{"★" * int(item.get("effectiveReviewStars") or 1)} · '
+            f'자동 {_text(item.get("autoReviewRank"), "-")}위</p></article>'
             for index, item in enumerate(ordered, 1)
         )
     articles = snapshot.get("articles") or []
@@ -126,7 +126,7 @@ def _article_cards(
             f'<article class="article"{anchor}>'
             f'<span class="number">{index:02d}</span><div><h3>{title_html}</h3>'
             f'<p class="meta">{_text(item.get("source"), "출처 미상")} · '
-            f'{_text(item.get("pubDate"), "시각 미상")} · {_text(item.get("priority") or item.get("risk"))}</p>'
+            f'{_text(item.get("pubDate"), "시각 미상")}</p>'
             f'<p>{_text(item.get("description"))}</p>{note}</div></article>'
         )
     return "".join(cards)

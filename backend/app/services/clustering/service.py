@@ -10,6 +10,7 @@ from typing import Any
 
 from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.normalization.dates import date_value
+from backend.app.services.review_priority import rank_issues
 
 ALGORITHM_VERSION = "event-aware-title-tfidf-v2"
 PAIR_THRESHOLD = 0.40
@@ -294,6 +295,16 @@ def build_clusters(
                 "directMention": any(item.get("directMention") for item in members),
                 "firstSeenAt": min(published_times) if published_times else None,
                 "lastSeenAt": max(published_times) if published_times else None,
+                "members": [
+                    {
+                        "id": item["id"],
+                        "source": item.get("source"),
+                        "relevanceScore": item.get("relevanceScore") or 0,
+                        "severityScore": item.get("severityScore") or 0,
+                        "eventType": item.get("eventType") or "general",
+                    }
+                    for item in members
+                ],
                 "membershipScores": member_scores,
                 "autoReasons": {
                     "algorithmVersion": ALGORITHM_VERSION,
@@ -325,7 +336,10 @@ def build_clusters(
                 },
             }
         )
-    return sorted(clusters, key=lambda cluster: (cluster["lastSeenAt"] or "", cluster["autoTitle"]), reverse=True)
+    ranked = rank_issues(clusters, as_of)
+    for cluster in ranked:
+        cluster.pop("members", None)
+    return ranked
 
 
 def build_proposal(

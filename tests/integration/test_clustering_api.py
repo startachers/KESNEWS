@@ -43,6 +43,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert issues_feature.status_code == 200
     assert "issue.selected" in issues_feature.text
     assert "article.topIssue" in issues_feature.text
+    assert "MAX_TOP_ISSUES = 5" in issues_feature.text
     assert "같은 사건 기사" in issues_feature.text
 
     articles_feature = client.get("/js/features/articles.js")
@@ -58,6 +59,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text
+    assert "topIssueTagCount() >= MAX_TOP_ISSUES" in articles_feature.text
     assert 'data-action="group-picker-select"' in articles_feature.text
     assert "openManualGroupPicker" in articles_feature.text
     assert "createManualIssueGroup" in articles_feature.text
@@ -267,6 +269,40 @@ def test_briefing_issue_patch_checks_revision_and_persists_state():
     assert stale.status_code == 409
 
 
+def test_issue_review_stars_are_ranked_and_editor_override_is_preserved():
+    report_date = "2026-08-14"
+    _create_briefing(report_date)
+    _create_article(
+        report_date, "review-star", "한국전기안전공사 압수수색 관련 사실 확인", "연합뉴스",
+        "2026-08-14T05:00:00Z",
+    )
+    run = client.post(
+        "/api/cluster-runs", json={"reportDate": report_date, "asOf": "2026-08-14T06:00:00Z"}
+    ).json()["data"]
+    assert run["proposal"][0]["autoReviewRank"] == 1
+    assert 1 <= run["proposal"][0]["autoReviewStars"] <= 5
+    assert "urgency" in run["proposal"][0]["reviewReasons"]["components"]
+    client.post(f"/api/cluster-runs/{run['id']}/apply")
+    issue = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"][0]
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    patched = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": briefing["revision"], "editorReviewStars": 2},
+    )
+    assert patched.status_code == 200
+    overridden = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"][0]
+    assert overridden["editorReviewStars"] == 2
+    assert overridden["effectiveReviewStars"] == 2
+
+    rerun = client.post(
+        "/api/cluster-runs", json={"reportDate": report_date, "asOf": "2026-08-14T07:00:00Z"}
+    ).json()["data"]
+    client.post(f"/api/cluster-runs/{rerun['id']}/apply")
+    preserved = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"][0]
+    assert preserved["editorReviewStars"] == 2
+    assert preserved["effectiveReviewStars"] == 2
+
+
 def test_individual_article_top_issue_tag_persists_independently():
     report_date = "2026-08-06"
     _create_briefing(report_date)
@@ -291,6 +327,77 @@ def test_individual_article_top_issue_tag_persists_independently():
     assert articles[0]["starred"] is False
     # 직접 추가 기사의 기존 브리핑 선정 상태와는 독립적으로 저장된다.
     assert articles[0]["included"] is True
+
+
+def test_top_issues_allow_five_and_reject_sixth_tag():
+    report_date = "2026-08-15"
+    _create_briefing(report_date)
+    article_ids = [
+        _create_article(
+            report_date,
+            f"top-five-{index}",
+            f"전기안전 점검 Top 이슈 후보 {index}",
+            f"지역일보{index}",
+            f"2026-08-15T0{index}:00:00Z",
+        )
+        for index in range(6)
+    ]
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+
+    for article_id in article_ids[:5]:
+        response = client.patch(
+            f"/api/briefings/{report_date}/articles/{article_id}",
+            json={"expectedRevision": revision, "topIssue": True},
+        )
+        assert response.status_code == 200
+        revision = response.json()["data"]["revision"]
+
+    rejected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[5]}",
+        json={"expectedRevision": revision, "topIssue": True},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "TOP_ISSUE_LIMIT_EXCEEDED"
+
+    removed = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[0]}",
+        json={"expectedRevision": revision, "topIssue": False},
+    )
+    assert removed.status_code == 200
+    replacement = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[5]}",
+        json={
+            "expectedRevision": removed.json()["data"]["revision"],
+            "topIssue": True,
+        },
+    )
+    assert replacement.status_code == 200
+
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-15T12:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{run['id']}/apply").status_code == 200
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    revision = replacement.json()["data"]["revision"]
+    rejected_issue = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": revision, "selected": True},
+    )
+    assert rejected_issue.status_code == 409
+    assert rejected_issue.json()["error"]["code"] == "TOP_ISSUE_LIMIT_EXCEEDED"
+
+    removed = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[1]}",
+        json={"expectedRevision": revision, "topIssue": False},
+    )
+    selected_issue = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": removed.json()["data"]["revision"], "selected": True},
+    )
+    assert selected_issue.status_code == 200
 
 
 def test_manual_group_moves_articles_and_survives_reclustering():

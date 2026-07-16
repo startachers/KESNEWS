@@ -3,7 +3,11 @@ import { escapeHtml } from "../utils/strings.js";
 import { formatRelative } from "../utils/dates.js";
 
 const ISSUE_STATUS_LABELS = { new: "신규", expanding: "확산", ongoing: "지속", cooling: "진정", closed: "종료" };
-const ISSUE_RISK = { required: "critical", review: "watch", reference: "routine" };
+export const MAX_TOP_ISSUES = 5;
+function starsText(value) {
+  const stars = Math.max(1, Math.min(5, Number(value) || 1));
+  return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
+}
 
 export function renderTopIssues() {
   const articleById = new Map(state.articles.map(article => [article.id, article]));
@@ -19,15 +23,15 @@ export function renderTopIssues() {
   }));
   const top = taggedIssues.concat(taggedArticles)
     .sort((left, right) => String(right.date).localeCompare(String(left.date)))
-    .slice(0, 3);
+    .slice(0, MAX_TOP_ISSUES);
 
-  els.topIssues.innerHTML = [0, 1, 2].map((_, index) => {
+  els.topIssues.innerHTML = Array.from({ length: MAX_TOP_ISSUES }, (_, index) => {
     const tagged = top[index];
     if (!tagged) return `<div class="issue-card empty"><div>ISSUE ${String(index + 1).padStart(2, "0")}</div><strong>Media Coverage에서 군집 또는 기사를 태그하세요</strong></div>`;
     if (tagged.kind === "article") {
       const article = tagged.item;
       return `<article class="issue-card">
-        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-${article.risk}">기사</span></div>
+        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-neutral">기사</span></div>
         <h3>${escapeHtml(article.title)}</h3>
         <div class="issue-meta">${escapeHtml(article.source || "출처 미상")} · ${formatRelative(article.pubDate)}</div>
         <div class="issue-reason">담당자가 개별 기사를 Top 이슈로 태그했습니다.</div>
@@ -36,7 +40,6 @@ export function renderTopIssues() {
     const issue = tagged.item;
     const articles = issue.articleIds.map(articleId => articleById.get(articleId)).filter(Boolean);
     const sourceCount = new Set(articles.map(article => article.source).filter(Boolean)).size;
-    const risk = ISSUE_RISK[issue.effectivePriority] || "routine";
     const status = ISSUE_STATUS_LABELS[issue.effectiveStatus] || issue.effectiveStatus || "상태 없음";
     const pressCoverage = issue.autoReasons?.origin?.type === "kesco_press_release";
     const reason = pressCoverage
@@ -45,9 +48,9 @@ export function renderTopIssues() {
         ? `같은 사건 기사 ${issue.articleIds.length}건이 묶인 이슈입니다.`
         : "단일 기사 이슈입니다.";
     return `<article class="issue-card">
-      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-${risk}">${escapeHtml(status)}</span></div>
+      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="review-stars">${starsText(issue.effectiveReviewStars)}</span></div>
       <h3>${escapeHtml(issue.effectiveTitle)}</h3>
-      <div class="issue-meta">기사 ${issue.articleIds.length}건 · 매체 ${sourceCount}개 · ${formatRelative(issue.lastSeenAt)}</div>
+      <div class="issue-meta">자동 ${issue.autoReviewRank || "-"}위 · 점수 ${issue.autoReviewScore ?? "-"} · ${escapeHtml(status)} · 기사 ${issue.articleIds.length}건 · 매체 ${sourceCount}개 · ${formatRelative(issue.lastSeenAt)}</div>
       <div class="issue-reason">${escapeHtml(reason)}</div>
     </article>`;
   }).join("");

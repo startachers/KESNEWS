@@ -209,20 +209,18 @@ export function getRelevance(article) {
 export function relevanceSort(a, b) {
   const left = getRelevance(a);
   const right = getRelevance(b);
-  const riskOrder = { critical: 3, watch: 2, routine: 1 };
   return left.rank - right.rank
     || Number(isYonhapArticle(b)) - Number(isYonhapArticle(a))
     || Number(b.starred) - Number(a.starred)
     || Number(right.titleMatch) - Number(left.titleMatch)
     || right.matchCount - left.matchCount
     || right.score - left.score
-    || (riskOrder[b.risk] || 0) - (riskOrder[a.risk] || 0)
     || dateValue(b.pubDate) - dateValue(a.pubDate)
     || (a.title || "").localeCompare(b.title || "", "ko")
     || String(a.id || "").localeCompare(String(b.id || ""));
 }
 
 export function prioritySort(a, b) {
-  const score = x => (x.starred ? 1000 : 0) + (x.risk === "critical" ? 300 : x.risk === "watch" ? 150 : 0) + Math.min((x.riskScore || 0) * 8, 80) + (x.sentiment === "positive" ? 8 : 0) + dateValue(x.pubDate) / 1e13;
+  const score = x => (x.starred ? 1000 : 0) + getRelevance(x).score + (x.sentiment === "positive" ? 8 : 0) + dateValue(x.pubDate) / 1e13;
   return score(b) - score(a);
 }

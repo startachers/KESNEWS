@@ -183,7 +183,8 @@ DELETE /api/articles/{article_id}
 - `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환하며 `briefing_issues`의 수동 상태를 합쳐 반환한다.
 
 Top Issues는 담당자가 직접 태그한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
-개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 3개로 제한한다.
+개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 5개로 제한한다.
+6번째 항목을 선택하는 mutation은 `TOP_ISSUE_LIMIT_EXCEEDED`(409)로 거부한다.
 재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
 
 ### 2.6 정렬 변경
@@ -385,7 +386,57 @@ low       direct가 아니고 relevance_score < 40
 - `related` 경계값 40은 `config/classification_rules.yaml`의 `relevance_tiers.related_min_score`로 조정한다.
 - 등급 판정 결과와 근거 매칭 문자열을 `auto_reasons_json`에 기록한다.
 
-### 4.2 자동 우선도 점수
+### 4.2 군집 검토순위 점수와 5단계 별점
+
+화면의 기존 기사 위험 신호(`critical/watch/routine`)와 3단계 보고 우선도
+(`required/review/reference`)는 신규 검토 흐름에서 사용하지 않는다. 기존 컬럼은 JSON·CSV와
+과거 snapshot 호환을 위해 당분간 보존하되 신규 화면·정렬·최종 보고의 기준이 아니다.
+
+검토순위는 보고일별 유효 군집을 단위로 다음과 같이 계산한다.
+
+```text
+review_score = 0.30 × relevance_score
+             + 0.25 × management_impact_score
+             + 0.20 × coverage_score
+             + 0.15 × urgency_score
+             + 0.10 × response_suitability_score
+```
+
+- `management_impact_score`: 사고뿐 아니라 정책·감사·성과가 경영 판단에 미치는 영향
+- `coverage_score`: 독립 매체 수와 주요 매체 포함 여부
+- `urgency_score`: 즉시·당일·24시간 이내 검토 필요성과 이슈 상태
+- `response_suitability_score`: 공사의 적극 대응 필요성과 대응으로 상황을 개선할 가능성
+- 각 성분, 적용 floor·cap, 근거는 `reasons_json`에 저장한다.
+
+순위 구간은 할당량이 아니라 상한이다. 자동 별점은 순위 구간과 점수 구간 중 낮은 값이다.
+
+```text
+★★★★★  1~10위  AND 80점 이상
+★★★★☆  1~20위  AND 65점 이상
+★★★☆☆  1~40위  AND 50점 이상
+★★☆☆☆  1~100위 AND 30점 이상
+★☆☆☆☆  나머지
+```
+
+동점은 경영영향도, 관련도, 긴급성, 최근 보도시각, 안정적인 `issue_id` 순으로 해소한다.
+공사 직접 거론 중대사고·수사 이슈는 90점 floor, 공사 미거론 전기안전 중대사고는 70점
+floor를 적용한다. 관련도 40 미만은 중대사고 예외가 없으면 39점 cap을 적용한다.
+
+순위는 보고일 후보 집합에 상대적이므로 `issues`가 아닌 다음 테이블에 저장한다.
+
+```text
+issue_review_assessments
+  briefing_id, issue_id, auto_score, auto_rank, auto_stars,
+  editor_stars, editor_reason, reasons_json, scoring_version
+```
+
+유효 별점은 `editor_stars ?? auto_stars`다. 담당자 값은 자동 재수집·재분류·재군집화로
+덮어쓰지 않으며, 변경은 브리핑 `expectedRevision`을 검증한다.
+
+### 4.2.1 레거시 자동 우선도 점수
+
+아래 산식은 과거 데이터 호환과 내부 분류 근거를 위해 보존한다. 신규 검토별점에는 직접
+사용하지 않는다.
 
 기사 단계:
 
@@ -425,6 +476,9 @@ reference  45 미만
 - `prevention`, `achievement`, `community`만 있는 기사는 자동 `required` 금지, 최대 `review`
 - `low relevance`는 자동 최대 `reference`; 단, 전기안전 분야 중대사고 hard floor가 있으면 `review`
 - 담당자 `final_priority`는 모든 자동 floor·cap보다 우선한다.
+
+이 절의 `priority` floor·cap은 레거시 기사 판정 호환 규칙이다. 신규 군집 검토순위의
+floor·cap은 4.2절을 따른다.
 
 ### 4.4 문맥 판정 순서
 
@@ -567,10 +621,11 @@ AI 실행마다 고정 index를 만든다.
 ```text
 auto_title       editor_title
 auto_status      editor_status
-auto_priority    editor_priority
+레거시 auto_priority    레거시 editor_priority
+보고일별 auto_stars     보고일별 editor_stars
 ```
 
-화면 유효값은 `editor_*`가 있으면 editor 값을 사용한다.
+제목·상태와 검토별점의 화면 유효값은 담당자 값이 있으면 담당자 값을 사용한다.
 
 ### 6.2 구성 기사 override
 

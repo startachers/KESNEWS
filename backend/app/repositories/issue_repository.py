@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import secrets
 import sqlite3
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from backend.app.core.clock import now_iso
 from backend.app.repositories.article_repository import list_candidate_article_ids
 from backend.app.services.ids import make_id
+from backend.app.services.review_priority import rank_issues
 
 
 def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[dict[str, Any]]:
@@ -19,6 +21,7 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
         f"""
         SELECT a.id, a.title, a.description, a.source, a.published_at,
                aa.auto_relevance_score, aa.auto_severity_score, aa.auto_reasons_json,
+               COALESCE(aa.final_event_type, aa.auto_event_type) AS event_type,
                COALESCE(aoa.final_origin_type, aoa.auto_origin_type) AS origin_type,
                CASE
                    WHEN aoa.final_origin_type = 'independent' THEN NULL
@@ -48,6 +51,7 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
                 "publishedAt": row["published_at"],
                 "relevanceScore": row["auto_relevance_score"] or 0,
                 "severityScore": row["auto_severity_score"] or 0,
+                "eventType": row["event_type"] or "general",
                 "directMention": bool(reasons.get("directMention")),
                 "originType": row["origin_type"],
                 "pressReleaseId": row["press_release_id"],
@@ -188,6 +192,95 @@ def apply_proposal(
     return matched_ids
 
 
+def apply_review_assessments(
+    connection: sqlite3.Connection,
+    report_date: str,
+    proposal: list[dict[str, Any]],
+    issue_ids: list[str],
+) -> None:
+    briefing = connection.execute(
+        "SELECT id FROM briefings WHERE report_date = ?", (report_date,)
+    ).fetchone()
+    if briefing is None:
+        return
+    now = now_iso()
+    for item, issue_id in zip(proposal, issue_ids, strict=True):
+        connection.execute(
+            """
+            INSERT INTO issue_review_assessments (
+                briefing_id, issue_id, auto_score, auto_rank, auto_stars,
+                reasons_json, scoring_version, calculated_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(briefing_id, issue_id) DO UPDATE SET
+                auto_score = excluded.auto_score,
+                auto_rank = excluded.auto_rank,
+                auto_stars = excluded.auto_stars,
+                reasons_json = excluded.reasons_json,
+                scoring_version = excluded.scoring_version,
+                calculated_at = excluded.calculated_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                briefing["id"], issue_id, item.get("autoReviewScore"),
+                item.get("autoReviewRank"), item.get("autoReviewStars"),
+                json.dumps(item.get("reviewReasons") or {}, ensure_ascii=False),
+                "review-v1", now, now,
+            ),
+        )
+
+
+def recalculate_review_assessments(connection: sqlite3.Connection, report_date: str) -> None:
+    items = list_for_report_date(connection, report_date)
+    review_inputs: list[dict[str, Any]] = []
+    for item in items:
+        article_ids = item.get("articleIds") or []
+        if not article_ids:
+            continue
+        placeholders = ",".join("?" for _ in article_ids)
+        rows = connection.execute(
+            f"""
+            SELECT a.id, a.source, aa.auto_relevance_score, aa.auto_severity_score,
+                   COALESCE(aa.final_event_type, aa.auto_event_type) AS event_type
+            FROM articles a
+            LEFT JOIN article_assessments aa ON aa.article_id = a.id
+            WHERE a.id IN ({placeholders})
+            """,  # noqa: S608 - placeholders count only
+            article_ids,
+        ).fetchall()
+        review_inputs.append({
+            "id": item["id"],
+            "autoTitle": item.get("autoTitle"),
+            "autoStatus": item.get("autoStatus"),
+            "lastSeenAt": item.get("lastSeenAt"),
+            "directMention": item.get("directMention"),
+            "members": [
+                {
+                    "id": row["id"], "source": row["source"],
+                    "relevanceScore": row["auto_relevance_score"] or 0,
+                    "severityScore": row["auto_severity_score"] or 0,
+                    "eventType": row["event_type"] or "general",
+                }
+                for row in rows
+            ],
+        })
+    ranked = rank_issues(review_inputs, datetime.now(timezone.utc))
+    apply_review_assessments(
+        connection, report_date, ranked, [item["id"] for item in ranked]
+    )
+
+
+def report_date_for_issue(connection: sqlite3.Connection, issue_id: str) -> str | None:
+    row = connection.execute(
+        """
+        SELECT cr.report_date FROM issues i
+        JOIN cluster_runs cr ON cr.id = i.last_cluster_run_id
+        WHERE i.id = ?
+        """,
+        (issue_id,),
+    ).fetchone()
+    return row["report_date"] if row else None
+
+
 def _serialize_issue(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     effective_ids = _effective_article_ids(connection, row["id"])
     automatic = connection.execute(
@@ -232,13 +325,33 @@ def _serialize_issue(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[s
 
 def list_for_report_date(connection: sqlite3.Connection, report_date: str) -> list[dict[str, Any]]:
     candidate_ids = list_candidate_article_ids(connection, report_date)
+    review_rows = connection.execute(
+        """
+        SELECT ira.* FROM issue_review_assessments ira
+        JOIN briefings b ON b.id = ira.briefing_id
+        WHERE b.report_date = ?
+        """,
+        (report_date,),
+    ).fetchall()
+    reviews = {row["issue_id"]: row for row in review_rows}
     rows = connection.execute("SELECT * FROM issues ORDER BY last_seen_at DESC, id").fetchall()
     result = []
     for row in rows:
         serialized = _serialize_issue(connection, row)
         if candidate_ids.intersection(serialized["articleIds"]):
+            review = reviews.get(row["id"])
+            serialized.update({
+                "autoReviewScore": review["auto_score"] if review else None,
+                "autoReviewRank": review["auto_rank"] if review else None,
+                "autoReviewStars": review["auto_stars"] if review else None,
+                "editorReviewStars": review["editor_stars"] if review else None,
+                "editorReviewReason": (review["editor_reason"] or "") if review else "",
+                "effectiveReviewStars": (review["editor_stars"] or review["auto_stars"]) if review else None,
+                "reviewReasons": json.loads(review["reasons_json"] or "{}") if review else {},
+                "reviewScoringVersion": review["scoring_version"] if review else None,
+            })
             result.append(serialized)
-    return result
+    return sorted(result, key=lambda item: (-(item.get("effectiveReviewStars") or 0), item.get("autoReviewRank") or 999999, item.get("id") or ""))
 
 
 def get(connection: sqlite3.Connection, issue_id: str) -> sqlite3.Row | None:
@@ -448,6 +561,9 @@ def import_snapshots(
         (run_id, report_date, now, now),
     )
     imported = 0
+    briefing = connection.execute(
+        "SELECT id FROM briefings WHERE report_date = ?", (report_date,)
+    ).fetchone()
     for snapshot in snapshots:
         auto_ids = [
             article_id_map[article_id]
@@ -500,6 +616,23 @@ def import_snapshots(
                 issue_id,
                 article_id_map[item["article_id"]],
                 item["action"],
+            )
+        if briefing is not None:
+            connection.execute(
+                """
+                INSERT INTO issue_review_assessments (
+                    briefing_id, issue_id, auto_score, auto_rank, auto_stars,
+                    editor_stars, editor_reason, reasons_json, scoring_version,
+                    calculated_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    briefing["id"], issue_id, snapshot.get("autoReviewScore"),
+                    snapshot.get("autoReviewRank"), snapshot.get("autoReviewStars"),
+                    snapshot.get("editorReviewStars"), snapshot.get("editorReviewReason") or None,
+                    json.dumps(snapshot.get("reviewReasons") or {}, ensure_ascii=False),
+                    snapshot.get("reviewScoringVersion") or "review-v1", now, now,
+                ),
             )
         imported += 1
     _enforce_manual_group_exclusivity(connection, report_date)

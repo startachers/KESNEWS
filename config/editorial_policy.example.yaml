@@ -1,7 +1,7 @@
 version: 2
 briefing:
   max_ai_articles: 20
-  max_top_issues: 3
+  max_top_issues: 5
   default_status: "draft"
   final_report_requires_manual_review: true
   one_working_copy_per_report_date: true

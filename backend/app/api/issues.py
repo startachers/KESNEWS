@@ -81,6 +81,9 @@ async def patch_issue(issue_id: str, request: IssuePatchRequest) -> Any:
                 issues_repo.set_membership_override(
                     connection, issue_id, request.articleId, request.membershipAction
                 )
+            report_date = issues_repo.report_date_for_issue(connection, issue_id)
+            if report_date:
+                issues_repo.recalculate_review_assessments(connection, report_date)
         return ok_envelope(issues_repo.serialize_one(connection, issue_id))
     finally:
         connection.close()
@@ -111,6 +114,7 @@ async def create_manual_group(request: ManualGroupRequest) -> Any:
                 request.expectedRevision,
                 {},
             )
+            issues_repo.recalculate_review_assessments(connection, request.reportDate)
             issue = issues_repo.serialize_one(connection, issue_id)
     except briefings_repo.BriefingNotFound:
         return error_response("BRIEFING_NOT_FOUND", "작업본을 찾을 수 없습니다.")
@@ -182,7 +186,10 @@ async def apply_cluster_run(cluster_run_id: str) -> Any:
             )
         serialized = runs_repo.serialize(run)
         with connection:
-            issues_repo.apply_proposal(connection, cluster_run_id, serialized["proposal"])
+            issue_ids = issues_repo.apply_proposal(connection, cluster_run_id, serialized["proposal"])
+            issues_repo.apply_review_assessments(
+                connection, run["report_date"], serialized["proposal"], issue_ids
+            )
             runs_repo.mark_applied(connection, cluster_run_id)
         applied = runs_repo.get(connection, cluster_run_id)
         return ok_envelope(runs_repo.serialize(applied))

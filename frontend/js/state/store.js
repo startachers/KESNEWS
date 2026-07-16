@@ -52,11 +52,10 @@ export const CATEGORY_COLORS = {
   kesco_achievement: "#087f76", strategic_trend: "#397b62", renewable_ess_industry: "#247a73",
   ev_industry: "#2f6fa3", macro_economy: "#9a6a20", ai_trend: "#5364a8"
 };
-export const RISK_LABELS = { critical: "긴급", watch: "주의", routine: "일상" };
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
 export const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
 export const LAST_AUTO_KEY = "kesco_media_briefing_last_auto_v2";
-export const AI_API_BASE = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname) && location.port === "8787" ? "/api" : "http://127.0.0.1:8787/api";
+export const AI_API_BASE = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname) ? "/api" : "http://127.0.0.1:8787/api";
 export const AI_SESSION_TOKEN = document.querySelector('meta[name="kesco-ai-token"]')?.content || new URLSearchParams(location.hash.slice(1)).get("ai") || "";
 
 export const $ = (id) => document.getElementById(id);
@@ -215,7 +214,7 @@ export function flushDailyState() {
 
 export let settings = loadSettings();
 export let state = makeEmptyState(localDateKey());
-export let filters = { text: "", category: "all", risk: "all", selection: "all", sort: "relevance" };
+export let filters = { text: "", category: "all", risk: "all", selection: "all", sort: "review" };
 export let isSearching = false;
 export let isAnalyzingSummary = false;
 export let aiRequestSerial = 0;

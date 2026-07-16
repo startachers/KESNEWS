@@ -18,6 +18,8 @@ _PATCH_COLUMNS = {
     "aiInputSignature": "ai_input_signature",
 }
 
+MAX_TOP_ISSUES = 5
+
 
 class BriefingNotFound(Exception):
     pass
@@ -29,6 +31,23 @@ class RevisionConflict(Exception):
 
 class BriefingFinalized(Exception):
     pass
+
+
+class TopIssueLimitExceeded(Exception):
+    pass
+
+
+def _top_issue_count(connection: sqlite3.Connection, briefing_id: str) -> int:
+    row = connection.execute(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM briefing_issues WHERE briefing_id = ? AND selected = 1)
+          + (SELECT COUNT(*) FROM briefing_articles WHERE briefing_id = ? AND top_issue = 1)
+          AS item_count
+        """,
+        (briefing_id, briefing_id),
+    ).fetchone()
+    return int(row["item_count"])
 
 
 def get_by_date(connection: sqlite3.Connection, report_date: str) -> sqlite3.Row | None:
@@ -226,6 +245,14 @@ def patch_article_state(
     _ensure_briefing_article_row(connection, briefing["id"], article_id)
 
     patch = {key: value for key, value in fields.items() if key in _ARTICLE_STATE_COLUMNS}
+    if patch.get("topIssue") is True:
+        current = connection.execute(
+            "SELECT top_issue FROM briefing_articles WHERE briefing_id = ? AND article_id = ?",
+            (briefing["id"], article_id),
+        ).fetchone()
+        limit_reached = _top_issue_count(connection, briefing["id"]) >= MAX_TOP_ISSUES
+        if current is not None and not bool(current["top_issue"]) and limit_reached:
+            raise TopIssueLimitExceeded()
     if patch.get("dismissed") is True:
         patch["selected"] = False
 
@@ -344,6 +371,14 @@ def patch_issue_state(
     )
     column_map = {"selected": "selected", "starred": "starred", "note": "note", "sortOrder": "sort_order"}
     patch = {key: value for key, value in fields.items() if key in column_map}
+    if patch.get("selected") is True:
+        current = connection.execute(
+            "SELECT selected FROM briefing_issues WHERE briefing_id = ? AND issue_id = ?",
+            (briefing["id"], issue_id),
+        ).fetchone()
+        limit_reached = _top_issue_count(connection, briefing["id"]) >= MAX_TOP_ISSUES
+        if current is not None and not bool(current["selected"]) and limit_reached:
+            raise TopIssueLimitExceeded()
     if patch:
         assignments = ", ".join(f"{column_map[key]} = ?" for key in patch)
         values = [1 if value is True else 0 if value is False else value for value in patch.values()]
@@ -351,6 +386,30 @@ def patch_issue_state(
             f"UPDATE briefing_issues SET {assignments}, updated_at = ? "  # noqa: S608
             "WHERE briefing_id = ? AND issue_id = ?",
             (*values, now, briefing["id"], issue_id),
+        )
+    review_patch = {
+        key: fields[key]
+        for key in ("editorReviewStars", "editorReviewReason")
+        if key in fields
+    }
+    if review_patch:
+        connection.execute(
+            """
+            INSERT INTO issue_review_assessments (
+                briefing_id, issue_id, editor_stars, editor_reason, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(briefing_id, issue_id) DO UPDATE SET
+                editor_stars = CASE WHEN ? THEN excluded.editor_stars ELSE issue_review_assessments.editor_stars END,
+                editor_reason = CASE WHEN ? THEN excluded.editor_reason ELSE issue_review_assessments.editor_reason END,
+                updated_at = excluded.updated_at
+            """,
+            (
+                briefing["id"], issue_id,
+                review_patch.get("editorReviewStars"),
+                review_patch.get("editorReviewReason"), now,
+                1 if "editorReviewStars" in review_patch else 0,
+                1 if "editorReviewReason" in review_patch else 0,
+            ),
         )
     return _bump_revision(connection, briefing["id"], expected_revision)
 

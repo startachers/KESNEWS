@@ -1,4 +1,4 @@
-import { state, setState, settings, els, filters, setFilters, CATEGORY_COLORS, RISK_LABELS, SENTIMENT_LABELS, saveDailyState, loadDailyState } from "../state/store.js";
+import { state, setState, settings, els, filters, setFilters, CATEGORY_COLORS, SENTIMENT_LABELS, saveDailyState, loadDailyState } from "../state/store.js";
 import { escapeHtml, escapeAttr, safeUrl, friendlyError } from "../utils/strings.js";
 import { dateValue, formatDateTime } from "../utils/dates.js";
 import { getRelevance, isYonhapArticle, relevanceSort, prioritySort } from "./collection.js";
@@ -9,6 +9,7 @@ import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis
 import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
+import { MAX_TOP_ISSUES } from "./issues.js";
 
 const expandedIssueIds = new Set();
 const manualGroupSelection = new Set();
@@ -22,6 +23,11 @@ function isKescoPressArticle(article) {
 
 function isKescoPressIssue(issue) {
   return issue?.autoReasons?.origin?.type === "kesco_press_release";
+}
+
+function starsText(value) {
+  const stars = Math.max(1, Math.min(5, Number(value) || 1));
+  return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
 }
 
 export function collectionOrderSort(a, b, relatedCounts = new Map()) {
@@ -53,7 +59,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const href = safeUrl(a.url);
   const titleEl = href ? `<a class="article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>` : `<span class="article-title">${escapeHtml(a.title)}</span>`;
   const relevanceBadge = relevance.rank < 99 ? `관련 ${relevance.rank}순위` : "관련 기준 외";
-  const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.risk}">${RISK_LABELS[a.risk]}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
+  const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
   const causeBadge = {
     unknown: "원인 미상 화재",
     electrical_suspected: "전기 원인 의심",
@@ -68,7 +74,9 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   }
   if (isKescoPressIssue(issue)) badges.unshift('<span class="badge badge-press-origin">공사 보도자료 확산</span>');
   if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
-  if (issue) badges.unshift('<span class="badge badge-same-issue">동일 이슈</span>');
+  if (issue) {
+    badges.unshift(`<span class="badge badge-same-issue">군집 검토 <span class="review-stars">${starsText(issue.effectiveReviewStars)}</span> · ${issue.autoReviewRank || "-"}위</span>`);
+  }
   if (a.topIssue && !issue) badges.push('<span class="badge badge-top-issue">Top 이슈</span>');
   if (a.manual) badges.push('<span class="badge badge-manual">직접 추가</span>');
   if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
@@ -76,10 +84,14 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const topIssueButton = issue
     ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="군집을 Top 이슈로 태그" aria-label="군집 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
     : `<button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="개별 기사를 Top 이슈로 태그" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>`;
-  const relatedArticles = issue ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
+  const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
     <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
     <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article)).join("")}</ul>
   </details>` : "";
+  const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="군집 검토별점" ${state.status === "final" ? "disabled" : ""}>
+    <option value="auto" ${issue.editorReviewStars == null ? "selected" : ""}>자동 ${starsText(issue.autoReviewStars)}</option>
+    ${[5,4,3,2,1].map(stars => `<option value="${stars}" ${issue.editorReviewStars === stars ? "selected" : ""}>${starsText(stars)}</option>`).join("")}
+  </select>` : "";
   return `<article class="article-card ${issue ? "grouped-article-card" : ""} ${a.included ? "included" : ""} ${issue?.selected ? "top-tagged" : ""}" data-id="${escapeAttr(a.id)}" ${issue ? `data-issue-id="${escapeAttr(issue.id)}"` : ""}>
     <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
     <div class="article-main">
@@ -90,6 +102,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
       <input class="article-note" data-action="note" value="${escapeAttr(a.note || "")}" aria-label="기사 메모" placeholder="보고 메모 추가 (인쇄에는 포함되지 않음)" ${state.status === "final" ? "disabled" : ""}>
     </div>
     <div class="article-actions">
+      ${reviewControl}
       ${topIssueButton}
       <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
       <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제" ${state.status === "final" ? "disabled" : ""}>${ICONS.trash}</button>
@@ -132,7 +145,7 @@ function renderMediaGroups(items) {
     return { issue, members, position: members[0]?.index };
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, position }) => {
-    if (issue.articleIds.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article) };
+    if (issue.articleIds.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
     const representative = members[0];
     const related = members.filter(member => member.article.id !== representative.article.id);
     return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
@@ -163,7 +176,9 @@ export function renderArticles() {
   let items = state.articles.filter(a => {
     const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")}`.toLowerCase();
     const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
-    return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && (filters.risk === "all" || a.risk === filters.risk) && selectionMatch;
+    const issue = state.issues.find(candidate => candidate.articleIds?.includes(a.id));
+    const reviewMatch = filters.risk === "all" || Number(filters.risk) === Number(issue?.effectiveReviewStars);
+    return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && reviewMatch && selectionMatch;
   });
   if (filters.sort === "relevance") items.sort(relevanceSort);
   else if (filters.sort === "collection") {
@@ -172,6 +187,16 @@ export function renderArticles() {
   }
   else if (filters.sort === "newest") items.sort((a,b) => dateValue(b.pubDate)-dateValue(a.pubDate));
   else if (filters.sort === "source") items.sort((a,b) => (a.source || "").localeCompare(b.source || "", "ko"));
+  else if (filters.sort === "review") {
+    const issueByArticle = new Map();
+    state.issues.forEach(issue => issue.articleIds?.forEach(id => issueByArticle.set(id, issue)));
+    items.sort((a, b) => {
+      const left = issueByArticle.get(a.id); const right = issueByArticle.get(b.id);
+      return (right?.effectiveReviewStars || 0) - (left?.effectiveReviewStars || 0)
+        || (left?.autoReviewRank || 999999) - (right?.autoReviewRank || 999999)
+        || relevanceSort(a, b);
+    });
+  }
   else items.sort(prioritySort);
   els.visibleCount.textContent = `${items.length}건 표시`;
 
@@ -194,6 +219,11 @@ export function renderArticles() {
 
 export function handleArticleChange(e) {
   if (state.status === "final") return;
+  if (e.target.dataset.action === "review-stars") {
+    const issue = state.issues.find(candidate => candidate.id === e.target.dataset.issueId);
+    if (issue) updateReviewStars(issue, e.target.value);
+    return;
+  }
   const item = e.target.closest("[data-id]"); if (!item) return;
   const article = state.articles.find(a => a.id === item.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
@@ -201,6 +231,24 @@ export function handleArticleChange(e) {
     afterArticleMutation();
     trackArticlePatch(article.id, { selected: article.included });
     showToast(article.included ? "브리핑 기사로 선정했습니다." : "브리핑 선정을 해제했습니다.", article.included ? "success" : "");
+  }
+}
+
+async function updateReviewStars(issue, value) {
+  const previous = issue.editorReviewStars;
+  issue.editorReviewStars = value === "auto" ? null : Number(value);
+  issue.effectiveReviewStars = issue.editorReviewStars ?? issue.autoReviewStars;
+  renderAll();
+  try {
+    const result = await api.patchBriefingIssue(state.date, issue.id, state.revision, { editorReviewStars: issue.editorReviewStars });
+    state.revision = result.data.revision;
+    showToast(issue.editorReviewStars == null ? "자동 검토별점으로 되돌렸습니다." : `담당자 검토별점을 ${issue.editorReviewStars}점으로 저장했습니다.`, "success");
+  } catch (error) {
+    issue.editorReviewStars = previous;
+    issue.effectiveReviewStars = previous ?? issue.autoReviewStars;
+    if (error.code === "BRIEFING_REVISION_CONFLICT") setState(await loadDailyState(state.date));
+    showToast(`검토별점 저장 실패: ${friendlyError(error)}`, "error");
+    renderAll();
   }
 }
 
@@ -344,8 +392,8 @@ export function handleArticleClick(e) {
   if (action === "search") return runSearch(false);
   if (action === "sample") return loadSample();
   if (action === "clear-filters") {
-    setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "relevance" });
-    els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "relevance"; renderArticles(); return;
+    setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "review" });
+    els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderArticles(); return;
   }
   if (!action) return;
   if (state.status === "final") return;
@@ -353,8 +401,8 @@ export function handleArticleClick(e) {
     const group = e.target.closest("[data-issue-id]");
     const issue = state.issues.find(item => item.id === group?.dataset.issueId);
     if (!issue) return;
-    if (!issue.selected && topIssueTagCount() >= 3) {
-      showToast("Top Issues는 최대 3개까지 태그할 수 있습니다.", "error");
+    if (!issue.selected && topIssueTagCount() >= MAX_TOP_ISSUES) {
+      showToast(`Top Issues는 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
       return;
     }
     toggleTopIssue(issue);
@@ -363,8 +411,8 @@ export function handleArticleClick(e) {
   const item = e.target.closest("[data-id]");
   const article = state.articles.find(a => a.id === item?.dataset.id); if (!article) return;
   if (action === "article-top-issue") {
-    if (!article.topIssue && topIssueTagCount() >= 3) {
-      showToast("Top Issues는 군집과 개별 기사를 합쳐 최대 3개까지 태그할 수 있습니다.", "error");
+    if (!article.topIssue && topIssueTagCount() >= MAX_TOP_ISSUES) {
+      showToast(`Top Issues는 군집과 개별 기사를 합쳐 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
       return;
     }
     toggleArticleTopIssue(article);

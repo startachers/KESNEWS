@@ -95,6 +95,7 @@ def init_db(db_path: Path = DB_PATH) -> list[str]:
             backup_database(db_path)
         applied = apply_migrations(connection)
         _backfill_phase5_assessments(connection)
+        _backfill_issue_review_assessments(connection)
         return applied
     finally:
         connection.close()
@@ -144,3 +145,25 @@ def _backfill_phase5_assessments(connection: sqlite3.Connection) -> None:
                 assessment=classified["assessment"],
                 classifier_version=CLASSIFIER_VERSION,
             )
+
+
+def _backfill_issue_review_assessments(connection: sqlite3.Connection) -> None:
+    """migration 직후 기존 보고일 군집에 검토순위가 없을 때 한 번 계산한다."""
+    from backend.app.repositories import issue_repository as issue_repo
+
+    rows = connection.execute(
+        """
+        SELECT b.report_date
+        FROM briefings b
+        WHERE NOT EXISTS (
+            SELECT 1 FROM issue_review_assessments ira WHERE ira.briefing_id = b.id
+        )
+          AND EXISTS (
+            SELECT 1 FROM cluster_runs cr
+            WHERE cr.report_date = b.report_date AND cr.status = 'applied'
+        )
+        """
+    ).fetchall()
+    with connection:
+        for row in rows:
+            issue_repo.recalculate_review_assessments(connection, row["report_date"])

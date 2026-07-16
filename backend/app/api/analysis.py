@@ -46,17 +46,30 @@ class AnalyzeRequest(BaseModel):
     model: str
 
 
-def _issue_map(connection, report_date: str) -> dict[str, list[str]]:
+def _issue_context(connection, report_date: str) -> tuple[dict[str, list[str]], dict[str, dict[str, Any]]]:
     result: dict[str, list[str]] = {}
+    reviews: dict[str, dict[str, Any]] = {}
     for issue in issues_repo.list_for_report_date(connection, report_date):
+        reviews[issue["id"]] = {
+            "issueId": issue["id"],
+            "autoReviewScore": issue.get("autoReviewScore"),
+            "autoReviewRank": issue.get("autoReviewRank"),
+            "autoReviewStars": issue.get("autoReviewStars"),
+            "effectiveReviewStars": issue.get("effectiveReviewStars"),
+            "components": (issue.get("reviewReasons") or {}).get("components") or {},
+        }
         for article_id in issue.get("articleIds") or []:
             result.setdefault(article_id, []).append(issue["id"])
-    return result
+    return result, reviews
 
 
 def _inputs(connection, report_date: str) -> tuple[list[dict[str, Any]], dict[str, str]]:
     articles = articles_repo.list_candidates(connection, report_date, include_dismissed=False)
-    return build_evidence_input(articles, _issue_map(connection, report_date))
+    issue_map, reviews = _issue_context(connection, report_date)
+    inputs, evidence = build_evidence_input(articles, issue_map)
+    for item in inputs:
+        item["issueReviews"] = [reviews[issue_id] for issue_id in item["issueIds"] if issue_id in reviews]
+    return inputs, evidence
 
 
 def _refresh_selected_bodies(report_date: str) -> None:

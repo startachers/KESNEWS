@@ -1,5 +1,5 @@
 import {
-  state, settings, els, RISK_LABELS, AI_API_BASE,
+  state, settings, els, AI_API_BASE,
   isAnalyzingSummary, setAnalyzingSummary, aiRequestSerial, nextAiRequestSerial,
   aiAbortController, setAiAbortController, aiServerState, setAiServerState
 } from "../state/store.js";
@@ -25,22 +25,23 @@ export function renderSummary() {
 export function generateSummary() {
   const items = state.articles.filter(a => a.included);
   if (!items.length) return "• 현재 CEO 보고 대상으로 선택된 기사가 없습니다.\n• 기사를 검색하거나 직접 추가한 뒤 포함 여부를 확인해 주세요.";
-  const critical = items.filter(a => a.risk === "critical");
-  const watch = items.filter(a => a.risk === "watch");
   const positive = items.filter(a => a.sentiment === "positive");
   const sources = new Set(items.map(a => a.source).filter(Boolean)).size;
-  const top = [...items].sort(prioritySort)[0];
+  const issueByArticle = new Map();
+  state.issues.forEach(issue => issue.articleIds?.forEach(id => issueByArticle.set(id, issue)));
+  const top = [...items].sort((a, b) => (issueByArticle.get(a.id)?.autoReviewRank || 999999) - (issueByArticle.get(b.id)?.autoReviewRank || 999999) || prioritySort(a, b))[0];
+  const topIssue = issueByArticle.get(top.id);
+  const priorityIssueCount = state.issues.filter(issue => (issue.effectiveReviewStars || 0) >= 4).length;
   const categories = countBy(items, "category");
   const topCategory = Object.entries(categories).sort((a,b) => b[1]-a[1])[0];
   const categoryLabel = settings.queries.find(q => q.id === topCategory?.[0])?.label || "주요 이슈";
   const lines = [
     `• 최근 ${settings.lookback}시간 기준 ${sources}개 매체의 관련 보도 ${items.length}건을 CEO 보고 대상으로 선별했습니다.`,
-    `• 최우선 검토 보도는 「${top.title}」이며, ${RISK_LABELS[top.risk]} 단계로 분류했습니다.`,
-    `• 보도 비중은 ${categoryLabel} 분야가 ${topCategory?.[1] || 0}건으로 가장 높고, 긴급 ${critical.length}건·주의 ${watch.length}건·긍정 ${positive.length}건입니다.`
+    `• 최우선 검토 군집은 「${topIssue?.effectiveTitle || top.title}」이며, 검토별점 ${topIssue?.effectiveReviewStars || 1}점·자동순위 ${topIssue?.autoReviewRank || "미산정"}위입니다.`,
+    `• 보도 비중은 ${categoryLabel} 분야가 ${topCategory?.[1] || 0}건으로 가장 높고, 우선 검토 군집 ${priorityIssueCount}개·긍정 보도 ${positive.length}건입니다.`
   ];
-  if (critical.length) lines.push("• 제언: 긴급 보도의 사실관계와 확산 추이를 우선 확인하고, 필요 시 주관 부서 메시지를 조기에 정렬할 필요가 있습니다.");
-  else if (watch.length) lines.push("• 제언: 주의 보도의 추가 확산 여부를 모니터링하고 문의 대응용 핵심 사실을 사전 점검하는 것이 좋습니다.");
-  else lines.push("• 제언: 즉시 대응이 필요한 위험 신호는 낮으며, 주요 성과 보도의 후속 확산 기회를 검토할 수 있습니다.");
+  if ((topIssue?.effectiveReviewStars || 0) >= 4) lines.push("• 제언: 상위 검토 군집의 긴급성과 대응적합도 근거를 확인하고, 필요 시 주관 부서의 사실관계와 대응 메시지를 정렬할 필요가 있습니다.");
+  else lines.push("• 제언: 상위 검토 군집은 많지 않으며, 주요 성과 보도의 후속 확산 기회를 함께 검토할 수 있습니다.");
   return lines.join("\n");
 }
 

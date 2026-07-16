@@ -44,21 +44,20 @@ export function renderHeader() {
 
 export function renderMetrics() {
   const items = state.articles;
-  const risk = items.filter(a => a.risk === "critical" || a.risk === "watch").length;
-  const positive = items.filter(a => a.sentiment === "positive").length;
+  const priorityIssues = state.issues.filter(issue => (issue.effectiveReviewStars || 0) >= 4).length;
   const sources = new Set(items.map(a => a.source).filter(Boolean)).size;
   els.kpiTotal.innerHTML = `${items.length}<small>건</small>`;
-  els.kpiRisk.innerHTML = `${risk}<small>건</small>`;
-  els.kpiPositive.innerHTML = `${positive}<small>건</small>`;
+  els.kpiRisk.innerHTML = `${priorityIssues}<small>개</small>`;
+  els.kpiPositive.innerHTML = `${state.issues.length}<small>개</small>`;
   els.kpiSources.innerHTML = `${sources}<small>개</small>`;
   els.kpiTotalNote.textContent = state.fetchedAt ? `${settings.lookback}시간 · 원본 후보 ${state.rawCollectedCount || items.length}건` : "검색 대기";
   const selected = items.filter(a => a.included).length;
   const issueNote = state.issues.length ? ` · 이슈 ${state.issues.length}개` : "";
   els.kpiSourceNote.textContent = items.length ? `${selected}건 브리핑 선정 · 중복 ${state.duplicatesRemoved || 0}건 제거${issueNote}` : "유사 제목·동일 URL 자동 정리";
-  const counts = { critical: 0, watch: 0, routine: 0 };
-  items.forEach(a => counts[a.risk] = (counts[a.risk] || 0) + 1);
-  const max = Math.max(items.length, 1);
-  ["critical", "watch", "routine"].forEach(k => { els[`${k}Count`].textContent = counts[k]; els[`${k}Bar`].style.width = `${Math.round(counts[k] / max * 100)}%`; });
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  state.issues.forEach(issue => { const stars = issue.effectiveReviewStars || 1; counts[stars] += 1; });
+  const max = Math.max(state.issues.length, 1);
+  [5, 4, 3, 2, 1].forEach(stars => { els[`star${stars}Count`].textContent = counts[stars]; els[`star${stars}Bar`].style.width = `${Math.round(counts[stars] / max * 100)}%`; });
 }
 
 export function renderSidePanel() {

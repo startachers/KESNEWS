@@ -128,7 +128,7 @@ export async function addManualArticle(e) {
     pubDate: parseDate($("manualDate").value),
     description: $("manualDescription").value.trim(),
     category: $("manualCategory").value || "kesco_direct",
-    forcedRisk: $("manualRisk").value,
+    forcedRisk: "auto",
     riskKeywords: settings.riskKeywords,
     positiveKeywords: settings.positiveKeywords
   };

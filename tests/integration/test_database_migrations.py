@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "ai_runs",
     "kesco_press_releases",
     "article_origin_assessments",
+    "issue_review_assessments",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -37,7 +38,18 @@ EXPECTED_MIGRATIONS = [
     "0009_trusted_media.sql",
     "0010_provider_item_key_index.sql",
     "0011_kesco_press_origin.sql",
+    "0012_issue_review_priority.sql",
 ]
+
+
+def test_review_priority_migration_adds_report_date_relative_issue_assessment(tmp_path):
+    connection = get_connection(tmp_path / "review-priority.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(issue_review_assessments)")}
+        assert {"briefing_id", "issue_id", "auto_score", "auto_rank", "auto_stars", "editor_stars", "editor_reason", "reasons_json", "scoring_version"}.issubset(columns)
+    finally:
+        connection.close()
 
 
 def _table_names(connection: sqlite3.Connection) -> set[str]:
@@ -245,8 +257,9 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0008_query_groups_17.sql",
         "0009_trusted_media.sql",
         "0010_provider_item_key_index.sql",
-        "0011_kesco_press_origin.sql",
-    ]
+            "0011_kesco_press_origin.sql",
+            "0012_issue_review_priority.sql",
+        ]
     upgraded = get_connection(db_path)
     try:
         row = upgraded.execute(

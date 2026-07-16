@@ -17,8 +17,8 @@ from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 7
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7}
+SCHEMA_VERSION = 8
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",

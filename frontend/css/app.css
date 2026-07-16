@@ -259,6 +259,14 @@ a { color: inherit; }
 .risk-fill.critical { background: var(--red); }
 .risk-fill.watch { background: var(--amber); }
 .risk-fill.routine { background: var(--teal); }
+.risk-fill.star-5 { background: #9f3434; }
+.risk-fill.star-4 { background: #c97a16; }
+.risk-fill.star-3 { background: #326c9c; }
+.risk-fill.star-2 { background: #087f76; }
+.risk-fill.star-1 { background: #9aa8b1; }
+.review-stars { color: #b46a12; font-size: 11px; font-weight: 900; letter-spacing: .02em; }
+.review-rank { color: var(--muted); font-size: 9px; }
+.review-star-select { max-width: 116px; height: 30px; padding: 3px 6px; border: 1px solid #d9e0e2; border-radius: 8px; background: #fff; color: #745016; font-size: 10px; font-weight: 800; }
 .badge-press-origin { color: #6b4d00; background: #fff3c4; border-color: #e6c866; }
 .coverage-section-heading { margin: 22px 0 10px; padding: 13px 15px; border: 1px solid #e6c866; border-radius: 9px; background: #fffaf0; display: flex; align-items: baseline; gap: 10px; }
 .coverage-section-heading strong { color: var(--navy); font-size: 13px; }

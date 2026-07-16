@@ -141,6 +141,6 @@ export async function changeReportDate() {
     return;
   }
   setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "relevance" });
-  els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "relevance"; renderAll();
+  els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderAll();
   setStatus(state.articles.length ? "live" : "idle", state.articles.length ? `${next} 저장본 ${state.articles.length}건` : `${next} 저장본이 없습니다`);
 }

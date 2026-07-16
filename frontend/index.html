@@ -85,10 +85,10 @@
             <div class="kpi-label">수집 보도</div><div class="kpi-value" id="kpiTotal">0<small>건</small></div><div class="kpi-note" id="kpiTotalNote">검색 대기</div>
           </div>
           <div class="kpi risk">
-            <div class="kpi-label">주의 이상</div><div class="kpi-value" id="kpiRisk">0<small>건</small></div><div class="kpi-note">키워드 기반 위험 신호</div>
+            <div class="kpi-label">우선 검토</div><div class="kpi-value" id="kpiRisk">0<small>개</small></div><div class="kpi-note">검토별점 4~5점 군집</div>
           </div>
           <div class="kpi positive">
-            <div class="kpi-label">긍정 보도</div><div class="kpi-value" id="kpiPositive">0<small>건</small></div><div class="kpi-note">성과·협력·예방 활동</div>
+            <div class="kpi-label">평가 군집</div><div class="kpi-value" id="kpiPositive">0<small>개</small></div><div class="kpi-note">관련기사를 군집 단위로 평가</div>
           </div>
           <div class="kpi">
             <div class="kpi-label">보도 매체</div><div class="kpi-value" id="kpiSources">0<small>개</small></div><div class="kpi-note" id="kpiSourceNote">중복 제목 자동 정리</div>
@@ -119,11 +119,13 @@
               <div id="printSummary" class="print-summary"></div>
             </div>
             <aside class="summary-side">
-              <h3>위험 신호 구성</h3>
+              <h3>군집 검토순위 구성</h3>
               <div class="risk-stack">
-                <div class="risk-row"><span>긴급</span><div class="risk-track"><div id="criticalBar" class="risk-fill critical" style="width:0"></div></div><strong id="criticalCount">0</strong></div>
-                <div class="risk-row"><span>주의</span><div class="risk-track"><div id="watchBar" class="risk-fill watch" style="width:0"></div></div><strong id="watchCount">0</strong></div>
-                <div class="risk-row"><span>일상</span><div class="risk-track"><div id="routineBar" class="risk-fill routine" style="width:0"></div></div><strong id="routineCount">0</strong></div>
+                <div class="risk-row"><span>★★★★★</span><div class="risk-track"><div id="star5Bar" class="risk-fill star-5" style="width:0"></div></div><strong id="star5Count">0</strong></div>
+                <div class="risk-row"><span>★★★★</span><div class="risk-track"><div id="star4Bar" class="risk-fill star-4" style="width:0"></div></div><strong id="star4Count">0</strong></div>
+                <div class="risk-row"><span>★★★</span><div class="risk-track"><div id="star3Bar" class="risk-fill star-3" style="width:0"></div></div><strong id="star3Count">0</strong></div>
+                <div class="risk-row"><span>★★</span><div class="risk-track"><div id="star2Bar" class="risk-fill star-2" style="width:0"></div></div><strong id="star2Count">0</strong></div>
+                <div class="risk-row"><span>★</span><div class="risk-track"><div id="star1Bar" class="risk-fill star-1" style="width:0"></div></div><strong id="star1Count">0</strong></div>
               </div>
               <div class="action-note">
                 <label for="actionNote">CEO 참고·지시사항</label>
@@ -135,7 +137,7 @@
         </section>
 
         <section class="section">
-          <div class="section-heading"><div><h2>Top Issues</h2><p>Media Coverage에서 직접 태그한 군집·기사를 최대 3개 표시합니다.</p></div><div class="section-rule"></div></div>
+          <div class="section-heading"><div><h2>Top Issues</h2><p>Media Coverage에서 직접 태그한 군집·기사를 최대 5개 표시합니다.</p></div><div class="section-rule"></div></div>
           <div class="issues-grid" id="topIssues"></div>
         </section>
 
@@ -149,16 +151,16 @@
             </div>
             <label class="sr-only" for="categoryFilter">분류 필터</label>
             <select id="categoryFilter" class="control-select"><option value="all">전체 분류</option></select>
-            <label class="sr-only" for="riskFilter">위험도 필터</label>
+            <label class="sr-only" for="riskFilter">검토별점 필터</label>
             <select id="riskFilter" class="control-select">
-              <option value="all">모든 위험도</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option>
+              <option value="all">모든 검토별점</option><option value="5">★★★★★</option><option value="4">★★★★</option><option value="3">★★★</option><option value="2">★★</option><option value="1">★</option>
             </select>
             <label class="sr-only" for="selectionFilter">선정 상태 필터</label>
             <select id="selectionFilter" class="control-select"><option value="all">전체 기사</option><option value="selected">브리핑 선정만</option><option value="starred">중요 표시만</option><option value="unselected">미선정만</option></select>
             <button type="button" id="selectedOnlyBtn" class="selection-toggle" aria-pressed="false">✓ 선택 기사만 보기 <strong id="selectedOnlyCount">0</strong></button>
             <button type="button" id="manualGroupModeBtn" class="manual-group-btn">관련기사 수동 묶기</button>
             <label class="sr-only" for="sortOrder">정렬</label>
-            <select id="sortOrder" class="control-select"><option value="relevance">공사 관련도순</option><option value="collection">관련기사 수집순</option><option value="priority">위험·중요도순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
+            <select id="sortOrder" class="control-select"><option value="review">군집 검토순위</option><option value="relevance">공사 관련도순</option><option value="collection">관련기사 수집순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
             <span class="count-label" id="visibleCount">0건 표시</span>
           </div>
           <div class="relevance-guide no-print"><strong>관련도 기준</strong><span>① 공사 직접 거론 〉 ② 전기화재·감전 사고 〉 ③ 정전·전력공급 장애 〉 ④ 정부·국회+전기·에너지 〉 ⑤ 법령·기준·기본계획 〉 ⑥ 공공기관 경영 〉 ⑦ 신산업·전략동향 · 같은 기준에서는 연합뉴스를 먼저 표시합니다.</span></div>
@@ -167,7 +169,7 @@
 
         <footer class="report-footer">
           <div><strong>자료 기준</strong> <span id="footerTimestamp">수집 전</span> · 공개 온라인 기사 제목·요약</div>
-          <div>자동 위험도는 키워드 기반 참고 지표이며 최종 판단은 담당자 검토를 따릅니다.</div>
+          <div>검토별점은 군집 단위 자동 참고 지표이며 담당자 별점이 항상 우선합니다.</div>
         </footer>
       </div>
     </article>
@@ -305,7 +307,6 @@
           <div class="field"><label for="manualDate">보도 일시</label><input id="manualDate" type="datetime-local"></div>
           <div class="field full"><label for="manualUrl">기사 URL</label><input id="manualUrl" type="url" placeholder="https://"></div>
           <div class="field"><label for="manualCategory">분류</label><select id="manualCategory"></select></div>
-          <div class="field"><label for="manualRisk">위험도</label><select id="manualRisk"><option value="auto">자동 판별</option><option value="critical">긴급</option><option value="watch">주의</option><option value="routine">일상</option></select></div>
           <div class="field full"><label for="manualDescription">기사 요약</label><textarea id="manualDescription" rows="4"></textarea></div>
         </div>
         <div class="modal-footer"><button type="button" class="btn" data-close="articleOverlay">취소</button><button type="submit" class="btn btn-primary">브리핑에 추가</button></div>

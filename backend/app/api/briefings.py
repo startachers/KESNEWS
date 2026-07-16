@@ -53,6 +53,8 @@ class IssueStatePatchRequest(BaseModel):
     starred: bool | None = None
     note: str | None = None
     sortOrder: int | None = None
+    editorReviewStars: int | None = Field(default=None, ge=1, le=5)
+    editorReviewReason: str | None = Field(default=None, max_length=500)
 
 
 def _serialize(row: sqlite3.Row) -> dict[str, Any]:
@@ -127,7 +129,8 @@ async def put_briefing(report_date: str, request: BriefingPutRequest) -> Any:
 async def patch_briefing_article(
     report_date: str, article_id: str, request: ArticleStatePatchRequest
 ) -> Any:
-    fields = request.model_dump(exclude={"expectedRevision"}, exclude_none=True)
+    fields = request.model_dump(exclude={"expectedRevision"})
+    fields = {key: value for key, value in fields.items() if key in request.model_fields_set}
     connection = get_connection()
     try:
         with connection:
@@ -141,6 +144,10 @@ async def patch_briefing_article(
     except repo.RevisionConflict:
         return error_response(
             "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+        )
+    except repo.TopIssueLimitExceeded:
+        return error_response(
+            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 5개까지 선정할 수 있습니다."
         )
     finally:
         connection.close()
@@ -172,7 +179,8 @@ async def put_article_order(report_date: str, request: ArticleOrderRequest) -> A
 async def patch_briefing_issue(
     report_date: str, issue_id: str, request: IssueStatePatchRequest
 ) -> Any:
-    fields = request.model_dump(exclude={"expectedRevision"}, exclude_none=True)
+    fields = request.model_dump(exclude={"expectedRevision"})
+    fields = {key: value for key, value in fields.items() if key in request.model_fields_set}
     connection = get_connection()
     try:
         if issues_repo.get(connection, issue_id) is None:
@@ -188,6 +196,10 @@ async def patch_briefing_issue(
     except repo.RevisionConflict:
         return error_response(
             "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+        )
+    except repo.TopIssueLimitExceeded:
+        return error_response(
+            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 5개까지 선정할 수 있습니다."
         )
     finally:
         connection.close()
