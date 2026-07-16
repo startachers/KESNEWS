@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "kesco_press_releases",
     "article_origin_assessments",
     "issue_review_assessments",
+    "briefing_report_drafts",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -39,6 +40,7 @@ EXPECTED_MIGRATIONS = [
     "0010_provider_item_key_index.sql",
     "0011_kesco_press_origin.sql",
     "0012_issue_review_priority.sql",
+    "0013_briefing_report_draft.sql",
 ]
 
 
@@ -259,6 +261,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0010_provider_item_key_index.sql",
             "0011_kesco_press_origin.sql",
             "0012_issue_review_priority.sql",
+            "0013_briefing_report_draft.sql",
         ]
     upgraded = get_connection(db_path)
     try:

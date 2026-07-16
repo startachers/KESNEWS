@@ -6,8 +6,10 @@ from typing import Any
 from backend.app.repositories import ai_run_repository as ai_run_repo
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import issue_repository as issue_repo
+from backend.app.repositories import report_draft_repository as report_draft_repo
 from backend.app.services.ai.analyzer import build_evidence_input, input_signature
 from backend.app.services.ai.ollama_client import DEFAULT_CONTEXT_LENGTH
+from backend.app.services.reports.report_draft import build_exchange_context
 
 SNAPSHOT_SCHEMA_VERSION = 1
 
@@ -108,6 +110,25 @@ def build_snapshot(
             input_signature(ai_run["model"], current_input, run_context_length)
             != ai_run["inputSignature"]
         )
+    report_draft_row = report_draft_repo.get(connection, briefing["id"])
+    exchange_context = build_exchange_context(connection, briefing["report_date"])
+    report_draft = report_draft_repo.serialize(
+        report_draft_row,
+        stale=bool(
+            report_draft_row is not None
+            and report_draft_row["input_signature"] != exchange_context.signature
+        ),
+    )
+    evidence = _evidence_snapshot(ai_run, articles_by_id)
+    if report_draft is not None:
+        evidence = {
+            evidence_id: {
+                "articleId": article_id,
+                "article": articles_by_id.get(article_id)
+                or {"id": article_id, "title": "근거 기사", "source": ""},
+            }
+            for evidence_id, article_id in report_draft["evidence"].items()
+        }
     snapshot = {
         "snapshotSchemaVersion": SNAPSHOT_SCHEMA_VERSION,
         "reportDate": briefing["report_date"],
@@ -118,7 +139,8 @@ def build_snapshot(
         "articles": selected_articles,
         "issues": issues,
         "aiRun": ai_run,
-        "evidence": _evidence_snapshot(ai_run, articles_by_id),
+        "reportDraft": report_draft,
+        "evidence": evidence,
     }
     if version is not None:
         snapshot["briefing"]["status"] = "final"

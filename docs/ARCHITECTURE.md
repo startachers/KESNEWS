@@ -612,6 +612,29 @@ created_at
 updated_at
 ```
 
+### 7.7.1 BriefingReportDraft
+
+Gemma 실행 결과를 보존하면서 외부 AI 결과와 담당자 수정본을 CEO 보고에 적용하는
+보고일별 편집 작업본이다.
+
+```text
+briefing_id
+source_type          gemma | external | manual
+source_label
+content_json
+evidence_json
+input_signature
+based_on_ai_run_id
+created_at
+updated_at
+```
+
+- 보고일별 작업본에 최대 1개를 둔다.
+- `content_json`은 기존 AI 근거 ID schema와 동일하게 검증한다.
+- 자동 AI 실행은 이 row를 생성하거나 덮어쓰지 않는다.
+- 미리보기와 최종 snapshot은 이 값이 있으면 최신 정상 Gemma 결과보다 우선 사용한다.
+- 기사·전문·편집 태그가 바뀌면 삭제하지 않고 stale로 표시한다.
+
 ### 7.8 CollectionRun
 
 전체 수집 실행 요약이다.
@@ -1037,11 +1060,17 @@ GET /report/{date}
 GET /report/{date}?version=N
 GET /api/exports/{date}.json?scope=working|latest-final|version:N
 GET /api/exports/{date}.csv?scope=working|latest-final|version:N
+POST /api/exports/{date}.md
+GET /api/briefings/{date}/report-draft
+POST /api/briefings/{date}/report-draft/validate
+PUT /api/briefings/{date}/report-draft
 ```
 
 - `/preview/{date}`는 현재 작업본이다.
 - `/report/{date}`는 최신 최종 snapshot만 제공하며 최종본이 없으면 404다.
 - JSON은 정식 백업, CSV는 손실형 목록 교환 포맷이다.
+- Markdown은 선정 기사 전문·태그와 고정 근거 ID를 외부 AI에 전달하는 분석 교환 포맷이다.
+- 외부 AI 결과는 검증 후 별도 CEO 보고 편집본으로 저장하며 Gemma 실행 이력을 덮어쓰지 않는다.
 
 
 ## 12. 프런트엔드 상태 설계

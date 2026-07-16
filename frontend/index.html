@@ -101,6 +101,8 @@
             <div class="section-rule"></div>
             <div class="summary-heading-actions no-print">
               <button class="mini-action" id="ruleSummaryBtn">기본 요약</button>
+              <button class="mini-action" id="markdownExportBtn">AI 분석용 MD</button>
+              <button class="mini-action" id="reportDraftBtn">CEO 보고 편집</button>
               <button class="btn btn-primary ai-generate-btn" id="generateAiSummaryBtn">Gemma 4 경영메시지 생성</button>
             </div>
           </div>
@@ -341,6 +343,25 @@
         <div class="manual-group-list" id="manualGroupList"></div>
       </div>
       <div class="modal-footer manual-group-footer"><span>선택 <strong id="manualGroupUnitCount">0</strong>개 · 전체 기사 <strong id="manualGroupCount">0</strong>건</span><button class="btn" id="manualGroupCancelBtn">취소</button><button class="btn btn-primary" id="manualGroupBtn" disabled>선택한 묶음·기사를 하나로 합치기</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="reportDraftOverlay" role="dialog" aria-modal="true" aria-labelledby="reportDraftTitle">
+    <div class="modal report-draft-modal">
+      <div class="modal-header"><div><h2 id="reportDraftTitle">CEO 보고 편집</h2><p>Gemma 실행 기록은 보존되며, 여기 저장한 편집본이 CEO 미리보기의 AI 심층 분석에 우선 적용됩니다.</p></div><button class="close-btn" id="reportDraftCloseBtn" aria-label="닫기">×</button></div>
+      <div class="modal-body report-draft-body">
+        <div id="reportDraftStatus" class="report-draft-status"></div>
+        <div class="field"><label for="reportDraftSource">분석 출처</label><input id="reportDraftSource" type="text" placeholder="예: 고성능 AI 모델명"></div>
+        <section class="report-draft-pane">
+          <div class="report-draft-pane-head"><div><h3>외부 AI 분석 붙여넣기</h3><p>외부 AI가 작성한 일반 텍스트를 형식 변환 없이 그대로 붙여넣으세요.</p></div><button class="btn btn-subtle" id="validateExternalAnalysisBtn" type="button">CEO 보고 본문에 반영</button></div>
+          <textarea id="externalAnalysisPaste" class="report-text-editor" rows="9" placeholder="외부 AI가 작성한 분석 내용을 그대로 붙여넣으세요."></textarea>
+        </section>
+        <section class="report-draft-pane">
+          <div class="report-draft-pane-head"><div><h3>CEO 보고 분석 본문</h3><p>미리보기에 표시할 문구를 일반 텍스트로 직접 수정할 수 있습니다.</p></div><button class="btn btn-subtle" id="loadGemmaDraftBtn" type="button">Gemma 결과 불러오기</button></div>
+          <textarea id="reportDraftContent" class="report-text-editor report-content-editor" rows="22"></textarea>
+        </section>
+      </div>
+      <div class="modal-footer"><button class="btn" id="previewReportDraftBtn" type="button">CEO 미리보기</button><button class="btn btn-primary" id="saveReportDraftBtn" type="button">편집본 저장</button></div>
     </div>
   </div>
 

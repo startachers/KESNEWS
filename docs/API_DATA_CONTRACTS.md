@@ -610,6 +610,37 @@ AI 실행마다 고정 index를 만든다.
 - 서버는 형식교정 재시도를 최대 1회 수행한다.
 - 재시도 후에도 실패하면 기존 AI 결과와 담당자 수정본을 유지하고 오류만 기록한다.
 
+### 5.4 외부 AI 분석 교환과 CEO 보고 편집본
+
+선정 기사 전문·태그를 외부 고성능 AI에 전달하는 Markdown은 다음 요청으로 생성한다.
+
+```text
+POST /api/exports/{date}.md
+```
+
+- `selected=true`인 기사만 담당자 정렬 순서로 포함한다.
+- 저장된 전문이 없으면 명시적 내보내기 요청에서 전문 수집을 시도하고 `articles.body_text`에
+  캐시한다. 실패 시 RSS 요약과 현재 오류 상태를 함께 기록한다.
+- 각 기사에는 실행 중 고정되는 `A01`, `A02` 형식의 근거 ID를 부여한다.
+- Markdown에는 보고일과 입력 서명을 포함하며 외부 AI에는 일반 텍스트 출력을 요청한다.
+
+외부 결과는 다음 두 단계로 적용한다.
+
+```text
+POST /api/briefings/{date}/report-draft/validate
+PUT  /api/briefings/{date}/report-draft
+GET  /api/briefings/{date}/report-draft
+```
+
+- validate는 저장하지 않으며 현재 입력 서명을 검증한다. 일반 텍스트 입력은 현재 선정 기사
+  전체를 근거로 연결해 내부 구조로 변환한다. 기존 구조화 JSON 입력도 호환을 위해 허용한다.
+- PUT은 `expectedRevision`을 요구하고 최종 상태에서는 거부한다.
+- 기사·전문·메모·중요 태그·분류·이슈 구성이 바뀌어 입력 서명이 달라지면
+  `REPORT_DRAFT_STALE`로 거부한다.
+- 편집본은 `briefing_report_drafts`에 저장하며 기존 `ai_runs`를 변경하지 않는다.
+- 보고 미리보기와 최종 snapshot은 편집본이 있으면 이를 우선 사용한다.
+- 자동 AI 재실행은 기존 CEO 보고 편집본을 덮어쓰지 않는다.
+
 ---
 
 ## 6. 재군집화와 담당자 수정 보존

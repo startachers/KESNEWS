@@ -11,14 +11,16 @@ from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories import press_release_repository as press_release_repo
+from backend.app.repositories import report_draft_repository as report_draft_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
+from backend.app.services.reports.report_draft import build_exchange_context, validate_content
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 8
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8}
+SCHEMA_VERSION = 9
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -59,6 +61,9 @@ def build_export(connection: sqlite3.Connection, report_date: str) -> dict[str, 
             ai_run_repo.serialize(row)
             for row in ai_run_repo.list_for_briefing(connection, briefing["id"])
         ],
+        "reportDraft": report_draft_repo.serialize(
+            report_draft_repo.get(connection, briefing["id"])
+        ),
         "briefingVersions": [
             version_repo.serialize(row)
             for row in reversed(version_repo.list_versions(connection, briefing["id"]))
@@ -78,6 +83,7 @@ def build_version_export(row: sqlite3.Row, report_date: str) -> dict[str, Any]:
         "articles": snapshot.get("articles") or [],
         "issues": snapshot.get("issues") or [],
         "aiRuns": [ai_run] if ai_run else [],
+        "reportDraft": snapshot.get("reportDraft"),
         "briefingVersions": [serialized],
     }
 
@@ -110,6 +116,11 @@ def _remap_snapshot(
     ai_run["evidence"] = {
         key: article_id_map.get(article_id, article_id)
         for key, article_id in (ai_run.get("evidence") or {}).items()
+    }
+    report_draft = result.get("reportDraft") or {}
+    report_draft["evidence"] = {
+        key: article_id_map.get(article_id, article_id)
+        for key, article_id in (report_draft.get("evidence") or {}).items()
     }
     for item in (result.get("evidence") or {}).values():
         old_id = item.get("articleId")
@@ -153,6 +164,9 @@ def import_export(
 
     if existing is not None and mode == "replace":
         backup_database()
+        connection.execute(
+            "DELETE FROM briefing_report_drafts WHERE briefing_id = ?", (existing["id"],)
+        )
         connection.execute("DELETE FROM ai_runs WHERE briefing_id = ?", (existing["id"],))
         connection.execute("DELETE FROM briefing_articles WHERE briefing_id = ?", (existing["id"],))
         if existing["status"] == "final":
@@ -300,6 +314,24 @@ def import_export(
         payload.get("aiRuns") or [],
         article_id_map,
     )
+    imported_report_draft = payload.get("reportDraft")
+    if imported_report_draft:
+        context = build_exchange_context(connection, report_date)
+        content = validate_content(imported_report_draft.get("content") or {}, context.evidence)
+        report_draft_repo.upsert(
+            connection,
+            briefing_id=briefing["id"],
+            source_type=(
+                imported_report_draft.get("sourceType")
+                if imported_report_draft.get("sourceType") in {"gemma", "external", "manual"}
+                else "manual"
+            ),
+            source_label=imported_report_draft.get("sourceLabel") or "",
+            content=content,
+            evidence=context.evidence,
+            input_signature=context.signature,
+            based_on_ai_run_id=None,
+        )
 
     versions_imported = 0
     for item in imported_versions:

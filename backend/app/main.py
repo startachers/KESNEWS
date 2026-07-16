@@ -18,6 +18,7 @@ from backend.app.api.issues import router as issues_router
 from backend.app.api.operations import router as operations_router
 from backend.app.api.press_releases import router as press_releases_router
 from backend.app.api.reports import router as reports_router
+from backend.app.api.report_drafts import router as report_drafts_router
 from backend.app.core.logging import configure_logging
 from backend.app.repositories.database import check_database_integrity, get_connection, init_db
 from backend.app.repositories import ai_run_repository as ai_runs_repo
@@ -137,5 +138,6 @@ app.include_router(briefings_router)
 app.include_router(exports_router)
 app.include_router(issues_router)
 app.include_router(reports_router)
+app.include_router(report_drafts_router)
 app.include_router(operations_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

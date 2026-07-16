@@ -306,15 +306,27 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     badge = "작업본 미리보기" if preview else f"최종본 v{version}"
     badge_class = "preview" if preview else "final"
     ai_run = snapshot.get("aiRun") or {}
-    analysis = ((ai_run.get("response") or {}).get("analysis") or {})
+    report_draft = snapshot.get("reportDraft") or {}
+    analysis = report_draft.get("content") or ((ai_run.get("response") or {}).get("analysis") or {})
     evidence = snapshot.get("evidence") or {}
     ai_html = _render_ai_analysis(analysis, evidence)
     if ai_html:
-        ai_caption = (
-            f'<p class="section-caption">모델 {_text(ai_run.get("model"), "미상")} · '
-            f'생성 {_text(_datetime_label(briefing.get("aiGeneratedAt"), "시각 미상"))} · '
-            "AI가 생성한 참고 분석으로, 최종 판단은 근거 기사 확인 후 내려 주시기 바랍니다.</p>"
-        )
+        if report_draft:
+            source_label = report_draft.get("sourceLabel") or {
+                "gemma": "Gemma 분석 편집본",
+                "external": "외부 AI 분석 편집본",
+                "manual": "담당자 편집본",
+            }.get(report_draft.get("sourceType"), "CEO 보고 편집본")
+            ai_caption = (
+                f'<p class="section-caption">CEO 보고 편집본 · {_text(source_label)} · '
+                f'수정 {_text(_datetime_label(report_draft.get("updatedAt"), "시각 미상"))}</p>'
+            )
+        else:
+            ai_caption = (
+                f'<p class="section-caption">모델 {_text(ai_run.get("model"), "미상")} · '
+                f'생성 {_text(_datetime_label(briefing.get("aiGeneratedAt"), "시각 미상"))} · '
+                "AI가 생성한 참고 분석으로, 최종 판단은 근거 기사 확인 후 내려 주시기 바랍니다.</p>"
+            )
         ai_section = f"{ai_caption}{ai_html}"
     else:
         ai_section = '<p class="empty">이 작업본에서는 AI 분석이 실행되지 않았습니다.</p>'
@@ -322,7 +334,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     action_note = briefing.get("actionNote") or "별도 지시사항 없음"
     stale_notice = (
         '<p class="warning">주의: AI 분석 이후 선정 기사·메모·이슈 연결이 변경된 상태에서 확정됐습니다.</p>'
-        if ai_run.get("stale")
+        if (report_draft.get("stale") if report_draft else ai_run.get("stale"))
         else ""
     )
     styles = """
@@ -376,7 +388,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .badge.tone-negative{background:#f3e8f5;color:#7b3f8a}.badge.tone-positive{background:#e3f3f0;color:#086b63}
     .badge.star{background:#fff3d3;color:#8a6410}
     .claim{padding:15px 18px;border:1px solid var(--line);border-radius:10px;margin-top:10px;break-inside:avoid}
-    .claim h3{margin:0;color:var(--navy);font-size:13.5px}.claim p{margin:7px 0;font-size:13.5px}
+    .claim h3{margin:0;color:var(--navy);font-size:13.5px}.claim p{margin:7px 0;font-size:13.5px;white-space:pre-wrap}
     .evidence-list{font-size:11px;color:#71808a}
     .evidence{display:inline-block;margin-left:4px;padding:2px 7px;border-radius:999px;background:#e3f3f0;color:#086b63;text-decoration:none}
     .articles{display:grid;gap:10px}

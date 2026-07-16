@@ -62,6 +62,39 @@ export function cancelBriefingAnalysis(date) {
   return request(`/briefings/${date}/analysis/cancel`, { method: "POST" });
 }
 
+export function getReportDraft(date) {
+  return request(`/briefings/${encodeURIComponent(date)}/report-draft`);
+}
+
+export function validateReportDraft(date, payload) {
+  return request(`/briefings/${encodeURIComponent(date)}/report-draft/validate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function putReportDraft(date, payload) {
+  return request(`/briefings/${encodeURIComponent(date)}/report-draft`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAnalysisMarkdown(date) {
+  const response = await fetchWithTimeout(
+    `${AI_API_BASE}/exports/${encodeURIComponent(date)}.md`,
+    { method: "POST", headers: { Accept: "text/markdown" } },
+    120000
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const error = new Error(body?.error?.message || `Markdown 내보내기 실패 (${response.status})`);
+    error.code = body?.error?.code;
+    throw error;
+  }
+  return response.text();
+}
+
 export function patchBriefingArticle(date, articleId, expectedRevision, fields) {
   return request(`/briefings/${date}/articles/${articleId}`, {
     method: "PATCH",

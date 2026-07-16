@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
@@ -9,9 +10,37 @@ from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories.database import get_connection
-from backend.app.services.exports import csv_export, json_export
+from backend.app.services.exports import csv_export, json_export, markdown_export
 
 router = APIRouter()
+
+
+@router.post("/api/exports/{report_date}.md")
+async def export_markdown(report_date: str) -> Any:
+    connection = get_connection()
+    try:
+        briefing = briefing_repo.get_by_date(connection, report_date)
+        if briefing is None:
+            return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+    finally:
+        connection.close()
+    await asyncio.to_thread(markdown_export.refresh_selected_bodies, report_date, get_connection)
+    connection = get_connection()
+    try:
+        briefing = briefing_repo.get_by_date(connection, report_date)
+        context = markdown_export.build_exchange_context(connection, report_date)
+        if not context.articles:
+            return error_response("REPORT_DRAFT_INVALID", "Markdown으로 내보낼 선정 기사가 없습니다.")
+        content = markdown_export.build_markdown(
+            report_date, briefing["prepared_by"] or "", context
+        )
+    finally:
+        connection.close()
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="KESCO_AI_{report_date}.md"'},
+    )
 
 
 @router.get("/api/exports/{report_date}.json")

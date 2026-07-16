@@ -208,7 +208,7 @@ def _ensure_briefing_article_row(connection: sqlite3.Connection, briefing_id: st
     )
 
 
-def _bump_revision(connection: sqlite3.Connection, briefing_id: str, expected_revision: int) -> sqlite3.Row:
+def bump_revision(connection: sqlite3.Connection, briefing_id: str, expected_revision: int) -> sqlite3.Row:
     cursor = connection.execute(
         """
         UPDATE briefings SET revision = revision + 1, updated_at = ?
@@ -269,7 +269,7 @@ def patch_article_state(
             [*values, now_iso(), briefing["id"], article_id],
         )
 
-    return _bump_revision(connection, briefing["id"], expected_revision)
+    return bump_revision(connection, briefing["id"], expected_revision)
 
 
 def mark_selected(connection: sqlite3.Connection, briefing_id: str, article_id: str) -> None:
@@ -337,7 +337,7 @@ def reorder_articles(
             (index, now, briefing["id"], article_id),
         )
 
-    return _bump_revision(connection, briefing["id"], expected_revision)
+    return bump_revision(connection, briefing["id"], expected_revision)
 
 
 def patch_issue_state(
@@ -411,7 +411,7 @@ def patch_issue_state(
                 1 if "editorReviewReason" in review_patch else 0,
             ),
         )
-    return _bump_revision(connection, briefing["id"], expected_revision)
+    return bump_revision(connection, briefing["id"], expected_revision)
 
 
 def list_issue_states(connection: sqlite3.Connection, report_date: str) -> dict[str, dict[str, Any]]:
