@@ -16,6 +16,7 @@ from backend.app.services.classification.rule_engine import (
     has_actual_accident,
     infer_category,
     infer_event_type,
+    message_context_terms,
     matched_terms,
 )
 from backend.app.services.extraction.cleaner import clean_text
@@ -25,7 +26,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v5"
+CLASSIFIER_VERSION = "rules-v10"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -36,13 +37,14 @@ def get_relevance(article: Article) -> dict[str, Any]:
     sentinel_incident_type = (sentinel.get("incident") or {}).get("incident_type")
 
     def authority_context(text: str) -> list[str]:
+        message_terms = [
+            *message_context_terms(text, "presidential_message"),
+            *message_context_terms(text, "prime_minister_message"),
+            *message_context_terms(text, "climate_minister_message"),
+        ]
+        if message_terms:
+            return list(dict.fromkeys(message_terms))
         authority_terms = (
-            "대통령실",
-            "대통령",
-            "국무총리",
-            "총리실",
-            "국무조정실",
-            "기후에너지환경부",
             "국무회의",
             "국정현안관계장관회의",
             "경제관계장관회의",
@@ -54,30 +56,30 @@ def get_relevance(article: Article) -> dict[str, Any]:
             "국정조사",
             "현안질의",
         )
-        authorities = matched_terms(
-            text,
-            authority_terms,
-        )
-        context = text
-        for term in authority_terms:
-            context = context.replace(term, " ")
-        energy = matched_terms(
-            context,
-            (
-                "전기안전",
-                "전력",
-                "전력망",
-                "전력수급",
-                "전기설비",
-                "전기화재",
-                "감전",
-                "정전",
-                "에너지",
-                "ess",
-                "전기차 충전",
-            ),
-        )
-        return [*authorities, *energy] if authorities and energy else []
+        for sentence in re.split(r"(?<=[.!?。！？])\s+|\n+", text):
+            authorities = matched_terms(sentence, authority_terms)
+            context = sentence
+            for term in authority_terms:
+                context = context.replace(term, " ")
+            energy = matched_terms(
+                context,
+                (
+                    "전기안전",
+                    "전력",
+                    "전력망",
+                    "전력수급",
+                    "전기설비",
+                    "전기화재",
+                    "감전",
+                    "정전",
+                    "에너지",
+                    "ess",
+                    "전기차 충전",
+                ),
+            )
+            if authorities and energy:
+                return [*authorities, *energy]
+        return []
 
     def industry_strategy_or_macro(text: str) -> list[str]:
         industry = matched_terms(text, ("ess", "에너지저장장치", "배터리", "전기차 충전"))

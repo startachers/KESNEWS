@@ -97,7 +97,7 @@ def _within_lookback(pub_date: str | None, report_date: str, lookback_hours: int
         target = datetime.now(SEOUL_TZ).timestamp() * 1000
     else:
         target = datetime.fromisoformat(f"{report_date}T23:59:59").replace(tzinfo=SEOUL_TZ).timestamp() * 1000
-    return target - lookback_hours * 3600000 <= value <= target + 3600000
+    return target - lookback_hours * 3600000 <= value <= target
 
 
 def fetch_query(
@@ -129,9 +129,12 @@ def fetch_naver_query(
     client_id: str,
     client_secret: str,
     within_lookback,
+    max_records: int,
 ) -> dict[str, Any]:
     return {
-        "items": fetch_naver_news(query_text, client_id, client_secret, within_lookback),
+        "items": fetch_naver_news(
+            query_text, client_id, client_secret, within_lookback
+        )[:max_records],
         "provider": NAVER_PROVIDER,
     }
 
@@ -271,7 +274,9 @@ def apply_collection_limit(items: list[Article], collection_limit: int) -> list[
 
 async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     report_date = payload.get("reportDate") or today_seoul()
-    lookback_hours = int(payload.get("lookbackHours") or 48)
+    # 일일 브리핑 후보는 실행 시각 기준 24시간으로 고정한다. 구버전 클라이언트가
+    # 48/72시간을 보내더라도 이전 브리핑 구간의 기사를 다시 수집하지 않는다.
+    lookback_hours = 24
     max_records = int(payload.get("maxRecordsPerQuery") or 50)
     collection_limit = int(payload.get("collectionLimit") or 400)
     enable_yonhap = payload.get("enableYonhap") is not False
@@ -323,6 +328,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     for query in queries:
         query_id = str(query.get("id") or "direct")
         label = str(query.get("label") or query_id or "검색식")
+        query_limit = query_max_records(query, max_records)
         if naver_configured:
             naver_queries = [
                 str(value).strip()
@@ -346,6 +352,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                         naver_client_id,
                         naver_client_secret,
                         within_lookback,
+                        query_limit,
                     )
                 )
         tasks.append(
@@ -357,7 +364,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                 query,
                 endpoint,
                 lookback_hours,
-                query_max_records(query, max_records),
+                query_limit,
             )
         )
 

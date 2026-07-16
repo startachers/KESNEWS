@@ -463,11 +463,36 @@ LEFT JOIN briefing_articles ba ON ba.briefing_id = b.id AND ba.article_id = a.id
 
 
 def list_candidates(
-    connection: sqlite3.Connection, report_date: str, include_dismissed: bool
+    connection: sqlite3.Connection,
+    report_date: str,
+    include_dismissed: bool,
+    *,
+    published_since: str | None = None,
+    published_until: str | None = None,
 ) -> list[dict[str, Any]]:
     rows = connection.execute(_CANDIDATE_UNION_SQL, {"report_date": report_date}).fetchall()
     result = []
     for row in rows:
+        # 수동 편집 상태가 없는 자동 후보에만 최신 수집 창을 적용한다. 담당자가 선택·메모·
+        # 중요·숨김 처리한 briefing_articles row와 수동 등록 기사는 기간 밖이어도 보존한다.
+        has_editor_state = (
+            bool(row["selected"])
+            or bool(row["starred"])
+            or bool(row["top_issue"])
+            or bool(row["dismissed"])
+            or bool(row["note"])
+            or bool(row["manual_override"])
+        )
+        if not has_editor_state and not bool(row["manual"]):
+            published_value = date_value(row["published_at"])
+            if published_since and (
+                not published_value or published_value < date_value(published_since)
+            ):
+                continue
+            if published_until and (
+                not published_value or published_value > date_value(published_until)
+            ):
+                continue
         dismissed = bool(row["dismissed"])
         if not include_dismissed and dismissed:
             continue

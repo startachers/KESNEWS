@@ -32,8 +32,78 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v5():
-    assert CLASSIFIER_VERSION == "rules-v5"
+def test_classifier_version_is_rules_v10():
+    assert CLASSIFIER_VERSION == "rules-v10"
+
+
+@pytest.mark.parametrize(
+    "article",
+    [
+        {
+            "title": "미 증시, 빅테크 강세",
+            "description": "트럼프 대통령은 AI 데이터센터 전력망 대책을 강조했다.",
+        },
+        {
+            "title": "호남 반도체 투자 논쟁",
+            "description": "대통령이 투자를 유인했다는 비판과 전력망 구축의 어려움이 제기됐다.",
+        },
+        {
+            "title": "산업 현안 점검",
+            "description": "국무총리가 행사에 참석했다. 업계는 전력망 대책을 촉구했다.",
+        },
+        {
+            "title": "재생에너지 정책 발표",
+            "description": "기후에너지환경부가 재생에너지 확대 대책을 발표했다.",
+        },
+        {
+            "title": "전직 정부 인사 인터뷰",
+            "description": "전 대통령은 전력망 대책을 강조했고 전 국무총리도 지원을 촉구했다.",
+        },
+    ],
+)
+def test_message_categories_reject_foreign_incidental_or_non_speaker_mentions(article):
+    assert infer_category(article) == "other"
+    assert get_relevance(article)["rank"] != 4
+
+
+@pytest.mark.parametrize(
+    ("description", "category"),
+    [
+        ("대통령이 전력망 확충을 주문했다", "presidential_message"),
+        ("국무총리는 전력수급 대책을 마련하라고 지시했다", "prime_minister_message"),
+        (
+            "기후장관은 재생에너지 전력망 현장을 점검하고 보강을 강조했다",
+            "climate_minister_message",
+        ),
+        (
+            "기후부 장관 “호남 반도체 산단 전력망 속도전”",
+            "climate_minister_message",
+        ),
+    ],
+)
+def test_message_categories_require_same_sentence_authority_topic_and_action(
+    description, category
+):
+    article = {"title": "정부 메시지", "description": description}
+    assert infer_category(article) == category
+    assert get_relevance(article)["rank"] == 4
+
+
+@pytest.mark.parametrize(
+    "article",
+    [
+        {
+            "title": "美전력 수요, AI 붐 여파 사상 최고치",
+            "description": "미국 데이터센터 전력 수요가 증가했다.",
+        },
+        {
+            "title": "북한, 올해도 ARF 불참 유력",
+            "description": "정부는 AI 협력사업을 제안했다. 전력망 협력도 논의한다.",
+        },
+    ],
+)
+def test_ambiguous_or_foreign_ai_mentions_are_isolated_as_other(article):
+    assert infer_category(article) == "other"
 
 
 def test_classify_article_critical_risk_from_heavy_keyword():

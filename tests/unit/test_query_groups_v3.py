@@ -2,7 +2,12 @@ import json
 import re
 from pathlib import Path
 
-from backend.app.services.collection.collector import query_max_records, replace_people_tokens
+from backend.app.services.collection.collector import (
+    _within_lookback,
+    fetch_naver_query,
+    query_max_records,
+    replace_people_tokens,
+)
 
 ROOT = Path(__file__).parents[2]
 QUERY_IDS = [
@@ -47,7 +52,8 @@ def test_automated_and_frontend_defaults_contain_same_21_query_groups():
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
     assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 5" in default_block
+    assert "settingsVersion: 6" in default_block
+    assert "lookback: 24" in default_block
     assert default_block.count("naverQueries:") == len(QUERY_IDS)
     assert default_block.count("maxRecords: 20") == 2
 
@@ -66,12 +72,36 @@ def test_query_settings_screen_defines_six_groups_and_every_query_id():
     for query_id in QUERY_IDS:
         assert query_id in source
 
+    html = (ROOT / "frontend/index.html").read_text(encoding="utf-8")
+    assert '<select id="settingMaxRecords"><option value="20">20건</option>' in html
+    assert '<option value="400">400건 (권장)</option>' in html
+    assert 'const otherOption = `<option value="other">기타</option>`;' in source
+
 
 def test_query_max_records_uses_positive_override_or_global_default():
     assert query_max_records({"maxRecords": 20}, 50) == 20
     assert query_max_records({}, 50) == 50
     assert query_max_records({"maxRecords": 0}, 50) == 50
     assert query_max_records({"maxRecords": "invalid"}, 50) == 50
+
+
+def test_collection_window_is_exactly_previous_24_hours_without_future_grace():
+    report_date = "2025-01-15"
+
+    assert _within_lookback("2025-01-14T14:59:59Z", report_date, 24) is True
+    assert _within_lookback("2025-01-14T14:59:58Z", report_date, 24) is False
+    assert _within_lookback("2025-01-15T15:00:00Z", report_date, 24) is False
+
+
+def test_naver_query_applies_the_same_per_query_limit(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.services.collection.collector.fetch_naver_news",
+        lambda *args: [{"id": index} for index in range(50)],
+    )
+
+    result = fetch_naver_query("전기안전", "id", "secret", lambda value: True, 20)
+
+    assert len(result["items"]) == 20
 
 
 def test_people_tokens_expand_names_and_remove_empty_or_clauses(tmp_path):

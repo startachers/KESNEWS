@@ -38,7 +38,7 @@ providers:
     timeout_seconds: 20
 
 collection:
-  default_lookback_hours: 48
+  default_lookback_hours: 24
   per_query_limit: 50
   total_limit: 200
   retry_count: 1

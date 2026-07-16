@@ -10,8 +10,9 @@ import { setStatus, showToast } from "./notifications.js";
 
 export function populateStaticControls() {
   const options = settings.queries.map(q => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.label)}</option>`).join("");
-  els.categoryFilter.innerHTML = `<option value="all">전체 분류</option>${options}`;
-  $("manualCategory").innerHTML = options;
+  const otherOption = `<option value="other">기타</option>`;
+  els.categoryFilter.innerHTML = `<option value="all">전체 분류</option>${options}${otherOption}`;
+  $("manualCategory").innerHTML = `${options}${otherOption}`;
 }
 
 export function openOverlay(id) { $(id).classList.add("open"); document.body.style.overflow = "hidden"; }

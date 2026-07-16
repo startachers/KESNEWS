@@ -1,5 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 
+from backend.app.core.clock import now_iso, today_seoul
+from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection import collector as collector_module
 from backend.app.services.collection.http import CollectionHttpError
@@ -61,6 +66,123 @@ def _articles(report_date: str, **params):
     response = client.get("/api/articles", params={"report_date": report_date, **params})
     assert response.status_code == 200
     return response.json()
+
+
+def test_collection_rejects_per_query_limits_below_twenty():
+    global_limit = _base_payload(maxRecordsPerQuery=19)
+    query_override = _base_payload()
+    query_override["queries"][0]["maxRecords"] = 19
+
+    assert client.post("/api/collections", json=global_limit).status_code == 422
+    assert client.post("/api/collections", json=query_override).status_code == 422
+
+
+def test_article_list_hides_legacy_auto_candidate_outside_current_24_hours():
+    report_date = today_seoul()
+    now = datetime.now(timezone.utc)
+    old_date = (now - timedelta(hours=25)).isoformat().replace("+00:00", "Z")
+    recent_date = (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    connection = get_connection()
+    try:
+        with connection:
+            run_id = run_repo.create_run(
+                connection,
+                report_date=report_date,
+                started_at=now_iso(),
+                lookback_hours=48,
+            )
+            provider_id = run_repo.add_provider_result(
+                connection,
+                run_id=run_id,
+                provider="Google 뉴스 RSS",
+                query_group_id="direct",
+                status="success",
+                started_at=now_iso(),
+                finished_at=now_iso(),
+                raw_count=2,
+                accepted_count=2,
+                duplicate_count=0,
+                warning_message=None,
+                error_code=None,
+                error_message=None,
+            )
+            article_ids = []
+            for suffix, published_at in (("old-window", old_date), ("recent-window", recent_date)):
+                url = f"https://www.chosun.com/national/{suffix}/"
+                article_id = article_repo.create_article(
+                    connection,
+                    url=url,
+                    title=f"한국전기안전공사 {suffix} 기사",
+                    source="조선일보",
+                    published_at=published_at,
+                    description="24시간 후보 범위 테스트",
+                    category_hint="direct",
+                    manual=False,
+                    publisher_id="chosun",
+                    publisher_allowed=True,
+                )
+                article_repo.insert_observation(
+                    connection,
+                    article_id=article_id,
+                    collection_run_provider_id=provider_id,
+                    provider="Google 뉴스 RSS",
+                    provider_item_key=None,
+                    query_group_id="direct",
+                    raw_url=url,
+                    raw_title=f"한국전기안전공사 {suffix} 기사",
+                    raw_source="조선일보",
+                    raw_published_at=published_at,
+                    raw_description="24시간 후보 범위 테스트",
+                    raw_payload_json=None,
+                    dedup_method="new",
+                    dedup_score=None,
+                )
+                article_ids.append(article_id)
+            run_repo.finish_run(
+                connection,
+                run_id,
+                status="success",
+                finished_at=now_iso(),
+                raw_count=2,
+                accepted_count=2,
+                unique_count=2,
+                stale_reused_count=0,
+                warning_count=0,
+                error_count=0,
+            )
+    finally:
+        connection.close()
+
+    listed_ids = {item["id"] for item in _articles(report_date)["data"]["articles"]}
+    assert article_ids[0] not in listed_ids
+    assert article_ids[1] in listed_ids
+
+    briefing_response = client.put(
+        f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}}
+    )
+    if briefing_response.status_code == 409:
+        briefing_response = client.get(f"/api/briefings/{report_date}")
+    assert briefing_response.status_code == 200
+    briefing = briefing_response.json()["data"]
+    empty_state = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[0]}",
+        json={"expectedRevision": briefing["revision"], "selected": False},
+    )
+    assert empty_state.status_code == 200
+    assert article_ids[0] not in {
+        item["id"] for item in _articles(report_date)["data"]["articles"]
+    }
+
+    patched = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[0]}",
+        json={
+            "expectedRevision": empty_state.json()["data"]["revision"],
+            "selected": True,
+        },
+    )
+    assert patched.status_code == 200
+    preserved_ids = {item["id"] for item in _articles(report_date)["data"]["articles"]}
+    assert article_ids[0] in preserved_ids
 
 
 def test_collections_merges_providers_and_returns_success(monkeypatch):

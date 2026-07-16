@@ -244,7 +244,7 @@
           <p>HTML을 열었을 때 당일 저장본이 없으면 자동으로 새 기사를 검색합니다.</p>
           <div class="settings-grid">
             <div class="setting-box toggle-line"><input id="settingAutoRun" type="checkbox"><div><strong>하루 한 번 자동 검색</strong><small>브라우저가 닫혀 있으면 실행되지 않습니다.</small></div></div>
-            <div class="setting-box"><div class="field"><label for="settingLookback">검색 기간</label><select id="settingLookback"><option value="24">최근 24시간</option><option value="48">최근 48시간</option><option value="72">최근 72시간</option><option value="168">최근 7일</option></select></div></div>
+            <div class="setting-box"><div class="field"><label for="settingLookback">검색 기간</label><select id="settingLookback"><option value="24">현재 시각 기준 최근 24시간</option></select></div></div>
           </div>
         </section>
 
@@ -272,8 +272,8 @@
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingOpmPress" type="checkbox"><div><strong>국무조정실(총리실) 보도자료 직접 수집</strong><small>opm.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingMePress" type="checkbox"><div><strong>기후에너지환경부 보도자료 직접 수집</strong><small>me.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
           <div class="field"><label for="settingEndpoint">기관용 뉴스 API 프록시 URL (선택)</label><input id="settingEndpoint" type="text" placeholder="https://내부주소/news?q={query}&hours={hours}"></div>
-          <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
-          <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건 (권장)</option><option value="300">300건</option></select></div>
+          <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="20">20건</option><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
+          <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건</option><option value="300">300건</option><option value="400">400건 (권장)</option></select></div>
           <div class="security-note">RSS·GDELT 수집은 이 컴퓨터의 로컬 서버(127.0.0.1:8787)가 직접 호출하며 외부 공개 프록시를 거치지 않습니다. 기관용 뉴스 API를 연결할 경우 비밀키는 서버 쪽 프록시 URL에 보관하고 이 화면에는 입력하지 마세요.</div>
         </section>
       </div>
@@ -331,6 +331,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-16"></script>
+  <script type="module" src="js/app.js?v=20260716-17"></script>
 </body>
 </html>

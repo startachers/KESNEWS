@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
-from backend.app.core.clock import now_iso
+from backend.app.core.clock import SEOUL_TZ, now_iso, today_seoul
 from backend.app.repositories import article_repository as articles_repo
 from backend.app.repositories import briefing_repository as briefings_repo
 from backend.app.repositories import run_repository as runs_repo
@@ -15,6 +16,20 @@ from backend.app.services.classification.service import CLASSIFIER_VERSION, clas
 from backend.app.services.normalization.dates import since_bound_iso
 
 router = APIRouter()
+
+
+def _daily_collection_window(report_date: str) -> tuple[str, str]:
+    if report_date == today_seoul():
+        window_end = datetime.now(timezone.utc)
+    else:
+        window_end = datetime.fromisoformat(f"{report_date}T23:59:59").replace(
+            tzinfo=SEOUL_TZ
+        ).astimezone(timezone.utc)
+    window_start = window_end - timedelta(hours=24)
+    return (
+        window_start.isoformat().replace("+00:00", "Z"),
+        window_end.isoformat().replace("+00:00", "Z"),
+    )
 
 
 class ManualArticleRequest(BaseModel):
@@ -45,7 +60,14 @@ async def list_articles(
 ) -> Any:
     connection = get_connection()
     try:
-        items = articles_repo.list_candidates(connection, report_date, include_dismissed)
+        published_since, published_until = _daily_collection_window(report_date)
+        items = articles_repo.list_candidates(
+            connection,
+            report_date,
+            include_dismissed,
+            published_since=published_since,
+            published_until=published_until,
+        )
         meta: dict[str, Any] = {"failedProviders": [], "lastGoodCollectionAt": None}
         latest_run = runs_repo.get_latest_run(connection, report_date)
         if latest_run is not None:

@@ -50,6 +50,21 @@ ACHIEVEMENT_TERMS = ("수상", "성과", "혁신", "우수", "개선")
 COMMUNITY_TERMS = ("협약", "봉사", "지원", "지역", "상생")
 POLICY_TERMS = ("산업통상", "전기안전관리법", "정책", "규제", "법안", "국회")
 HARD_EXCLUSION_PHRASES = ("채용공고",)
+MESSAGE_ENERGY_TERMS = (
+    "전기안전", "전력", "전력망", "전력수급", "전기설비", "전기화재",
+    "감전", "정전", "에너지", "ess", "전기차 충전",
+)
+MESSAGE_ACTION_TERMS = (
+    "지시", "주문", "당부", "강조", "밝혔", "말했", "말씀", "발언", "브리핑",
+    "업무보고", "대책", "촉구", "약속", "제안", "발표", "점검",
+)
+_FOREIGN_PRESIDENT = re.compile(
+    r"(?:미국|미|중국|중|러시아|러|프랑스|폴란드|라트비아|리투아니아|우크라이나|"
+    r"트럼프|바이든|시진핑|푸틴|마크롱|나우세다|젤렌스키)\s*(?:의\s*)?대통령"
+)
+_FOREIGN_GENERAL_TOPIC = re.compile(
+    r"^(?:美|中|미국|중국|일본|러시아|유럽|뉴욕|워싱턴|월가|EU|G7|G20)(?:\s|전력|증시|경제|시장)"
+)
 
 _CATEGORY_RULES: list[tuple[str, tuple[tuple[str, ...], ...]]] = [
     (
@@ -356,6 +371,50 @@ def sentences(text: str) -> list[str]:
     ] or [text]
 
 
+def message_context_terms(text: str, category: str) -> list[str]:
+    """같은 문장에서 국내 메시지 주체·에너지 주제·발언 행위가 모두 확인될 때만 인정한다."""
+    for sentence in sentences(text):
+        energy = matched_terms(sentence, MESSAGE_ENERGY_TERMS)
+        actions = matched_terms(sentence, MESSAGE_ACTION_TERMS)
+        if not energy:
+            continue
+        if category == "presidential_message":
+            authorities = matched_terms(sentence, ("대통령실", "대통령"))
+            former = re.search(r"(?:전|前)\s*대통령", sentence)
+            quoted = any(
+                re.search(rf"{re.escape(term)}[^.!?。！？]{{0,24}}[\"“‘]", sentence)
+                for term in authorities
+            )
+            if (
+                authorities
+                and (actions or quoted)
+                and not former
+                and not _FOREIGN_PRESIDENT.search(sentence)
+            ):
+                return [*authorities, *energy, *actions]
+        elif category == "prime_minister_message":
+            authorities = matched_terms(sentence, ("국무총리", "총리실", "국무조정실"))
+            former = re.search(r"(?:전|前)\s*(?:국무총리|총리)", sentence)
+            quoted = any(
+                re.search(rf"{re.escape(term)}[^.!?。！？]{{0,24}}[\"“‘]", sentence)
+                for term in authorities
+            )
+            if authorities and (actions or quoted) and not former:
+                return [*authorities, *energy, *actions]
+        elif category == "climate_minister_message":
+            authorities = matched_terms(
+                sentence,
+                ("기후에너지환경부 장관", "기후부 장관", "기후부장관", "기후장관"),
+            )
+            quoted = any(
+                re.search(rf"{re.escape(term)}[^.!?。！？]{{0,24}}[\"“‘]", sentence)
+                for term in authorities
+            )
+            if authorities and (actions or quoted):
+                return [*authorities, *energy, *actions]
+    return []
+
+
 def has_actual_accident(text: str) -> bool:
     """예방 문구와 분리된 문장에 위해 용어와 발생 신호가 함께 있을 때만 사고로 본다."""
     for sentence in sentences(text):
@@ -412,7 +471,7 @@ def infer_event_type(article: dict[str, Any]) -> tuple[str, list[str]]:
 
 
 def infer_category(article: dict[str, Any]) -> str:
-    _, text = article_text(article)
+    title, text = article_text(article)
     # '감사패' 속 모호한 '감사'는 management로 쓰지 않는다. 구체 문구는 그대로 남는다.
     suppressed = text.replace("감사패", " ").replace("감사 인사", " ")
     if (
@@ -424,7 +483,36 @@ def infer_category(article: dict[str, Any]) -> str:
     prevention_only = bool(matched_terms(suppressed, PREVENTION_CUES)) and not has_actual_accident(
         suppressed
     )
+    message_categories = (
+        "presidential_message",
+        "prime_minister_message",
+        "climate_minister_message",
+    )
+    for message_category in message_categories:
+        if message_context_terms(suppressed, message_category):
+            return message_category
+
+    ambiguous_authority = matched_terms(
+        suppressed,
+        (
+            "대통령실",
+            "대통령",
+            "국무총리",
+            "총리실",
+            "국무조정실",
+            "기후에너지환경부",
+            "기후에너지환경부 장관",
+            "기후부 장관",
+            "기후부장관",
+            "기후장관",
+        ),
+    )
+    if ambiguous_authority and matched_terms(suppressed, MESSAGE_ENERGY_TERMS):
+        return "other"
+
     for category, required_groups in _CATEGORY_RULES:
+        if category in message_categories:
+            continue
         if prevention_only and category in {"electrical_accident", "major_fire_breaking"}:
             continue
         if category == "major_fire_breaking" and not detect_incident_sentinel(article)["matched"]:
@@ -433,6 +521,12 @@ def infer_category(article: dict[str, Any]) -> str:
             any(category_keyword_matches(suppressed, keyword) for keyword in group)
             for group in required_groups
         ):
+            if category == "ai_trend":
+                title_has_ai = "인공지능" in title or bool(
+                    re.search(r"(?<![a-z0-9])ai(?![a-z0-9])", title)
+                )
+                if not title_has_ai or _FOREIGN_GENERAL_TOPIC.search(title):
+                    return "other"
             return category
     return "other"
 

@@ -3,7 +3,7 @@ import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js";
 import { renderAll } from "./ui/renderers.js";
-import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-16";
+import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-17";
 import { runSearch } from "./features/collection.js?v=20260716-15";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260716-12";

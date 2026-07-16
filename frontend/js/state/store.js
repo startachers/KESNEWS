@@ -4,12 +4,12 @@ import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
-  settingsVersion: 5,
+  settingsVersion: 6,
   autoRun: true,
   enableYonhap: true,
   enableOpmPress: true,
   enableMePress: true,
-  lookback: 48,
+  lookback: 24,
   maxRecords: 50,
   collectionLimit: 400,
   aiModel: "gemma4:26b",
@@ -78,6 +78,7 @@ export function loadSettings() {
         enabled: savedById.has(query.id) ? savedById.get(query.id).enabled !== false : query.enabled
       }));
       merged.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
+      merged.lookback = 24;
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
       settingsMigrationNotice = true;
     }

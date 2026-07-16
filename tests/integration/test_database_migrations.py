@@ -225,7 +225,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         ).fetchone()
         assert row["auto_priority"] == "review"
         assert row["auto_relevance_score"] == 100
-        assert row["classifier_version"] == "rules-v5"
+        assert row["classifier_version"] == "rules-v10"
         assert row["manual_override"] == 0
     finally:
         upgraded.close()

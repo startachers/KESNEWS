@@ -24,13 +24,13 @@ class CollectionQuery(BaseModel):
     label: str = ""
     query: str = ""
     naverQueries: list[str] = Field(default_factory=list, max_length=3)
-    maxRecords: int | None = Field(default=None, ge=1)
+    maxRecords: int | None = Field(default=None, ge=20)
 
 
 class CollectionRequest(BaseModel):
     reportDate: str | None = None
-    lookbackHours: int = 48
-    maxRecordsPerQuery: int = 50
+    lookbackHours: int = 24
+    maxRecordsPerQuery: int = Field(default=50, ge=20)
     collectionLimit: int = 400
     enableYonhap: bool = True
     enableOpmPress: bool = True

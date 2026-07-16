@@ -1,5 +1,5 @@
 {
-  "lookbackHours": 48,
+  "lookbackHours": 24,
   "maxRecordsPerQuery": 50,
   "collectionLimit": 400,
   "enableYonhap": true,
