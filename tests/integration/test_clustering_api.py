@@ -25,6 +25,14 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "state.issues = issuesResult.data.issues" in feature.text
     assert "applyClusterRun(activeRun.id)" in feature.text
 
+    collection_feature = client.get("/js/features/collection.js")
+    assert collection_feature.status_code == 200
+    assert "automaticallyRecluster(0.15)" in collection_feature.text
+    assert "createClusterRun(state.date, similarityThreshold)" in collection_feature.text
+    assert "applyClusterRun(proposed.data.id)" in collection_feature.text
+    assert "setSearchProgress(72" in collection_feature.text
+    assert "finishSearchProgress(true)" in collection_feature.text
+
     api_client = client.get("/js/api/client.js")
     assert api_client.status_code == 200
     assert "CLUSTER_RUN_TIMEOUT_MS = 120000" in api_client.text

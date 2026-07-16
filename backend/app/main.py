@@ -32,6 +32,17 @@ INSTANCE_ID = f"{os.getpid()}-{uuid4().hex[:8]}"
 app = FastAPI(title="KESCO Media Briefing")
 
 
+@app.middleware("http")
+async def _disable_frontend_asset_cache(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 @app.on_event("startup")
 async def _run_migrations_on_startup() -> None:
     applied_migrations = await asyncio.to_thread(init_db)

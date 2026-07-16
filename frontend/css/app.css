@@ -75,6 +75,23 @@ a { color: inherit; }
   display: flex; align-items: center; gap: 8px;
   min-width: 0; color: #c6d2dd; font-size: 12px;
 }
+.search-progress-percent { color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; }
+.search-progress {
+  position: absolute; right: 0; bottom: -1px; left: 0; height: 4px;
+  overflow: hidden; background: rgba(255,255,255,.12);
+}
+.search-progress[hidden] { display: none; }
+.search-progress span {
+  display: block; width: 0; height: 100%; background: #46d2af;
+  box-shadow: 0 0 10px rgba(70,210,175,.75);
+  transition: width .35s ease;
+}
+.search-progress.active span {
+  background-image: linear-gradient(90deg, #46d2af 0%, #8be9d0 48%, #46d2af 100%);
+  background-size: 180% 100%; animation: search-progress-pulse 1.25s linear infinite;
+}
+.search-progress.error span { background: #ff8178; box-shadow: 0 0 10px rgba(255,129,120,.65); }
+@keyframes search-progress-pulse { to { background-position: -180% 0; } }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #7b8c9c; flex: 0 0 auto; }
 .status-dot.live { background: #46d2af; box-shadow: 0 0 0 4px rgba(70,210,175,.12); }
 .status-dot.busy { background: #f5b852; animation: pulse 1s infinite; }

@@ -46,6 +46,13 @@ NAVER_CLIENT_SECRET=발급받은_Client_Secret
 4. 같은 앱의 중복 시작은 `data/server.lock`이 막는다. 실행 중 프로세스를 강제 종료하지
    않은 상태에서 lock 파일 자체를 삭제해 우회하지 않는다.
 
+### 화면 버튼이 모두 반응하지 않음
+
+1. 개발자도구 Console에서 ES Module의 export 불일치 오류가 있는지 확인한다.
+2. 로컬 서버는 HTML·JS·CSS에 `Cache-Control: no-store`를 반환하므로 페이지를 새로고침한다.
+3. 메인 앱 모듈 초기화가 실패해도 상단 `서버 재시작`은 독립된 restart guard가 처리한다.
+4. 재시작 뒤에도 같으면 `/js/app.js`와 오류에 표시된 모듈 URL이 모두 200인지 확인한다.
+
 ### 네트워크·provider 수집 실패
 
 1. `logs/collection.log`와 `/api/operations/status`의 `collection.latest`를 확인한다.

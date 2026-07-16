@@ -182,6 +182,7 @@ def test_article_order_reassigns_sort_order_for_listed_ids_only():
 
     items = client.get("/api/articles", params={"report_date": "2026-07-20"}).json()["data"]["articles"]
     order_by_id = {item["id"]: item["sortOrder"] for item in items}
+    assert all(item["firstObservedAt"] for item in items)
     assert order_by_id[ids[2]] == 0
     assert order_by_id[ids[0]] == 1
     assert order_by_id[ids[1]] == 2

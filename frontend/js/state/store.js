@@ -1,5 +1,5 @@
 import { localDateKey } from "../utils/dates.js";
-import { showToast } from "../ui/notifications.js";
+import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 

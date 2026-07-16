@@ -1,8 +1,8 @@
-import { state, settings, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
+import { els, state, settings, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
 import { localDateKey, dateValue } from "../utils/dates.js";
 import { cleanText, shortText, friendlyError, safeUrl } from "../utils/strings.js";
 import * as api from "../api/client.js?v=20260716-15";
-import { showToast, setStatus, setSearchButton } from "../ui/notifications.js";
+import { finishSearchProgress, setSearchProgress, showToast, setStatus, setSearchButton } from "../ui/notifications.js?v=20260716-1";
 import { renderSidePanel, renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
 
@@ -28,7 +28,8 @@ export async function runSearch(auto = false) {
   setSearching(true);
   state.demo = false;
   setSearchButton(true);
-  setStatus("busy", `연합뉴스 우선 · ${enabled.length}개 검색식으로 기사를 찾는 중…`);
+  els.reclusterBtn.disabled = true;
+  setSearchProgress(5, `연합뉴스 우선 · ${enabled.length}개 검색식으로 기사를 찾는 중…`);
   renderSidePanel();
 
   state.lastAttemptAt = new Date().toISOString();
@@ -48,6 +49,7 @@ export async function runSearch(auto = false) {
       excludeKeywords: settings.excludeKeywords,
       endpoint: settings.endpoint
     });
+    setSearchProgress(58, "기사 수집 완료 · 중복과 검색 기간을 정리하는 중…");
 
     state.fetchedAt = result.fetchedAt || state.lastAttemptAt;
     state.provider = result.provider || "";
@@ -59,19 +61,38 @@ export async function runSearch(auto = false) {
 
     if (result.status !== "failed") {
       await refreshArticles();
+      setSearchProgress(68, `${state.articles.length}건 기사 목록 갱신 완료`);
       state.demo = false;
       state.lastRunStatus = "success";
       state.errors = [];
       localStorage.setItem(LAST_AUTO_KEY, localDateKey());
       state.summaryError = "";
+      let clusteringError = "";
+      let issueCount = 0;
+      if (state.articles.length) {
+        setSearchButton(true, "이슈 묶는 중");
+        try {
+          issueCount = await automaticallyRecluster(0.15);
+        } catch (error) {
+          clusteringError = friendlyError(error);
+        }
+      }
       refreshRuleSummaryIfNeeded();
 
       if (state.articles.length) {
-        setStatus("live", `${state.articles.length}건 정리 · 중복 ${state.duplicatesRemoved}건 제거`);
-        showToast(`${state.articles.length}건을 정리하고 중복 ${state.duplicatesRemoved}건을 제거했습니다.${state.warnings.length ? ` 일부 검색 ${state.warnings.length}건은 보조 처리했습니다.` : ""}`, state.warnings.length ? "" : "success");
+        if (clusteringError) {
+          setStatus("error", `${state.articles.length}건 수집 완료 · 15% 이슈 재군집화 실패`);
+          showToast(`기사는 저장했지만 이슈 재군집화를 완료하지 못했습니다: ${shortText(clusteringError, 100)}`, "error");
+          finishSearchProgress(true);
+        } else {
+          setStatus("live", `${state.articles.length}건 정리 · 이슈 ${issueCount}개 자동 재군집화 완료`);
+          showToast(`${state.articles.length}건을 정리하고 15% 기준으로 이슈 ${issueCount}개를 묶었습니다.${state.warnings.length ? ` 일부 검색 ${state.warnings.length}건은 보조 처리했습니다.` : ""}`, state.warnings.length ? "" : "success");
+          finishSearchProgress();
+        }
       } else {
         setStatus("idle", "검색 기간 내 관련 기사가 없습니다");
         showToast("수집 연결은 정상이지만 검색 기간 내 관련 기사가 없습니다.");
+        finishSearchProgress();
       }
     } else {
       state.lastRunStatus = "error";
@@ -79,6 +100,7 @@ export async function runSearch(auto = false) {
       localStorage.removeItem(LAST_AUTO_KEY);
       setStatus("error", "기사 수집 실패 · 오류 상세를 확인하세요");
       showToast(`수집 실패: ${shortText(state.errors[0], 120)}`, "error");
+      finishSearchProgress(true);
     }
     saveDailyState();
   } catch (error) {
@@ -88,6 +110,7 @@ export async function runSearch(auto = false) {
     saveDailyState();
     setStatus("error", "기사 검색을 완료하지 못했습니다");
     showToast(friendlyError(error), "error");
+    finishSearchProgress(true);
   } finally {
     setSearching(false);
     setSearchButton(false);
@@ -98,6 +121,17 @@ export async function runSearch(auto = false) {
 async function requestCollection(payload) {
   const response = await api.runCollection(payload);
   return response.data;
+}
+
+async function automaticallyRecluster(similarityThreshold) {
+  setSearchProgress(72, "15% 기준으로 동일 이슈 기사를 계산하는 중…");
+  const proposed = await api.createClusterRun(state.date, similarityThreshold);
+  setSearchProgress(90, `${proposed.data.proposal?.length || 0}개 이슈 제안 생성 · 자동 적용 중…`);
+  await api.applyClusterRun(proposed.data.id);
+  setSearchProgress(97, "적용된 이슈 목록을 불러오는 중…");
+  const issuesResult = await api.listIssues(state.date);
+  state.issues = issuesResult.data.issues || [];
+  return state.issues.length;
 }
 
 export function normalizedArticleTitle(value) {

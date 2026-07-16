@@ -3,7 +3,7 @@ import { escapeHtml, shortText } from "../utils/strings.js";
 import { formatDateTime, formatTime } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
 import { renderTopIssues } from "../features/issues.js";
-import { renderArticles } from "../features/articles.js?v=20260716-12";
+import { renderArticles } from "../features/articles.js?v=20260716-13";
 
 export function renderAll() {
   renderHeader();
@@ -29,7 +29,7 @@ export function renderHeader() {
   els.summaryEditor.disabled = finalized;
   els.actionNote.disabled = finalized;
   els.refreshBtn.disabled = finalized;
-  els.reclusterBtn.disabled = finalized || state.demo || !state.articles.length;
+  els.reclusterBtn.disabled = finalized || isSearching || state.demo || !state.articles.length;
   $("addArticleBtn").disabled = finalized;
   $("importBtn").disabled = finalized;
   els.finalizeBtn.hidden = finalized;

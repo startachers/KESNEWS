@@ -171,6 +171,8 @@ DELETE /api/articles/{article_id}
 3. 해당 날짜에 수동 추가된 기사
 
 - 각 기사에는 해당 날짜의 편집 상태(`selected`, `starred`, `topIssue`, `note`, `dismissed`)를 join해 반환한다. row가 없으면 기본 상태를 반환한다.
+- `firstObservedAt`은 기사가 로컬 수집기에 최초로 들어온 UTC 시각이다. 화면의
+  `관련기사 수집순`은 이 값을 오름차순으로 사용하고, 같은 시각이면 공사 관련도순으로 정렬한다.
 - 단계 3 이전 자동수집 기사처럼 `publisher_allowed`가 미판별(`null`)인 기사는 일반
   후보에서 제외한다. 단, 2번 합집합에 해당하는 기존 담당자 선택·중요·메모·숨김 상태는
   출처 판별값과 무관하게 계속 보존·표시한다.
@@ -603,6 +605,12 @@ POST /api/cluster-runs/{cluster_run_id}/apply
 - 수동 편집 이슈 중 자동 대응이 사라진 항목
 
 `apply` 시에만 자동 필드와 자동 membership을 갱신한다.
+
+화면의 `오늘 기사 검색`은 기사 수집이 성공하고 후보가 1건 이상이면 `similarityThreshold=0.15`로
+proposal을 생성한 뒤 즉시 apply한다. 수집·목록 갱신·proposal 생성·apply 단계는 진행률로
+표시한다. 자동 재군집화가 실패해도 이미 저장된 기사와 provider observation은 되돌리지 않으며,
+수집 성공과 재군집화 오류를 함께 표시한다. 수동 `이슈 재군집화`는 기존 proposal 검토·적용
+절차를 그대로 유지한다.
 
 ### 6.4 적용 규칙
 

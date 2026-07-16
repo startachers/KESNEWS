@@ -4,7 +4,7 @@ import { changeReportDate } from "./data-io.js";
 import { closeOverlay, openOverlay } from "../ui/dialogs.js";
 import { formatDateTime } from "../utils/dates.js";
 import { escapeAttr, escapeHtml, friendlyError } from "../utils/strings.js";
-import { showToast } from "../ui/notifications.js";
+import { showToast } from "../ui/notifications.js?v=20260716-1";
 
 function statusLabel(briefing) {
   if (briefing.status === "final") return "최종 확정";

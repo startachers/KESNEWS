@@ -1,12 +1,12 @@
 import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDailyState, loadDailyState, setState, consumeSettingsMigrationNotice } from "./state/store.js";
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
-import { setStatus, showToast } from "./ui/notifications.js";
+import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
 import { renderAll } from "./ui/renderers.js";
-import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-17";
-import { runSearch } from "./features/collection.js?v=20260716-15";
+import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-18";
+import { runSearch } from "./features/collection.js?v=20260716-17";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
-import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260716-12";
+import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260716-13";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
@@ -14,7 +14,7 @@ import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput,
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
 async function init() {
-  ["report", "statusDot", "globalStatus", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "manualGroupModeBtn", "manualGroupOverlay", "manualGroupSearch", "manualGroupList", "manualGroupCloseBtn", "manualGroupBtn", "manualGroupUnitCount", "manualGroupCount", "manualGroupCancelBtn", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState"].forEach(id => els[id] = $(id));
+  ["report", "statusDot", "globalStatus", "searchProgress", "searchProgressBar", "searchProgressPercent", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "criticalBar", "watchBar", "routineBar", "criticalCount", "watchCount", "routineCount", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "manualGroupModeBtn", "manualGroupOverlay", "manualGroupSearch", "manualGroupList", "manualGroupCloseBtn", "manualGroupBtn", "manualGroupUnitCount", "manualGroupCount", "manualGroupCancelBtn", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState"].forEach(id => els[id] = $(id));
 
   setState(await loadDailyState(localDateKey()));
   bindEvents();
@@ -45,6 +45,7 @@ function bindEvents() {
   $("editKeywordsBtn").addEventListener("click", openSettings);
   $("saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
   $("resetSettingsBtn").addEventListener("click", resetSettingsForm);
+  $("restartServerBtn").dataset.restartHandler = "module";
   $("restartServerBtn").addEventListener("click", restartServerFromSettings);
   $("addArticleBtn").addEventListener("click", openArticleModal);
   $("articleForm").addEventListener("submit", addManualArticle);

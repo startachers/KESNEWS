@@ -9,7 +9,7 @@ import { formatDateTime } from "../utils/dates.js";
 import { fetchWithTimeout } from "../utils/net.js";
 import { prioritySort, relevanceSort } from "./collection.js";
 import { renderAll } from "../ui/renderers.js";
-import { showToast } from "../ui/notifications.js";
+import { showToast } from "../ui/notifications.js?v=20260716-1";
 import * as api from "../api/client.js";
 
 export function renderSummary() {

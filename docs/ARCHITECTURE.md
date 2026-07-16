@@ -958,6 +958,10 @@ POST  /api/cluster-runs/{cluster_run_id}/apply
 
 재군집화 첫 요청은 `0.15~0.70` 범위의 선택적 `similarityThreshold`(기본 `0.40`)로 diff proposal을 만들고, apply 시 자동 필드만 갱신한다. 브라우저는 기사량이 많은 작업본도 계산을 기다릴 수 있도록 제안 생성 요청에 120초 제한을 적용한다. 화면에서 기준을 바꾼 경우 새 proposal을 계산하기 전에는 이전 proposal을 적용할 수 없다.
 
+수동 `오늘 기사 검색`과 화면 진입 시의 당일 자동 검색은 수집 성공 후 `0.15` 기준 cluster
+proposal을 생성하고 즉시 apply한다. 화면 진행률은 수집 요청, 기사 목록 갱신, proposal 계산,
+apply 완료라는 실제 경계에서 갱신한다. 재군집화 실패는 수집된 기사를 롤백하지 않는다.
+
 ### 11.6 브리핑 작업본·최종본
 
 ```text

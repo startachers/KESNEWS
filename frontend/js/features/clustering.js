@@ -1,7 +1,7 @@
 import { els, state } from "../state/store.js";
 import * as api from "../api/client.js";
 import { closeOverlay, openOverlay } from "../ui/dialogs.js";
-import { setStatus, showToast } from "../ui/notifications.js";
+import { setStatus, showToast } from "../ui/notifications.js?v=20260716-1";
 import { renderAll } from "../ui/renderers.js";
 import { escapeHtml, friendlyError } from "../utils/strings.js";
 

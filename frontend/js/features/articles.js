@@ -6,7 +6,7 @@ import * as api from "../api/client.js";
 import { ICONS } from "../ui/icons.js";
 import { renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis.js";
-import { showToast } from "../ui/notifications.js";
+import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
 
@@ -16,6 +16,11 @@ const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
 let manualGroupPickerEntries = new Map();
 let manualGroupSearchText = "";
+
+export function collectionOrderSort(a, b) {
+  return dateValue(a.firstObservedAt) - dateValue(b.firstObservedAt)
+    || relevanceSort(a, b);
+}
 
 function topIssueTagCount() {
   return state.issues.filter(issue => issue.selected).length
@@ -130,6 +135,7 @@ export function renderArticles() {
     return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && (filters.risk === "all" || a.risk === filters.risk) && selectionMatch;
   });
   if (filters.sort === "relevance") items.sort(relevanceSort);
+  else if (filters.sort === "collection") items.sort(collectionOrderSort);
   else if (filters.sort === "newest") items.sort((a,b) => dateValue(b.pubDate)-dateValue(a.pubDate));
   else if (filters.sort === "source") items.sort((a,b) => (a.source || "").localeCompare(b.source || "", "ko"));
   else items.sort(prioritySort);
