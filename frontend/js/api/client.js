@@ -97,6 +97,10 @@ export function runCollection(payload) {
   return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 45000);
 }
 
+export function getLatestCollection(date) {
+  return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
+}
+
 export function createClusterRun(reportDate, similarityThreshold = 0.40) {
   return request(`/cluster-runs`, {
     method: "POST",

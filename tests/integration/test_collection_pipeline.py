@@ -29,6 +29,7 @@ def _google_result(url, pub_date, **overrides):
         "pubDate": pub_date,
         "description": "전기화재 예방을 위한 캠페인이 실시됐다.",
         "provider": "Google 뉴스 RSS",
+        "sourceUrl": url,
     }
     item.update(overrides)
     return {"items": [item], "provider": "Google 뉴스 RSS"}
@@ -79,12 +80,26 @@ def test_collections_merges_providers_and_returns_success(monkeypatch):
     assert data["status"] == "success"
     assert data["rawCollectedCount"] == 2
     assert data["uniqueCount"] == 2
+    assert data["source_filter_stats"] == {
+        "raw_results": 2,
+        "official_sources": 0,
+        "trusted_media": 2,
+        "rejected_untrusted_media": 0,
+        "unknown_publisher": 0,
+    }
     assert "articles" not in data
 
     listed = _articles(report_date)
     urls = {article["url"] for article in listed["data"]["articles"]}
     assert yonhap_url in urls
     assert google_url in urls
+    google_article = next(a for a in listed["data"]["articles"] if a["url"] == google_url)
+    assert google_article["publisherId"] == "chosun"
+    assert google_article["publisherAllowed"] is True
+
+    latest = client.get("/api/collections/latest", params={"report_date": report_date})
+    assert latest.status_code == 200
+    assert latest.json()["data"]["source_filter_stats"] == data["source_filter_stats"]
 
 
 def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
@@ -193,8 +208,8 @@ def test_collections_falls_back_to_gdelt_when_rss_providers_fail(monkeypatch):
     gdelt_item = {
         "id": "raw-gdelt-1",
         "title": "한국전기안전공사 관련 GDELT 기사",
-        "source": "example.com",
-        "url": "https://example.com/gdelt/1",
+        "source": "조선일보",
+        "url": "https://www.chosun.com/gdelt/1",
         "pubDate": f"{report_date}T09:30:00Z",
         "description": "GDELT로 수집된 기사.",
         "provider": "GDELT",
@@ -211,7 +226,59 @@ def test_collections_falls_back_to_gdelt_when_rss_providers_fail(monkeypatch):
     assert any("RSS 보조 전환" in w for w in data["warnings"])
 
     listed = _articles(report_date)["data"]["articles"]
-    assert any(a["url"] == "https://example.com/gdelt/1" for a in listed)
+    assert any(a["url"] == "https://www.chosun.com/gdelt/1" for a in listed)
+
+
+def test_untrusted_and_google_without_source_url_are_rejected_with_stats(monkeypatch):
+    report_date = "2025-01-21"
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: {"items": [], "provider": "연합뉴스 RSS"},
+    )
+    items = [
+        _google_result(
+            "https://outside.example/article/1",
+            f"{report_date}T09:00:00Z",
+            title="한국전기안전공사 관련 허용목록 밖 기사",
+        )["items"][0],
+        _google_result(
+            "https://news.google.com/rss/articles/no-source",
+            f"{report_date}T08:00:00Z",
+            title="한국전기안전공사 관련 출처 미상 기사",
+            sourceUrl="",
+        )["items"][0],
+    ]
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: items)
+
+    data = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert data["uniqueCount"] == 0
+    assert data["source_filter_stats"]["rejected_untrusted_media"] == 2
+    assert data["source_filter_stats"]["unknown_publisher"] == 1
+    assert _articles(report_date)["data"]["articles"] == []
+
+
+def test_official_google_source_bypasses_media_allowlist(monkeypatch):
+    report_date = "2025-01-22"
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: {"items": [], "provider": "연합뉴스 RSS"},
+    )
+    official = _google_result(
+        "https://news.google.com/rss/articles/official",
+        f"{report_date}T09:00:00Z",
+        title="대통령실 전력망 안전 대책 발표",
+        source="대통령실",
+        sourceUrl="https://www.president.go.kr/newsroom/briefing",
+    )["items"][0]
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [official])
+
+    data = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert data["uniqueCount"] == 1
+    assert data["source_filter_stats"]["official_sources"] == 1
+    article = _articles(report_date)["data"]["articles"][0]
+    assert article["publisherId"] == "official:president.go.kr"
 
 
 def test_collections_rejects_request_without_any_source():

@@ -419,6 +419,8 @@ body_fetched_at
 body_error
 category_hint
 manual
+publisher_id
+publisher_allowed
 created_at
 updated_at
 ```
@@ -594,6 +596,7 @@ unique_count
 stale_reused_count
 warning_count
 error_count
+source_filter_stats_json
 ```
 
 ### 7.9 CollectionRunProvider
@@ -756,6 +759,7 @@ settings 테이블    화면에서 변경한 사용자 override
 - `classification_rules.yaml`: 위험어, 예방 문맥, 예외 문구, 점수
 - `editorial_policy.yaml`: 보고필수 기준, 최대 선정 건수, Top Issue 수
 - `briefing_style_guide.md`: AI 문체, 금지사항, 근거 표기 규칙
+- `trusted_media.yaml`: 일반 언론사 허용 도메인, 공식자료 예외, 승인된 중대사고 보조 언론
 
 ---
 
@@ -765,13 +769,13 @@ settings 테이블    화면에서 변경한 사용자 override
 1. Collect
 2. Parse
 3. Normalize
-4. Eligibility filter
-5. Exact deduplication
-6. Fuzzy duplicate detection
-7. Classification
-8. Issue clustering
-9. Persist
-10. Return summary to UI
+4. Official/trusted source filter
+5. Incident Sentinel and eligibility filter
+6. Exact deduplication
+7. Fuzzy duplicate detection
+8. Classification
+9. Issue clustering
+10. Persist and return summary to UI
 ```
 
 ### 10.1 Collect
@@ -792,6 +796,7 @@ class NewsProvider(Protocol):
 - 제목 뒤 매체명 제거
 - 추적 query string 제거
 - Google 뉴스 중계 URL과 원문 URL 구분
+- Google RSS `<source url>`을 원문 발행 도메인 판별값으로 보존
 - 매체명 표준화
 - UTC 시각 저장
 
@@ -803,6 +808,10 @@ class NewsProvider(Protocol):
 - 동일 원문으로 확정되는 매우 높은 유사도
 
 provider 응답은 먼저 `article_observations`에 기록한다. 완전 중복은 하나의 `articles` row로 연결하되 각 observation과 collection run 이력은 보존한다.
+
+일반 언론기사는 `trusted_media.yaml`의 도메인 허용목록을 먼저 통과해야 한다. 공식자료
+도메인은 별도 예외로 허용하고, 허용·제외·출처 미상 건수는 collection run에 JSON으로
+저장한다. Google 뉴스 RSS는 `news.google.com` 중계 URL을 판별에 사용하지 않는다.
 
 ### 10.4 Fuzzy duplicate detection
 
@@ -919,7 +928,8 @@ GET  /api/collections/latest?report_date=YYYY-MM-DD
 GET  /api/collections/{collection_run_id}
 ```
 
-반환에는 전체 status(`success|partial|failed`), provider별 성공·실패, stale 재사용 수, 중복 통계를 포함한다.
+반환에는 전체 status(`success|partial|failed`), provider별 성공·실패, stale 재사용 수,
+중복 통계와 `source_filter_stats`를 포함한다.
 
 ### 11.4 기사
 

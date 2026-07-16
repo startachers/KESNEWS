@@ -51,6 +51,7 @@ export async function runSearch(auto = false) {
     state.provider = result.provider || "";
     state.rawCollectedCount = result.rawCollectedCount || 0;
     state.duplicatesRemoved = result.duplicatesRemoved || 0;
+    state.sourceFilterStats = result.source_filter_stats || null;
     state.warnings = result.warnings || [];
 
     if (result.status !== "failed") {

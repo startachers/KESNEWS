@@ -17,10 +17,12 @@ def test_parse_rss_items_extracts_google_news_items():
     first = items[0]
     assert first["title"] == "한국전기안전공사, 전기화재 예방 캠페인 실시 - 연합뉴스"
     assert first["source"] == "연합뉴스"
+    assert first["sourceUrl"] == "https://www.yna.co.kr"
     assert first["provider"] == "Google 뉴스 RSS"
     assert first["pubDate"] == "2026-07-15T09:00:00Z"
     # source 태그가 없는 두 번째 아이템은 default_source로 채워지지 않고 빈 문자열이다(호출부에서 별도 추론).
     assert items[1]["source"] == ""
+    assert items[1]["sourceUrl"] == ""
 
 
 def test_parse_rss_items_uses_default_source_for_yonhap_feed():

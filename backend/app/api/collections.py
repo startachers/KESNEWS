@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -39,6 +40,11 @@ class CollectionRequest(BaseModel):
 
 
 def _serialize_run(row) -> dict[str, Any]:
+    source_filter_stats = (
+        json.loads(row["source_filter_stats_json"])
+        if row["source_filter_stats_json"]
+        else {}
+    )
     return {
         "id": row["id"],
         "reportDate": row["report_date"],
@@ -52,6 +58,7 @@ def _serialize_run(row) -> dict[str, Any]:
         "staleReusedCount": row["stale_reused_count"],
         "warningCount": row["warning_count"],
         "errorCount": row["error_count"],
+        "source_filter_stats": source_filter_stats,
     }
 
 

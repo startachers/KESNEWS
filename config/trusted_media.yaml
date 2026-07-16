@@ -1,0 +1,52 @@
+version: 1
+media_source_policy:
+  mode: allowlist_only
+  unknown_publisher_action: reject
+  use_original_link_domain: true
+
+trusted_media:
+  - { id: yonhap,      name: 연합뉴스,  domains: [yna.co.kr] }
+  - { id: news1,       name: 뉴스1,    domains: [news1.kr] }
+  - { id: newsis,      name: 뉴시스,   domains: [newsis.com] }
+  - { id: kbs,         name: KBS,      domains: [kbs.co.kr] }
+  - { id: mbc,         name: MBC,      domains: [imbc.com] }
+  - { id: sbs,         name: SBS,      domains: [sbs.co.kr] }
+  - { id: jtbc,        name: JTBC,     domains: [jtbc.co.kr] }
+  - { id: ytn,         name: YTN,      domains: [ytn.co.kr] }
+  - { id: hani,        name: 한겨레,   domains: [hani.co.kr] }
+  - { id: khan,        name: 경향신문, domains: [khan.co.kr] }
+  - { id: hankookilbo, name: 한국일보, domains: [hankookilbo.com] }
+  - { id: joongang,    name: 중앙일보, domains: [joongang.co.kr] }
+  - { id: donga,       name: 동아일보, domains: [donga.com] }
+  - { id: chosun,      name: 조선일보, domains: [chosun.com] }
+  - { id: seoul,       name: 서울신문, domains: [seoul.co.kr] }
+  - { id: kmib,        name: 국민일보, domains: [kmib.co.kr] }
+  - { id: segye,       name: 세계일보, domains: [segye.com] }
+  - { id: mk,          name: 매일경제, domains: [mk.co.kr] }
+  - { id: hankyung,    name: 한국경제, domains: [hankyung.com] }
+  - { id: etnews,      name: 전자신문, domains: [etnews.com] }
+
+# 중대사고 보조 언론은 { id, name, domains } 형식으로 담당자가 직접 추가한다.
+approved_incident_media: []
+
+official_source_exemptions:
+  - president.go.kr
+  - opm.go.kr
+  - me.go.kr
+  - moef.go.kr
+  - mofe.go.kr
+  - motie.go.kr
+  - motir.go.kr
+  - korea.kr
+  - assembly.go.kr
+  - likms.assembly.go.kr
+  - alio.go.kr
+  - law.go.kr
+  - kesco.or.kr
+
+incident_official_sources:
+  - nfa.go.kr
+  - police.go.kr
+  - mois.go.kr
+  - kepco.co.kr
+  - kpx.or.kr

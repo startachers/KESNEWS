@@ -32,6 +32,7 @@ EXPECTED_MIGRATIONS = [
     "0006_article_top_issue_tag.sql",
     "0007_manual_issue_group.sql",
     "0008_query_groups_17.sql",
+    "0009_trusted_media.sql",
 ]
 
 
@@ -149,7 +150,7 @@ def test_manual_issue_group_migration_marks_manual_groups(tmp_path):
         connection.close()
 
 
-def test_query_groups_migration_adds_only_incident_assessment_column(tmp_path):
+def test_query_groups_and_trusted_media_migrations_keep_columns_separate(tmp_path):
     connection = get_connection(tmp_path / "incident.db")
     try:
         apply_migrations(connection)
@@ -158,8 +159,9 @@ def test_query_groups_migration_adds_only_incident_assessment_column(tmp_path):
         }
         article_columns = {row[1] for row in connection.execute("PRAGMA table_info(articles)")}
         assert "incident_json" in assessment_columns
-        assert "publisher_id" not in article_columns
-        assert "publisher_allowed" not in article_columns
+        run_columns = {row[1] for row in connection.execute("PRAGMA table_info(collection_runs)")}
+        assert {"publisher_id", "publisher_allowed"}.issubset(article_columns)
+        assert "source_filter_stats_json" in run_columns
     finally:
         connection.close()
 
@@ -212,6 +214,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0006_article_top_issue_tag.sql",
         "0007_manual_issue_group.sql",
         "0008_query_groups_17.sql",
+        "0009_trusted_media.sql",
     ]
     upgraded = get_connection(db_path)
     try:

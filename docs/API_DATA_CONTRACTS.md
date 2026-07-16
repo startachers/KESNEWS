@@ -231,6 +231,7 @@ unique_count
 stale_reused_count
 warning_count
 error_count
+source_filter_stats_json
 ```
 
 #### collection_run_providers
@@ -310,6 +311,15 @@ POST /api/collections
 - `report_date` 생략 시 `Asia/Seoul` 기준 오늘 날짜를 사용한다.
 - `collection_runs.report_date`는 실행 시각이 아니라 **요청의 `report_date`**에 귀속한다. 자정 전후 실행이 어제·오늘 어느 보고일에 속하는지 서버가 추측하지 않는다.
 - `lookback_hours` 생략 시 `config/sources.yaml`의 `collection.default_lookback_hours`를 사용한다.
+
+### 3.6 신뢰 출처 필터와 통계
+
+- 일반 언론기사는 `config/trusted_media.yaml`의 원문 도메인 허용목록을 통과해야 저장한다.
+- 정부·국회·공공기관 공식 도메인은 일반 언론사 허용목록과 별도로 허용한다.
+- Google 뉴스 RSS는 중계 기사 URL이 아니라 `<source url>` 도메인으로 판별하며, 값이 없으면 `unknown_publisher`로 제외한다.
+- 판별 결과는 `articles.publisher_id`, `articles.publisher_allowed`에 저장한다. 수동 추가 기사는 출처 필터 대상이 아니므로 두 값이 `null`일 수 있다.
+- 실행별 `source_filter_stats_json`은 `raw_results`, `official_sources`, `trusted_media`, `rejected_untrusted_media`, `unknown_publisher`를 보존한다. `unknown_publisher`는 제외 건수의 부분집합이다.
+- `POST /api/collections`, 최신 실행 조회, 실행 ID 조회는 같은 통계를 `source_filter_stats`로 반환한다.
 
 ---
 

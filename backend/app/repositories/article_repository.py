@@ -88,6 +88,8 @@ def create_article(
     description: str | None,
     category_hint: str | None,
     manual: bool,
+    publisher_id: str | None = None,
+    publisher_allowed: bool | None = None,
 ) -> str:
     article_id = make_id()
     now = now_iso()
@@ -98,8 +100,8 @@ def create_article(
         INSERT INTO articles (
             id, content_key, canonical_url, title, normalized_title, source, source_domain,
             published_at, first_observed_at, last_observed_at, description, body_status,
-            category_hint, manual, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            category_hint, manual, created_at, updated_at, publisher_id, publisher_allowed
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article_id,
@@ -118,6 +120,8 @@ def create_article(
             1 if manual else 0,
             now,
             now,
+            publisher_id,
+            None if publisher_allowed is None else int(publisher_allowed),
         ),
     )
     return article_id
@@ -129,17 +133,28 @@ def touch_article(
     *,
     description: str | None = None,
     canonical_url: str | None = None,
+    publisher_id: str | None = None,
+    publisher_allowed: bool | None = None,
 ) -> None:
     now = now_iso()
+    publisher_value = None if publisher_allowed is None else int(publisher_allowed)
     if description is not None:
         connection.execute(
-            "UPDATE articles SET last_observed_at = ?, description = ?, updated_at = ? WHERE id = ?",
-            (now, description, now, article_id),
+            """UPDATE articles
+               SET last_observed_at = ?, description = ?, updated_at = ?,
+                   publisher_id = COALESCE(?, publisher_id),
+                   publisher_allowed = COALESCE(?, publisher_allowed)
+               WHERE id = ?""",
+            (now, description, now, publisher_id, publisher_value, article_id),
         )
     else:
         connection.execute(
-            "UPDATE articles SET last_observed_at = ?, updated_at = ? WHERE id = ?",
-            (now, now, article_id),
+            """UPDATE articles
+               SET last_observed_at = ?, updated_at = ?,
+                   publisher_id = COALESCE(?, publisher_id),
+                   publisher_allowed = COALESCE(?, publisher_allowed)
+               WHERE id = ?""",
+            (now, now, publisher_id, publisher_value, article_id),
         )
 
 
@@ -381,6 +396,8 @@ SELECT
     a.body_error AS body_error,
     a.category_hint AS category_hint,
     a.manual AS manual,
+    a.publisher_id AS publisher_id,
+    a.publisher_allowed AS publisher_allowed,
     lo.raw_url AS url,
     lo.provider AS provider,
     aa.auto_risk AS auto_risk,
@@ -447,6 +464,12 @@ def list_candidates(
                 "bodyError": row["body_error"] or "",
                 "category": effective_category,
                 "manual": bool(row["manual"]),
+                "publisherId": row["publisher_id"],
+                "publisherAllowed": (
+                    bool(row["publisher_allowed"])
+                    if row["publisher_allowed"] is not None
+                    else None
+                ),
                 "risk": {"required": "critical", "review": "watch", "reference": "routine"}.get(effective_priority, row["auto_risk"]),
                 "riskScore": row["auto_severity_score"] if row["auto_severity_score"] is not None else row["auto_risk_score"],
                 "sentiment": effective_tone,

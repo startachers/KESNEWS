@@ -56,7 +56,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0 };
+  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0, sourceFilterStats: null };
 }
 
 export function loadSettings() {
@@ -96,9 +96,13 @@ export async function loadDailyState(date) {
       if (error.code === "BRIEFING_NOT_FOUND") briefing = (await api.putBriefing(date, 0, {})).data;
       else throw error;
     }
-    const [articlesResult, issuesResult] = await Promise.all([
+    const [articlesResult, issuesResult, latestCollectionResult] = await Promise.all([
       api.listArticles(date, false),
       api.listIssues(date),
+      api.getLatestCollection(date).catch(error => {
+        if (error.code === "COLLECTION_FAILED") return null;
+        throw error;
+      }),
     ]);
     const articles = articlesResult.data.articles.map(a => ({ ...a, isDemo: false }));
     const successfulRun = briefing.aiState?.lastSuccessfulRun;
@@ -136,7 +140,13 @@ export async function loadDailyState(date) {
       aiAnalysis: analysis,
       aiRunId: latestRun?.id || "",
       aiRunStatus: latestRun?.status || "idle",
-      actionNote: briefing.actionNote || ""
+      actionNote: briefing.actionNote || "",
+      fetchedAt: latestCollectionResult?.data?.finishedAt || "",
+      lastAttemptAt: latestCollectionResult?.data?.startedAt || "",
+      lastRunStatus: latestCollectionResult?.data?.status === "failed" ? "error" : latestCollectionResult ? "success" : "idle",
+      provider: latestCollectionResult?.data?.providers?.map(item => item.provider).filter(Boolean).join(" + ") || "",
+      rawCollectedCount: latestCollectionResult?.data?.rawCount || 0,
+      sourceFilterStats: latestCollectionResult?.data?.source_filter_stats || null
     };
   } catch (error) {
     showToast(`${date} 저장본을 불러오지 못했습니다: ${friendlyError(error)}`, "error");

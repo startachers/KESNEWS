@@ -26,6 +26,7 @@ from backend.app.services.collection.rss_parser import RssParseError
 from backend.app.services.collection.yonhap import fetch_yonhap_rss
 from backend.app.services.deduplication.service import deduplicate_detailed
 from backend.app.services.extraction.cleaner import clean_text
+from backend.app.services.media import identify_trusted_publisher, load_trusted_media_config
 from backend.app.services.normalization.dates import date_value, since_bound_iso
 from backend.app.services.normalization.url import canonical_article_url
 
@@ -147,9 +148,20 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
         article_id = match["id"]
         new_description = item.get("description") or ""
         if len(new_description) > len(match["description"] or ""):
-            article_repo.touch_article(connection, article_id, description=new_description)
+            article_repo.touch_article(
+                connection,
+                article_id,
+                description=new_description,
+                publisher_id=item.get("publisherId"),
+                publisher_allowed=item.get("publisherAllowed"),
+            )
         else:
-            article_repo.touch_article(connection, article_id)
+            article_repo.touch_article(
+                connection,
+                article_id,
+                publisher_id=item.get("publisherId"),
+                publisher_allowed=item.get("publisherAllowed"),
+            )
         canonical = canonical_article_url(item.get("url"))
         dedup_method = "canonical_url" if canonical and canonical == match["canonical_url"] else "fuzzy_same_copy"
         return article_id, dedup_method, True
@@ -163,8 +175,43 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
         description=item.get("description"),
         category_hint=item.get("category"),
         manual=False,
+        publisher_id=item.get("publisherId"),
+        publisher_allowed=item.get("publisherAllowed"),
     )
     return article_id, "new", False
+
+
+def filter_trusted_sources(items: list[Article]) -> tuple[list[Article], dict[str, int]]:
+    config = load_trusted_media_config()
+    stats = {
+        "raw_results": len(items),
+        "official_sources": 0,
+        "trusted_media": 0,
+        "rejected_untrusted_media": 0,
+        "unknown_publisher": 0,
+    }
+    accepted: list[Article] = []
+    for article in items:
+        incident = detect_incident_sentinel(article)
+        decision = identify_trusted_publisher(
+            article, config=config, incident_matched=bool(incident["matched"])
+        )
+        if not decision.allowed:
+            stats["rejected_untrusted_media"] += 1
+            if decision.reason == "unknown_publisher":
+                stats["unknown_publisher"] += 1
+            continue
+        stats["official_sources" if decision.reason == "official_source" else "trusted_media"] += 1
+        accepted.append(
+            {
+                **article,
+                "publisherId": decision.publisher_id,
+                "publisherAllowed": True,
+                "_publisher_hostname": decision.hostname,
+                "_sentinel": incident,
+            }
+        )
+    return accepted, stats
 
 
 def apply_collection_limit(items: list[Article], collection_limit: int) -> list[Article]:
@@ -288,9 +335,10 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
+    source_filtered, source_filter_stats = filter_trusted_sources(collected)
     sentinel_checked = [
         {**article, "_sentinel": article.get("_sentinel") or detect_incident_sentinel(article)}
-        for article in collected
+        for article in source_filtered
     ]
     relevant = [
         article
@@ -332,6 +380,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     stale_reused_count=len(run_repo.unrefreshed_candidate_ids(connection, report_date, run_id)),
                     warning_count=len(warnings),
                     error_count=len(failures),
+                    source_filter_stats=source_filter_stats,
                 )
                 return {
                     "status": "failed",
@@ -343,6 +392,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     "errors": failures or ["데이터 제공 경로에서 응답을 받지 못했습니다."],
                     "warnings": warnings,
                     "collectionRunId": run_id,
+                    "source_filter_stats": source_filter_stats,
                 }
 
             new_count = 0
@@ -389,6 +439,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                 stale_reused_count=stale_reused_count,
                 warning_count=len(warnings),
                 error_count=len(failures),
+                source_filter_stats=source_filter_stats,
             )
     finally:
         connection.close()
@@ -405,4 +456,5 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         "errors": [],
         "warnings": [*warnings, *(f"일부 검색 실패: {f}" for f in failures)],
         "collectionRunId": run_id,
+        "source_filter_stats": source_filter_stats,
     }

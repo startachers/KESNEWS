@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from backend.app.repositories.article_repository import list_candidate_article_ids
@@ -39,15 +40,28 @@ def finish_run(
     stale_reused_count: int,
     warning_count: int,
     error_count: int,
+    source_filter_stats: dict[str, int] | None = None,
 ) -> None:
     connection.execute(
         """
         UPDATE collection_runs
         SET status = ?, finished_at = ?, raw_count = ?, accepted_count = ?, unique_count = ?,
-            stale_reused_count = ?, warning_count = ?, error_count = ?
+            stale_reused_count = ?, warning_count = ?, error_count = ?,
+            source_filter_stats_json = ?
         WHERE id = ?
         """,
-        (status, finished_at, raw_count, accepted_count, unique_count, stale_reused_count, warning_count, error_count, run_id),
+        (
+            status,
+            finished_at,
+            raw_count,
+            accepted_count,
+            unique_count,
+            stale_reused_count,
+            warning_count,
+            error_count,
+            json.dumps(source_filter_stats or {}, ensure_ascii=False),
+            run_id,
+        ),
     )
 
 

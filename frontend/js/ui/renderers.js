@@ -77,7 +77,11 @@ export function renderSidePanel() {
   } else if (state.fetchedAt) {
     if (state.warnings?.length) els.sourceStateBox.classList.add("warning");
     els.sourceStateTitle.textContent = `${formatTime(state.fetchedAt)} 수집 완료`;
-    els.sourceStateDetail.textContent = `${providerLabel} · 원본 ${state.rawCollectedCount || state.articles.length}건 → 중복 ${state.duplicatesRemoved || 0}건 제거 → 최종 ${state.articles.length}건`;
+    const stats = state.sourceFilterStats;
+    const sourceSummary = stats
+      ? ` · 출처 허용 ${Number(stats.official_sources || 0) + Number(stats.trusted_media || 0)}건 / 제외 ${Number(stats.rejected_untrusted_media || 0)}건`
+      : "";
+    els.sourceStateDetail.textContent = `${providerLabel} · 원본 ${state.rawCollectedCount || state.articles.length}건${sourceSummary} → 중복 ${state.duplicatesRemoved || 0}건 제거 → 최종 ${state.articles.length}건`;
   } else {
     els.sourceStateTitle.textContent = "검색 대기";
     els.sourceStateDetail.textContent = providerLabel;

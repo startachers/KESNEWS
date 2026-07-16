@@ -67,15 +67,15 @@ Phase 4에서 SQLite migration(`backend/app/db/`), 작업본·기사 API(`briefi
 
 ## 기사 수집 설계 변경 후속 항목
 
-`new_rules_news_clip.md` §18의 단계 1(17개 검색군 교체)은 2026-07-16에 완료했다.
-아래 항목은 단계 1의 회귀가 아니라, 문서에서 분리 구현하도록 정한 후속 단계의 현재 위험이다.
+`new_rules_news_clip.md` §18의 단계 1~3은 2026-07-16에 완료했다.
+아래 항목은 각 단계의 회귀가 아니라, 문서에서 분리 구현하도록 정한 후속 단계의 현재 위험이다.
 
 | ID | 후속 필요 사항 | 현재 영향·근거 | 처리 단계 |
 |---|---|---|---|
 | NC-001 | 중대화재·정전 Sentinel과 `incident_json`이 없었다 | 수치가 없거나 원인이 확인되지 않은 중대 사고 속보가 관련도 필터에서 탈락하고, 사고 정보가 저장·표시·내보내기에 남지 않았다. | **단계 2에서 해소.** Sentinel을 관련도보다 먼저 판정하고 migration `0008`의 `incident_json`, 사고 배지, JSON schemaVersion 6·CSV 왕복을 구현했다. `tests/unit/test_incident_sentinel.py`, `tests/integration/test_exports.py` |
 | NC-002 | `collectionLimit` 절단이 Sentinel·rank 1을 보호하지 않고 기본값도 200이었다 | 검색군 결과가 많으면 반드시 보존해야 할 기사가 단순 상한 절단에서 잘릴 수 있었다. | **단계 2에서 해소.** 보호 대상을 먼저 보존하고 나머지를 관련도순으로 채우며 API·프런트·자동수집 기본값을 400으로 맞췄다. `tests/unit/test_incident_sentinel.py::test_collection_limit_keeps_sentinel_and_rank_one_before_other_articles` |
-| NC-003 | 신뢰 언론사 허용목록·공식자료 예외·Google `<source url>` 판별이 아직 없다 | 현재 단계 1은 검색 범위만 넓혔으므로 허용목록 밖 매체도 기존과 같이 저장되고, 출처별 허용·제외 통계가 없다. | 단계 3에서 별도 구현. 단계 2에는 `publisher_id`·`publisher_allowed` 컬럼을 미리 추가하지 않는다. |
+| NC-003 | 신뢰 언론사 허용목록·공식자료 예외·Google `<source url>` 판별이 없었다 | 허용목록 밖 매체 저장과 출처 통계 부재 위험이 있었다. | **단계 3에서 해소.** migration `0009`와 `config/trusted_media.yaml`, 도메인 판별, Google source URL 추출, 공식자료 예외, 실행별 `source_filter_stats` 저장·API·화면 표시를 구현했다. `tests/unit/test_media.py`, `tests/integration/test_collection_pipeline.py` |
 | NC-004 | 네이버 뉴스 API provider는 아직 없다 | `.env.example`에는 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 자리만 문서화됐으며 실행 코드, query 변환, 장애 fallback은 없다. | 단계 4에서 별도 구현. 자격정보는 프런트·내보내기·오류에 노출하지 않는다. |
 
-P4-001의 검색 설정 이중 원본(localStorage와 `config/automated_collection.json`)은 단계 1 이후에도
-유지된다. `/api/settings` 일원화는 위 2~4단계와 섞지 않고 별도 작업으로 남긴다.
+P4-001의 검색 설정 이중 원본(localStorage와 `config/automated_collection.json`)은 단계 3 이후에도
+유지된다. `/api/settings` 일원화는 단계 4와도 섞지 않고 별도 작업으로 남긴다.

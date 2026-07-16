@@ -27,13 +27,16 @@ def parse_rss_items(text: str, provider: str, default_source: str = "") -> list[
 
     result: list[dict[str, Any]] = []
     for item in root.findall(".//item"):
-        source = clean_text(_text(item, "source"))
+        source_element = item.find("source")
+        source = clean_text(source_element.text if source_element is not None else "")
+        source_url = clean_text(source_element.get("url", "") if source_element is not None else "")
         date_text = item.findtext("pubDate") or item.findtext(_DC_DATE)
         result.append(
             {
                 "id": make_id(),
                 "title": clean_text(_text(item, "title")) or "제목 없음",
                 "source": source or default_source,
+                "sourceUrl": source_url,
                 "url": clean_text(_text(item, "link")),
                 "pubDate": parse_date(date_text),
                 "description": clean_text(_text(item, "description")),
