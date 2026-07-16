@@ -3,6 +3,8 @@
   "maxRecordsPerQuery": 50,
   "collectionLimit": 400,
   "enableYonhap": true,
+  "enableOpmPress": true,
+  "enableMePress": true,
   "queries": [
     {"id": "kesco_direct", "label": "공사 직접 보도", "query": "(\"한국전기안전공사\" OR \"전기안전공사\" OR \"KESCO\")"},
     {"id": "kesco_reputation", "label": "공사 위기·평판", "query": "(\"한국전기안전공사\" OR \"전기안전공사\" OR \"KESCO\") (사망 OR 사고 OR 화재 OR 감전 OR 정전 OR 중대재해 OR 부실점검 OR 허위점검 OR 위반 OR 논란 OR 수사 OR 고발 OR 압수수색 OR 징계 OR 비위 OR 해킹 OR \"정보 유출\" OR 민원)"},

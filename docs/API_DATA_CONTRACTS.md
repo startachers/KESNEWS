@@ -320,6 +320,7 @@ POST /api/collections
 
 - 일반 언론기사는 `config/trusted_media.yaml`의 원문 도메인 허용목록을 통과해야 저장한다.
 - 정부·국회·공공기관 공식 도메인은 일반 언론사 허용목록과 별도로 허용한다.
+- 국무조정실·기후에너지환경부 직접 수집과 정책브리핑 API 자료는 공식 도메인 검증을 통과하면 일반 관련도 탈락 규칙을 적용하지 않는다. 단, 보고일 기간 범위와 전체 제외 규칙은 그대로 적용한다.
 - Google 뉴스 RSS는 중계 기사 URL이 아니라 `<source url>` 도메인으로 판별하며, 값이 없으면 `unknown_publisher`로 제외한다.
 - 판별 결과는 `articles.publisher_id`, `articles.publisher_allowed`에 저장한다. 수동 추가 기사는 출처 필터 대상이 아니므로 두 값이 `null`일 수 있다.
 - 실행별 `source_filter_stats_json`은 `raw_results`, `official_sources`, `trusted_media`, `rejected_untrusted_media`, `unknown_publisher`를 보존한다. `unknown_publisher`는 제외 건수의 부분집합이다.
@@ -391,6 +392,7 @@ reference  45 미만
 - 공사 직접 거론 + 사망·중상·중대화재·대규모 정전·수사·압수수색: 최소 `required`
 - 공사 직접 거론 + 감사원 감사·국정감사·고발·중대한 법 위반: 최소 `review`; 심각도 70 이상이면 `required`
 - 전기안전 관련 사망·다수 인명피해가 있으나 공사 직접 거론이 없음: 최소 `review`
+- 공식 도메인 검증을 통과한 정부부처 직접 수집 자료: 최소 `review` (관련도만으로 `required` 금지)
 - `prevention`, `achievement`, `community`만 있는 기사는 자동 `required` 금지, 최대 `review`
 - `low relevance`는 자동 최대 `reference`; 단, 전기안전 분야 중대사고 hard floor가 있으면 `review`
 - 담당자 `final_priority`는 모든 자동 floor·cap보다 우선한다.

@@ -7,6 +7,8 @@ export const DEFAULT_SETTINGS = {
   settingsVersion: 3,
   autoRun: true,
   enableYonhap: true,
+  enableOpmPress: true,
+  enableMePress: true,
   lookback: 48,
   maxRecords: 50,
   collectionLimit: 400,

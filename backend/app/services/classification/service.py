@@ -248,6 +248,12 @@ def assess_article(article: Article) -> dict[str, Any]:
         capped = _lower_priority(priority, "reference")
         priority = capped
 
+    # 직접 수집해 공식 도메인 검증까지 마친 정부부처 자료는 내용 키워드가 약해도
+    # 담당자가 반드시 한 번 검토한다. 관련도만으로 required를 만들지는 않는다.
+    if article.get("_official_government") is True:
+        priority = _raise_priority(priority, "review")
+        floors.append("official_government_source")
+
     _, text = article_text(article)
     serious_direct = relevance["directMention"] and severity_score >= 70
     audit_direct = relevance["directMention"] and bool(matched_terms(text, MANAGEMENT_RISK_PHRASES))

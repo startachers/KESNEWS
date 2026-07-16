@@ -31,6 +31,8 @@ class CollectionRequest(BaseModel):
     maxRecordsPerQuery: int = 50
     collectionLimit: int = 400
     enableYonhap: bool = True
+    enableOpmPress: bool = True
+    enableMePress: bool = True
     queries: list[CollectionQuery] = Field(default_factory=list)
     coreKeywords: list[str] = Field(default_factory=list)
     riskKeywords: list[str] = Field(default_factory=list)
@@ -83,7 +85,9 @@ def _serialize_provider(row) -> dict[str, Any]:
 @router.post("/api/collections")
 async def create_collection(request: CollectionRequest) -> dict[str, Any]:
     enabled_queries = [q for q in request.queries if q.query.strip()]
-    if not enabled_queries and not request.enableYonhap:
+    if not enabled_queries and not (
+        request.enableYonhap or request.enableOpmPress or request.enableMePress
+    ):
         return error_response(
             "COLLECTION_NO_SOURCE", "활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요."
         )
@@ -94,6 +98,8 @@ async def create_collection(request: CollectionRequest) -> dict[str, Any]:
         "maxRecordsPerQuery": request.maxRecordsPerQuery,
         "collectionLimit": request.collectionLimit,
         "enableYonhap": request.enableYonhap,
+        "enableOpmPress": request.enableOpmPress,
+        "enableMePress": request.enableMePress,
         "queries": [q.model_dump() for q in enabled_queries],
         "coreKeywords": request.coreKeywords,
         "riskKeywords": request.riskKeywords,

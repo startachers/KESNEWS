@@ -21,6 +21,36 @@
   기존 기사는 계속 보존한다.
 - 회귀 기록: `docs/regression/NEWS_COLLECTION_STAGE3_2026-07-16.md`
 
+## 별도 추가 작업: 정부부처 직접 수집 (2026-07-16)
+
+`new_rules_news_clip.md` 분할 단계와는 별도로, 검색식(Google RSS)만으로는 놓치는 정부부처
+원문을 보완하기 위해 기관 직접 수집을 추가했다. 아래 단계 4(네이버 API)보다 먼저 구현했으며
+단계 4 순서를 대체하지 않는다.
+
+- `find_matching_article`이 canonical URL보다 `(provider, source_id)` 완전일치를 먼저
+  확인한다. `articles.article_observations`의 `provider_item_key` 색인을 migration
+  `0010`으로 추가했다.
+- `opm_press.py`(국무조정실 보도자료, `articleNo` 기준)와 `me_press.py`(기후에너지환경부
+  보도자료, `boardId` 기준)가 실제 목록 페이지 HTML을 정규식으로 파싱한다.
+  `automated_collection.json`의 `enableOpmPress`/`enableMePress`와 프런트 설정
+  화면의 동명 체크박스(기본 켬)로 켠다. `queries`/`coreKeywords` 등과 같은 요청 바디
+  경로이므로 프런트에서 수동으로 "기사검색"을 눌러도 함께 호출된다.
+- `policy_briefing.py`(정책브리핑 보도자료 OpenAPI, data.go.kr 서비스ID 1371000)는
+  엔드포인트만 확인했고 서비스키 발급 전이라 응답 필드명이 미확인 상태다. 방어적으로 여러
+  후보 필드명을 시도한다. 서비스키는 NC-004(네이버 자격정보)와 같은 원칙으로 요청
+  바디·프런트에 두지 않고 서버 환경변수 `POLICY_BRIEFING_SERVICE_KEY`로만 읽으며, 비어
+  있으면 이 provider 자체를 수집에 추가하지 않는다. 실제 키를 발급받으면
+  `backend/app/services/collection/policy_briefing.py`의
+  `_TITLE_KEYS`/`_BODY_KEYS`/`_DEPT_KEYS`/`_DATE_KEYS`/`_URL_KEYS`/`_ID_KEYS` 후보를
+  실제 응답과 대조해 확정해야 한다.
+- 대통령실(`president.go.kr`)은 WAF가 브라우저가 아닌 요청을 전부 에러 페이지로
+  돌려보내 직접 크롤링을 확인하지 못했다. 헤드리스 브라우저 없이는 어렵다고 보고, 당분간
+  정책브리핑 API·Google RSS·기존 `official_source_exemptions`에 의존한다.
+- 공식 도메인 검증을 통과한 위 정부부처 직접 수집 자료는 일반 관련도 탈락 규칙에서
+  제외하고 최소 `review`로 보존한다. 보고일 기간 범위와 전체 제외 규칙은 유지한다.
+- 검증: `.venv/bin/python -m pytest -q`(172 passed), `.venv/bin/ruff check .`,
+  `tests/unit/test_gov_adapters.py`(실제 페이지 HTML 구조로 만든 fixture 기반).
+
 ## 다음 범위
 
 다음 작업을 시작할 때는 별도 지시를 따른다. `new_rules_news_clip.md`가 정한 다음

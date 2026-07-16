@@ -41,6 +41,23 @@ def find_recent_candidates(
     ).fetchall()
 
 
+def find_by_provider_item_key(
+    connection: sqlite3.Connection, provider: str, provider_item_key: str
+) -> sqlite3.Row | None:
+    """기관 어댑터가 부여한 게시물 고유번호로 기존 기사를 찾는다. URL이 개편·수정으로 바뀌어도 동일 게시물로 병합하기 위함."""
+    row = connection.execute(
+        """
+        SELECT a.* FROM articles a
+        JOIN article_observations ao ON ao.article_id = a.id
+        WHERE ao.provider = ? AND ao.provider_item_key = ?
+        ORDER BY ao.observed_at DESC
+        LIMIT 1
+        """,
+        (provider, provider_item_key),
+    ).fetchone()
+    return row
+
+
 def find_matching_article(
     connection: sqlite3.Connection,
     *,
@@ -48,8 +65,16 @@ def find_matching_article(
     title: str,
     published_at: str | None,
     since_iso: str,
+    provider: str | None = None,
+    provider_item_key: str | None = None,
 ) -> sqlite3.Row | None:
-    """canonical URL 정확매칭 우선, 없으면 최근 후보 중 제목 fuzzy 매칭(services.deduplication.service.same_article와 동일 규칙)."""
+    """(provider, source_id) 완전일치 우선, 다음 canonical URL, 없으면 최근 후보 중 제목 fuzzy 매칭
+    (services.deduplication.service.same_article와 동일 규칙)."""
+    if provider and provider_item_key:
+        row = find_by_provider_item_key(connection, provider, provider_item_key)
+        if row is not None:
+            return row
+
     canonical = canonical_article_url(url)
     if canonical:
         row = connection.execute(

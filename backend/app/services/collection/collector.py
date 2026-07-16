@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,9 @@ from backend.app.services.collection.custom_endpoint import fetch_custom_endpoin
 from backend.app.services.collection.gdelt import fetch_gdelt_combined
 from backend.app.services.collection.google_news import fetch_google_rss
 from backend.app.services.collection.http import CollectionHttpError
+from backend.app.services.collection.me_press import fetch_me_press
+from backend.app.services.collection.opm_press import fetch_opm_press
+from backend.app.services.collection.policy_briefing import fetch_policy_briefing
 from backend.app.services.collection.rss_parser import RssParseError
 from backend.app.services.collection.yonhap import fetch_yonhap_rss
 from backend.app.services.deduplication.service import deduplicate_detailed
@@ -33,6 +37,11 @@ from backend.app.services.normalization.url import canonical_article_url
 Article = dict[str, Any]
 PEOPLE_CONFIG_PATH = Path(__file__).resolve().parents[4] / "config" / "people.yaml"
 _PEOPLE_KEYS = ("president", "prime_minister", "climate_minister")
+GOVERNMENT_DIRECT_PROVIDERS = {
+    "국무조정실 보도자료",
+    "기후에너지환경부 보도자료",
+    "정책브리핑 API",
+}
 
 
 def _load_people(path: Path | None = None) -> dict[str, str]:
@@ -141,8 +150,16 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
     """content_key/제목 fuzzy 매칭으로 기존 기사와 병합하거나 새 기사를 만든다. (article_id, dedup_method, matched) 반환."""
     pub_date = item.get("pubDate")
     since = since_bound_iso(pub_date, 96)
+    # insert_observation과 동일한 provider 식별 규칙을 써야 source_id 매칭이 어긋나지 않는다.
+    provider_label = item.get("provider") or item.get("_task_label") or "unknown"
     match = article_repo.find_matching_article(
-        connection, url=item.get("url"), title=item.get("title"), published_at=pub_date, since_iso=since
+        connection,
+        url=item.get("url"),
+        title=item.get("title"),
+        published_at=pub_date,
+        since_iso=since,
+        provider=provider_label,
+        provider_item_key=item.get("sourceId"),
     )
     if match is not None:
         article_id = match["id"]
@@ -207,6 +224,8 @@ def filter_trusted_sources(items: list[Article]) -> tuple[list[Article], dict[st
                 **article,
                 "publisherId": decision.publisher_id,
                 "publisherAllowed": True,
+                "_official_government": article.get("provider")
+                in GOVERNMENT_DIRECT_PROVIDERS,
                 "_publisher_hostname": decision.hostname,
                 "_sentinel": incident,
             }
@@ -221,6 +240,7 @@ def apply_collection_limit(items: list[Article], collection_limit: int) -> list[
         for item in items
         if item["_sentinel"]["matched"]
         or item["assessment"]["autoReasons"]["relevanceRank"] == 1
+        or item.get("_official_government") is True
     ]
     protected_ids = {id(item) for item in protected}
     remaining = [item for item in items if id(item) not in protected_ids]
@@ -233,6 +253,12 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     max_records = int(payload.get("maxRecordsPerQuery") or 50)
     collection_limit = int(payload.get("collectionLimit") or 400)
     enable_yonhap = payload.get("enableYonhap") is not False
+    # 구버전 프런트가 새 필드를 보내지 않아도 직접 수집은 기본 활성화한다.
+    # 명시적으로 false를 보낸 경우에만 끈다.
+    enable_opm_press = payload.get("enableOpmPress") is not False
+    enable_me_press = payload.get("enableMePress") is not False
+    # 자격정보는 프런트·요청 바디에 노출하지 않는다(NC-004와 동일 원칙). 서버 환경변수로만 읽는다.
+    policy_briefing_service_key = os.environ.get("POLICY_BRIEFING_SERVICE_KEY", "").strip()
     queries = replace_people_tokens(
         [q for q in (payload.get("queries") or []) if str(q.get("query") or "").strip()]
     )
@@ -252,6 +278,17 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     if enable_yonhap:
         tasks.append(("연합뉴스", "auto"))
         coros.append(asyncio.to_thread(fetch_yonhap_rss, within_lookback, collection_limit))
+    if enable_opm_press:
+        tasks.append(("국무조정실 보도자료", "auto"))
+        coros.append(asyncio.to_thread(fetch_opm_press, max_records))
+    if enable_me_press:
+        tasks.append(("기후에너지환경부 보도자료", "auto"))
+        coros.append(asyncio.to_thread(fetch_me_press, max_records))
+    if policy_briefing_service_key:
+        tasks.append(("정책브리핑 API", "auto"))
+        coros.append(
+            asyncio.to_thread(fetch_policy_briefing, policy_briefing_service_key, "", max_records)
+        )
     for query in queries:
         tasks.append((str(query.get("label") or query.get("id") or "검색식"), str(query.get("id") or "direct")))
         coros.append(asyncio.to_thread(fetch_query, query, endpoint, lookback_hours, max_records))
@@ -343,7 +380,9 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     relevant = [
         article
         for article in sentinel_checked
-        if article["_sentinel"]["matched"] or get_relevance(article)["rank"] < 99
+        if article.get("_official_government") is True
+        or article["_sentinel"]["matched"]
+        or get_relevance(article)["rank"] < 99
     ]
     eligible = [
         article
@@ -408,7 +447,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                     article_id=article_id,
                     collection_run_provider_id=provider_id_by_label.get(item.get("_task_label")),
                     provider=item.get("provider") or item.get("_task_label") or "unknown",
-                    provider_item_key=None,
+                    provider_item_key=item.get("sourceId"),
                     query_group_id=item.get("_query_group_id"),
                     raw_url=item.get("url"),
                     raw_title=item.get("title"),

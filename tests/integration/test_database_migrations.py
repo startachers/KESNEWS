@@ -33,6 +33,7 @@ EXPECTED_MIGRATIONS = [
     "0007_manual_issue_group.sql",
     "0008_query_groups_17.sql",
     "0009_trusted_media.sql",
+    "0010_provider_item_key_index.sql",
 ]
 
 
@@ -215,6 +216,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0007_manual_issue_group.sql",
         "0008_query_groups_17.sql",
         "0009_trusted_media.sql",
+        "0010_provider_item_key_index.sql",
     ]
     upgraded = get_connection(db_path)
     try:

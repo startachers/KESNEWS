@@ -43,6 +43,8 @@ def _base_payload(**overrides):
         "maxRecordsPerQuery": 50,
         "collectionLimit": 200,
         "enableYonhap": True,
+        "enableOpmPress": False,
+        "enableMePress": False,
         "queries": [{"id": "direct", "label": "기관 직접", "query": "(\"한국전기안전공사\")"}],
         "coreKeywords": ["한국전기안전공사"],
         "riskKeywords": ["국정감사", "화재"],
@@ -120,6 +122,97 @@ def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
     listed = _articles(report_date)["data"]["articles"]
     matching = [a for a in listed if a["url"] == yonhap_url]
     assert len(matching) == 1
+
+
+def test_source_id_match_survives_url_change_between_runs(monkeypatch):
+    """기관 어댑터가 부여한 source_id가 같으면, 사이트 개편으로 URL이 바뀌어도 같은 기사로 병합한다."""
+    report_date = "2025-01-20"
+
+    def _gov_item(url, title):
+        return {
+            "id": "raw-gov-1",
+            "title": title,
+            "source": "정책브리핑",
+            "url": url,
+            "pubDate": f"{report_date}T09:00:00Z",
+            "description": "한국전기안전공사 국정감사 관련 정부부처 보도자료 본문입니다.",
+            "provider": "정책브리핑 API",
+            "sourceId": "policy-briefing:123456",
+        }
+
+    monkeypatch.setattr(collector_module, "fetch_yonhap_rss", lambda *a, **k: {"items": [], "provider": "연합뉴스 RSS"})
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: [_gov_item("https://www.korea.kr/briefing/pressReleaseView.do?newsId=1", "전기안전 대책 발표")],
+    )
+
+    first = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert first["newCount"] == 1
+
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_google_rss",
+        lambda *a, **k: [_gov_item("https://www.korea.kr/briefing/pressReleaseView.do?newsId=1&page=2", "전기안전 대책 발표(수정)")],
+    )
+    second = client.post("/api/collections", json=_base_payload(reportDate=report_date)).json()["data"]
+    assert second["matchedCount"] == 1
+    assert second["newCount"] == 0
+
+    listed = _articles(report_date)["data"]["articles"]
+    matching = [a for a in listed if a["title"].startswith("전기안전 대책 발표")]
+    assert len(matching) == 1
+
+
+def test_direct_government_sources_default_on_and_bypass_relevance_filter(monkeypatch):
+    report_date = "2025-01-26"
+    gov_item = {
+        "id": "raw-opm-1",
+        "sourceId": "opm:123456",
+        "title": "정례 브리핑 자료",
+        "source": "국무조정실 보도자료",
+        "url": "https://www.opm.go.kr/opm/news/press-release.do?mode=view&articleNo=123456",
+        "pubDate": f"{report_date}T09:00:00Z",
+        "description": "담당 부서 안내",
+        "provider": "국무조정실 보도자료",
+    }
+    excluded_item = {
+        **gov_item,
+        "id": "raw-opm-2",
+        "sourceId": "opm:123457",
+        "title": "채용공고 안내",
+        "url": "https://www.opm.go.kr/opm/news/press-release.do?mode=view&articleNo=123457",
+    }
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_opm_press",
+        lambda *a, **k: {
+            "items": [gov_item, excluded_item],
+            "provider": "국무조정실 보도자료",
+        },
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_me_press",
+        lambda *a, **k: {"items": [], "provider": "기후에너지환경부 보도자료"},
+    )
+
+    # enableOpmPress/enableMePress를 보내지 않는 구버전 프런트 요청도 기본 활성화한다.
+    payload = _base_payload(reportDate=report_date, enableYonhap=False, queries=[])
+    payload.pop("enableOpmPress")
+    payload.pop("enableMePress")
+    response = client.post("/api/collections", json=payload)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["rawCollectedCount"] == 2
+    assert data["uniqueCount"] == 1
+
+    listed = _articles(report_date)["data"]["articles"]
+    article = next(item for item in listed if item["url"] == gov_item["url"])
+    assert article["assessment"]["effectivePriority"] == "review"
+    assert article["assessment"]["autoReasons"]["relevanceRank"] == 99
+    assert "official_government_source" in article["assessment"]["autoReasons"]["appliedFloors"]
+    assert all(item["url"] != excluded_item["url"] for item in listed)
 
 
 def test_legacy_unclassified_article_is_hidden_unless_editor_state_exists(monkeypatch):

@@ -266,6 +266,8 @@
           <h3>데이터 연결</h3>
           <p>연합뉴스 공식 RSS를 먼저 읽고 Google 뉴스 RSS로 보완하며, 수집 경로가 실패하면 GDELT 공개 기사 색인을 시도합니다.</p>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingYonhap" type="checkbox"><div><strong>연합뉴스 공식 RSS 우선 수집</strong><small>최근 종합 뉴스에서 지정 관련도 기준과 일치하는 기사만 반영합니다.</small></div></div>
+          <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingOpmPress" type="checkbox"><div><strong>국무조정실(총리실) 보도자료 직접 수집</strong><small>opm.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
+          <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingMePress" type="checkbox"><div><strong>기후에너지환경부 보도자료 직접 수집</strong><small>me.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
           <div class="field"><label for="settingEndpoint">기관용 뉴스 API 프록시 URL (선택)</label><input id="settingEndpoint" type="text" placeholder="https://내부주소/news?q={query}&hours={hours}"></div>
           <div class="field"><label for="settingMaxRecords">검색식당 수집 상한</label><select id="settingMaxRecords"><option value="30">30건</option><option value="50">50건 (권장)</option><option value="75">75건</option><option value="100">100건</option></select></div>
           <div class="field"><label for="settingCollectionLimit">중복 제거 후 전체 수집 상한</label><select id="settingCollectionLimit"><option value="100">100건</option><option value="150">150건</option><option value="200">200건 (권장)</option><option value="300">300건</option></select></div>

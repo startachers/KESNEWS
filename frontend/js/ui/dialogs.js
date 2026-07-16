@@ -20,6 +20,8 @@ export function closeOverlay(id) { $(id).classList.remove("open"); if (!document
 export function openSettings() {
   $("settingAutoRun").checked = settings.autoRun;
   $("settingYonhap").checked = settings.enableYonhap !== false;
+  $("settingOpmPress").checked = settings.enableOpmPress !== false;
+  $("settingMePress").checked = settings.enableMePress !== false;
   $("settingLookback").value = String(settings.lookback);
   $("settingMaxRecords").value = String(settings.maxRecords);
   $("settingCollectionLimit").value = String(settings.collectionLimit || 400);
@@ -52,6 +54,8 @@ export function saveSettingsFromForm() {
     ...settings,
     autoRun: $("settingAutoRun").checked,
     enableYonhap: $("settingYonhap").checked,
+    enableOpmPress: $("settingOpmPress").checked,
+    enableMePress: $("settingMePress").checked,
     lookback: Number($("settingLookback").value),
     maxRecords: Number($("settingMaxRecords").value),
     collectionLimit: Number($("settingCollectionLimit").value),

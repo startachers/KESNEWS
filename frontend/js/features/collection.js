@@ -39,6 +39,8 @@ export async function runSearch(auto = false) {
       maxRecordsPerQuery: Number(settings.maxRecords),
       collectionLimit: Number(settings.collectionLimit || 400),
       enableYonhap: !!settings.enableYonhap,
+      enableOpmPress: !!settings.enableOpmPress,
+      enableMePress: !!settings.enableMePress,
       queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query })),
       coreKeywords: settings.coreKeywords,
       riskKeywords: settings.riskKeywords,

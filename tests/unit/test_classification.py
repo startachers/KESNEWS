@@ -101,6 +101,19 @@ def test_get_relevance_no_match_returns_rank_99():
     assert result["score"] == 15
 
 
+def test_official_government_source_has_review_floor_without_becoming_required():
+    result = assess_article(
+        {
+            "title": "정례 브리핑 자료",
+            "description": "담당 부서 안내",
+            "_official_government": True,
+        }
+    )
+    assert result["autoReasons"]["relevanceRank"] == 99
+    assert result["autoPriority"] == "review"
+    assert "official_government_source" in result["autoReasons"]["appliedFloors"]
+
+
 def test_prevention_phrase_does_not_become_accident():
     result = assess_article(
         {"title": "한국전기안전공사, 전기화재 예방 캠페인", "description": "안전점검 교육을 실시했다."}
