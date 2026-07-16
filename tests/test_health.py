@@ -26,7 +26,13 @@ def test_index_html_is_served_at_root():
     assert "text/html" in response.headers["content-type"]
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
-    assert "js/app.js?v=20260716-15" in response.text
+    assert "js/app.js?v=20260716-16" in response.text
+
+    app_script = client.get("/js/app.js")
+    assert 'dialogs.js?v=20260716-16' in app_script.text
+
+    dialogs_script = client.get("/js/ui/dialogs.js")
+    assert 'import { setStatus, showToast } from "./notifications.js";' in dialogs_script.text
 
 
 def test_restart_requires_confirmation_header(monkeypatch):

@@ -6,7 +6,7 @@ import * as api from "../api/client.js?v=20260716-15";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
 import { persistAndRender } from "../features/articles.js?v=20260716-12";
 import { renderAll } from "./renderers.js";
-import { showToast } from "./notifications.js";
+import { setStatus, showToast } from "./notifications.js";
 
 export function populateStaticControls() {
   const options = settings.queries.map(q => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.label)}</option>`).join("");

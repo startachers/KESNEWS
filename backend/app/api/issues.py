@@ -33,7 +33,7 @@ class IssuePatchRequest(BaseModel):
 class ClusterRunRequest(BaseModel):
     reportDate: str
     asOf: datetime | None = None
-    similarityThreshold: float = Field(default=0.40, ge=0.20, le=0.70)
+    similarityThreshold: float = Field(default=0.40, ge=0.15, le=0.70)
 
 
 class ManualGroupRequest(BaseModel):

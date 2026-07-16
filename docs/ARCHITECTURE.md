@@ -956,7 +956,7 @@ GET   /api/cluster-runs/{cluster_run_id}
 POST  /api/cluster-runs/{cluster_run_id}/apply
 ```
 
-재군집화 첫 요청은 `0.20~0.70` 범위의 선택적 `similarityThreshold`(기본 `0.40`)로 diff proposal을 만들고, apply 시 자동 필드만 갱신한다. 화면에서 기준을 바꾼 경우 새 proposal을 계산하기 전에는 이전 proposal을 적용할 수 없다.
+재군집화 첫 요청은 `0.15~0.70` 범위의 선택적 `similarityThreshold`(기본 `0.40`)로 diff proposal을 만들고, apply 시 자동 필드만 갱신한다. 브라우저는 기사량이 많은 작업본도 계산을 기다릴 수 있도록 제안 생성 요청에 120초 제한을 적용한다. 화면에서 기준을 바꾼 경우 새 proposal을 계산하기 전에는 이전 proposal을 적용할 수 없다.
 
 ### 11.6 브리핑 작업본·최종본
 

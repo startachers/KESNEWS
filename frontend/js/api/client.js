@@ -1,6 +1,8 @@
 import { AI_API_BASE } from "../state/store.js";
 import { fetchWithTimeout } from "../utils/net.js";
 
+const CLUSTER_RUN_TIMEOUT_MS = 120000;
+
 async function request(path, options = {}, timeoutMs = 15000) {
   const response = await fetchWithTimeout(
     `${AI_API_BASE}${path}`,
@@ -127,7 +129,7 @@ export function createClusterRun(reportDate, similarityThreshold = 0.40) {
   return request(`/cluster-runs`, {
     method: "POST",
     body: JSON.stringify({ reportDate, similarityThreshold }),
-  });
+  }, CLUSTER_RUN_TIMEOUT_MS);
 }
 
 export function listIssues(reportDate) {

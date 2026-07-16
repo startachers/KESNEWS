@@ -306,8 +306,8 @@
         <p class="cluster-helper">제안 생성만으로 작업본은 바뀌지 않습니다. 기사 묶음을 검토한 뒤 아래의 ‘제안 적용’을 눌러야 반영됩니다.</p>
         <div class="cluster-threshold">
           <div class="cluster-threshold-head"><label for="clusterThreshold">기사 유사도 기준</label><strong id="clusterThresholdValue">40%</strong></div>
-          <input id="clusterThreshold" type="range" min="20" max="70" step="5" value="40" aria-describedby="clusterThresholdHint">
-          <div class="cluster-threshold-scale"><span>20% · 가장 넓게 묶기</span><span>70% · 엄격하게 묶기</span></div>
+          <input id="clusterThreshold" type="range" min="15" max="70" step="5" value="40" aria-describedby="clusterThresholdHint">
+          <div class="cluster-threshold-scale"><span>15% · 가장 넓게 묶기</span><span>70% · 엄격하게 묶기</span></div>
           <div class="cluster-threshold-actions"><p id="clusterThresholdHint">40%는 비슷한 제목과 사건 단서를 균형 있게 반영합니다.</p><button class="btn btn-subtle" id="clusterRecalculateBtn" type="button">이 기준으로 다시 계산</button></div>
         </div>
         <div class="cluster-meta" id="clusterProposalMeta"></div>
@@ -331,6 +331,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-15"></script>
+  <script type="module" src="js/app.js?v=20260716-16"></script>
 </body>
 </html>

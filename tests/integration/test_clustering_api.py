@@ -13,6 +13,8 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert 'id="clusterOverlay"' in page.text
     assert 'id="clusterApplyBtn"' in page.text
     assert 'id="clusterThreshold"' in page.text
+    assert 'min="15"' in page.text
+    assert "15% · 가장 넓게 묶기" in page.text
     assert 'id="clusterRecalculateBtn"' in page.text
 
     feature = client.get("/js/features/clustering.js")
@@ -22,6 +24,11 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "appliedThresholdPercent()" in feature.text
     assert "state.issues = issuesResult.data.issues" in feature.text
     assert "applyClusterRun(activeRun.id)" in feature.text
+
+    api_client = client.get("/js/api/client.js")
+    assert api_client.status_code == 200
+    assert "CLUSTER_RUN_TIMEOUT_MS = 120000" in api_client.text
+    assert "}, CLUSTER_RUN_TIMEOUT_MS);" in api_client.text
 
     issues_feature = client.get("/js/features/issues.js")
     assert issues_feature.status_code == 200
@@ -124,16 +131,16 @@ def test_cluster_run_accepts_similarity_threshold_and_rejects_out_of_range():
         json={
             "reportDate": report_date,
             "asOf": "2026-08-05T12:00:00Z",
-            "similarityThreshold": 0.20,
+            "similarityThreshold": 0.15,
         },
     )
     assert proposed.status_code == 200
     reasons = proposed.json()["data"]["proposal"][0]["autoReasons"]["clustering"]
-    assert reasons == {"pairThreshold": 0.20, "minimumCrossScore": 0.15}
+    assert reasons == {"pairThreshold": 0.15, "minimumCrossScore": 0.15}
 
     invalid = client.post(
         "/api/cluster-runs",
-        json={"reportDate": report_date, "similarityThreshold": 0.15},
+        json={"reportDate": report_date, "similarityThreshold": 0.10},
     )
     assert invalid.status_code == 422
 

@@ -582,7 +582,7 @@ POST /api/cluster-runs/{cluster_run_id}/apply
 
 첫 요청은 proposal과 diff를 만든다.
 
-요청 본문은 `reportDate`, 선택적인 `asOf`, `similarityThreshold`를 받는다. `similarityThreshold`는 `0.20` 이상 `0.70` 이하이며 생략 시 `0.40`이다. 값이 낮을수록 넓게, 높을수록 엄격하게 묶는다. proposal의 `autoReasons.clustering`에는 실제 적용한 기준값을 기록한다.
+요청 본문은 `reportDate`, 선택적인 `asOf`, `similarityThreshold`를 받는다. `similarityThreshold`는 `0.15` 이상 `0.70` 이하이며 생략 시 `0.40`이다. 값이 낮을수록 넓게, 높을수록 엄격하게 묶는다. proposal의 `autoReasons.clustering`에는 실제 적용한 기준값을 기록한다.
 
 - 생성 이슈
 - 병합 후보
