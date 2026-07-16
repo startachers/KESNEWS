@@ -247,6 +247,34 @@ _CATEGORY_RULES: list[tuple[str, tuple[tuple[str, ...], ...]]] = [
         ),
     ),
     (
+        "renewable_ess_industry",
+        (
+            ("재생에너지", "태양광", "풍력", "ess", "에너지저장장치", "무정전전원장치", "ups"),
+            ("보급", "확대", "정책", "시장", "투자", "구축", "입찰", "검사", "인증", "안전"),
+        ),
+    ),
+    (
+        "ev_industry",
+        (
+            ("전기차", "전기자동차"),
+            ("보급", "충전소", "충전기", "충전인프라", "배터리", "보조금", "정책", "안전"),
+        ),
+    ),
+    (
+        "macro_economy",
+        (
+            ("전기요금", "에너지요금", "공공요금", "유가", "물가", "금리", "경제성장률"),
+            ("인상", "인하", "전망", "발표", "정책", "대책"),
+        ),
+    ),
+    (
+        "ai_trend",
+        (
+            ("ai", "인공지능"),
+            ("데이터센터", "전력수요", "전력망", "에너지", "안전점검", "안전관리", "공공기관", "정부"),
+        ),
+    ),
+    (
         "law_standard_plan",
         (
             (
@@ -313,6 +341,13 @@ def article_text(article: dict[str, Any]) -> tuple[str, str]:
 
 def matched_terms(text: str, terms: tuple[str, ...]) -> list[str]:
     return [term for term in terms if term.lower() in text]
+
+
+def category_keyword_matches(text: str, keyword: str) -> bool:
+    """짧은 영문 약어 AI/UPS는 다른 영단어 내부에서 매칭하지 않는다."""
+    if keyword in {"ai", "ups"}:
+        return re.search(rf"(?<![a-z0-9]){keyword}(?![a-z0-9])", text) is not None
+    return keyword.lower() in text
 
 
 def sentences(text: str) -> list[str]:
@@ -395,7 +430,8 @@ def infer_category(article: dict[str, Any]) -> str:
         if category == "major_fire_breaking" and not detect_incident_sentinel(article)["matched"]:
             continue
         if all(
-            any(keyword.lower() in suppressed for keyword in group) for group in required_groups
+            any(category_keyword_matches(suppressed, keyword) for keyword in group)
+            for group in required_groups
         ):
             return category
     return "other"

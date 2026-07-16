@@ -3,7 +3,7 @@ import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js";
 import { renderAll } from "./ui/renderers.js";
-import { openSettings, saveSettingsFromForm, resetSettingsForm, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js";
+import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-14";
 import { runSearch } from "./features/collection.js";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260716-12";
@@ -21,7 +21,7 @@ async function init() {
   populateStaticControls();
   renderAll();
   if (consumeSettingsMigrationNotice()) {
-    showToast("기사 검색식이 17개 검색군으로 개편되었습니다. 검색 설정에서 확인해 주세요.");
+    showToast("기사 검색식이 21개 검색군으로 확장되었습니다. 검색 설정에서 확인해 주세요.");
   }
   autoResize(els.summaryEditor);
   window.setTimeout(checkAiServer, 120);
@@ -45,6 +45,7 @@ function bindEvents() {
   $("editKeywordsBtn").addEventListener("click", openSettings);
   $("saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
   $("resetSettingsBtn").addEventListener("click", resetSettingsForm);
+  $("restartServerBtn").addEventListener("click", restartServerFromSettings);
   $("addArticleBtn").addEventListener("click", openArticleModal);
   $("articleForm").addEventListener("submit", addManualArticle);
   els.refreshBtn.addEventListener("click", () => runSearch(false));

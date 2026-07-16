@@ -123,6 +123,15 @@ def fetch_query(
     return {"items": items, "provider": "Google 뉴스 RSS"}
 
 
+def query_max_records(query: dict[str, Any], default: int) -> int:
+    """검색군별 양의 정수 override가 있으면 사용하고, 아니면 전역 기본값을 유지한다."""
+    try:
+        value = int(query.get("maxRecords"))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
 def _persist_provider_results(
     connection, run_id: str, provider_tasks: list[dict[str, Any]], started_at: str, finished_at: str
 ) -> dict[str, str]:
@@ -291,7 +300,15 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         )
     for query in queries:
         tasks.append((str(query.get("label") or query.get("id") or "검색식"), str(query.get("id") or "direct")))
-        coros.append(asyncio.to_thread(fetch_query, query, endpoint, lookback_hours, max_records))
+        coros.append(
+            asyncio.to_thread(
+                fetch_query,
+                query,
+                endpoint,
+                lookback_hours,
+                query_max_records(query, max_records),
+            )
+        )
 
     results = await asyncio.gather(*coros, return_exceptions=True) if coros else []
 

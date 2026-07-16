@@ -2,7 +2,7 @@ import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, SETTINGS_KEY } 
 import { escapeHtml, escapeAttr, parseKeywordList, friendlyError } from "../utils/strings.js";
 import { parseDate } from "../utils/dates.js";
 import { refreshArticles } from "../features/collection.js";
-import * as api from "../api/client.js";
+import * as api from "../api/client.js?v=20260716-14";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
 import { persistAndRender } from "../features/articles.js?v=20260716-12";
 import { renderAll } from "./renderers.js";
@@ -40,7 +40,8 @@ export function renderQuerySettings(queries) {
     ["정부 메시지", ["presidential_message", "prime_minister_message", "climate_minister_message", "government_meeting"]],
     ["공공기관 경영", ["public_evaluation", "public_operations", "kesco_governance", "assembly_law"]],
     ["사고·안전", ["electrical_accident", "power_outage", "major_fire_breaking", "new_industry_safety"]],
-    ["제도·성과·전략", ["law_standard_plan", "kesco_achievement", "strategic_trend"]]
+    ["제도·성과·전략", ["law_standard_plan", "kesco_achievement", "strategic_trend"]],
+    ["산업·거시환경", ["renewable_ess_industry", "ev_industry", "macro_economy", "ai_trend"]]
   ];
   const byId = new Map(queries.map(query => [query.id, query]));
   els.querySettings.innerHTML = groups.map(([label, ids]) => {
@@ -65,6 +66,7 @@ export function saveSettingsFromForm() {
     positiveKeywords: parseKeywordList($("settingPositiveKeywords").value),
     excludeKeywords: parseKeywordList($("settingExcludeKeywords").value),
     queries: [...els.querySettings.querySelectorAll(".query-row")].map(row => ({
+      ...settings.queries.find(q => q.id === row.dataset.queryId),
       id: row.dataset.queryId,
       label: settings.queries.find(q => q.id === row.dataset.queryId)?.label || row.dataset.queryId,
       enabled: row.querySelector('input[type="checkbox"]').checked,
@@ -81,6 +83,30 @@ export function resetSettingsForm() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   openSettings();
   showToast("기본 검색식으로 복원했습니다.");
+}
+
+export async function restartServerFromSettings() {
+  if (!window.confirm("서버를 재시작할까요?")) return;
+  const button = $("restartServerBtn");
+  const originalText = button.textContent;
+  const forcedReload = window.setTimeout(() => window.location.reload(), 12000);
+  button.disabled = true;
+  button.textContent = "재시작 중…";
+  setStatus("busy", "로컬 서버를 재시작하고 있습니다…");
+  try {
+    const result = await api.restartServer();
+    closeOverlay("settingsOverlay");
+    showToast("서버 재시작을 요청했습니다. 연결을 확인하고 있습니다.");
+    await api.waitForRestart(result.data.processId);
+    window.clearTimeout(forcedReload);
+    window.location.reload();
+  } catch (error) {
+    window.clearTimeout(forcedReload);
+    button.disabled = false;
+    button.textContent = originalText;
+    setStatus("error", "서버 재시작을 확인하지 못했습니다");
+    showToast(`서버 재시작 실패: ${friendlyError(error)}`, "error");
+  }
 }
 
 export function openArticleModal() {

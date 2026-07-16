@@ -41,7 +41,7 @@ export async function runSearch(auto = false) {
       enableYonhap: !!settings.enableYonhap,
       enableOpmPress: !!settings.enableOpmPress,
       enableMePress: !!settings.enableMePress,
-      queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query })),
+      queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query, ...(q.maxRecords ? { maxRecords: Number(q.maxRecords) } : {}) })),
       coreKeywords: settings.coreKeywords,
       riskKeywords: settings.riskKeywords,
       positiveKeywords: settings.positiveKeywords,

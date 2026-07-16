@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 
-from backend.app.services.collection.collector import replace_people_tokens
+from backend.app.services.collection.collector import query_max_records, replace_people_tokens
 
 ROOT = Path(__file__).parents[2]
 QUERY_IDS = [
@@ -23,10 +23,14 @@ QUERY_IDS = [
     "law_standard_plan",
     "kesco_achievement",
     "strategic_trend",
+    "renewable_ess_industry",
+    "ev_industry",
+    "macro_economy",
+    "ai_trend",
 ]
 
 
-def test_automated_and_frontend_defaults_contain_same_17_query_groups():
+def test_automated_and_frontend_defaults_contain_same_21_query_groups():
     config_paths = [ROOT / "config/automated_collection.json.example"]
     local_config = ROOT / "config/automated_collection.json"
     if local_config.exists():
@@ -34,19 +38,37 @@ def test_automated_and_frontend_defaults_contain_same_17_query_groups():
     for path in config_paths:
         config = json.loads(path.read_text(encoding="utf-8"))
         assert [query["id"] for query in config["queries"]] == QUERY_IDS
+        by_id = {query["id"]: query for query in config["queries"]}
+        assert by_id["macro_economy"]["maxRecords"] == 20
+        assert by_id["ai_trend"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
     assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 3" in default_block
+    assert "settingsVersion: 4" in default_block
+    assert default_block.count("maxRecords: 20") == 2
 
 
-def test_query_settings_screen_defines_five_groups_and_every_query_id():
+def test_query_settings_screen_defines_six_groups_and_every_query_id():
     source = (ROOT / "frontend/js/ui/dialogs.js").read_text(encoding="utf-8")
-    for label in ("기관·평판", "정부 메시지", "공공기관 경영", "사고·안전", "제도·성과·전략"):
+    for label in (
+        "기관·평판",
+        "정부 메시지",
+        "공공기관 경영",
+        "사고·안전",
+        "제도·성과·전략",
+        "산업·거시환경",
+    ):
         assert label in source
     for query_id in QUERY_IDS:
         assert query_id in source
+
+
+def test_query_max_records_uses_positive_override_or_global_default():
+    assert query_max_records({"maxRecords": 20}, 50) == 20
+    assert query_max_records({}, 50) == 50
+    assert query_max_records({"maxRecords": 0}, 50) == 50
+    assert query_max_records({"maxRecords": "invalid"}, 50) == 50
 
 
 def test_people_tokens_expand_names_and_remove_empty_or_clauses(tmp_path):

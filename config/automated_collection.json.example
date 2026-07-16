@@ -22,7 +22,11 @@
     {"id": "new_industry_safety", "label": "ESS·배터리·충전시설 등 신산업 설비안전", "query": "(ESS OR \"에너지저장장치\" OR 배터리 OR \"전기차 충전\") (화재 OR 감전 OR 폭발 OR 사고 OR 안전점검 OR 결함 OR 리콜)"},
     {"id": "law_standard_plan", "label": "법령·기준·기본계획", "query": "(\"전기안전관리법\" OR \"전기사업법\" OR \"한국전기설비규정\" OR KEC OR \"전기설비기술기준\" OR \"전기안전관리 기본계획\" OR \"전력수급기본계획\") (개정 OR 시행 OR 입법예고 OR 행정예고 OR 고시 OR 확정 OR 발표)"},
     {"id": "kesco_achievement", "label": "공사 성과·상생·예방활동", "query": "(\"한국전기안전공사\" OR \"전기안전공사\" OR \"KESCO\") (업무협약 OR 협약 OR 수상 OR 혁신 OR 합동점검 OR 특별점검 OR 예방점검 OR 캠페인 OR 봉사 OR 기부 OR 상생 OR 안전문화 OR 취약계층)"},
-    {"id": "strategic_trend", "label": "전력망·분산에너지·데이터센터 등 전략동향", "query": "(\"전력망\" OR \"송전망\" OR \"배전망\" OR \"분산에너지\" OR \"데이터센터\" OR \"재생에너지\" OR \"전력수요\") (전기안전 OR 안전관리 OR 전기설비 OR 화재 OR 정전 OR 검사 OR 규제 OR 기본계획)"}
+    {"id": "strategic_trend", "label": "전력망·분산에너지·데이터센터 등 전략동향", "query": "(\"전력망\" OR \"송전망\" OR \"배전망\" OR \"분산에너지\" OR \"데이터센터\" OR \"재생에너지\" OR \"전력수요\") (전기안전 OR 안전관리 OR 전기설비 OR 화재 OR 정전 OR 검사 OR 규제 OR 기본계획)"},
+    {"id": "renewable_ess_industry", "label": "재생에너지·ESS·UPS 산업동향", "query": "(재생에너지 OR 태양광 OR 풍력 OR ESS OR \"에너지저장장치\" OR \"무정전전원장치\" OR UPS) (보급 OR 확대 OR 정책 OR 시장 OR 투자 OR 구축 OR 입찰 OR 검사 OR 인증 OR 안전)"},
+    {"id": "ev_industry", "label": "전기차·충전인프라 산업동향", "query": "(전기차 OR 전기자동차) (보급 OR 충전소 OR 충전기 OR 충전인프라 OR 배터리 OR 보조금 OR 정책 OR 안전)"},
+    {"id": "macro_economy", "label": "에너지·공공요금 거시환경", "query": "(전기요금 OR 에너지요금 OR 공공요금 OR 유가 OR 물가 OR 금리 OR 경제성장률) (인상 OR 인하 OR 전망 OR 발표 OR 정책 OR 대책)", "maxRecords": 20},
+    {"id": "ai_trend", "label": "AI·전력·공공부문 동향", "query": "(AI OR 인공지능) (데이터센터 OR 전력수요 OR 전력망 OR 에너지 OR 안전점검 OR 안전관리 OR 공공기관 OR 정부)", "maxRecords": 20}
   ],
   "coreKeywords": ["한국전기안전공사", "전기안전공사", "KESCO"],
   "riskKeywords": ["사망", "중대재해", "압수수색", "감사", "국정감사", "화재", "감전", "사고", "논란", "위반", "고발", "부실", "해킹", "정전", "피해", "징계"],

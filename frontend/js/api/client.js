@@ -101,6 +101,28 @@ export function getLatestCollection(date) {
   return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
 }
 
+export function restartServer() {
+  return request(`/operations/restart`, {
+    method: "POST",
+    headers: { "X-KESCO-Restart": "confirmed" },
+  });
+}
+
+export async function waitForRestart(previousProcessId, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 500));
+    try {
+      const response = await fetchWithTimeout(`${AI_API_BASE}/health`, { headers: { Accept: "application/json" } }, 1500);
+      const body = await response.json();
+      if (response.ok && body.service === "kesco-media-briefing" && !String(body.instanceId || "").startsWith(`${previousProcessId}-`)) return;
+    } catch {
+      // 기존 서버 종료 중의 연결 실패는 정상적인 재시작 과정이다.
+    }
+  }
+  throw new Error("서버가 10초 안에 다시 시작되지 않았습니다. 로그를 확인해 주세요.");
+}
+
 export function createClusterRun(reportDate, similarityThreshold = 0.40) {
   return request(`/cluster-runs`, {
     method: "POST",

@@ -25,7 +25,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v4"
+CLASSIFIER_VERSION = "rules-v5"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -79,7 +79,7 @@ def get_relevance(article: Article) -> dict[str, Any]:
         )
         return [*authorities, *energy] if authorities and energy else []
 
-    def new_industry_or_strategy(text: str) -> list[str]:
+    def industry_strategy_or_macro(text: str) -> list[str]:
         industry = matched_terms(text, ("ess", "에너지저장장치", "배터리", "전기차 충전"))
         safety = matched_terms(text, ("화재", "감전", "폭발", "사고", "안전점검", "결함", "리콜"))
         strategy = matched_terms(
@@ -93,6 +93,37 @@ def get_relevance(article: Article) -> dict[str, Any]:
             return [*industry, *safety]
         if strategy and strategy_context:
             return [*strategy, *strategy_context]
+        renewable = matched_terms(
+            text,
+            ("재생에너지", "태양광", "풍력", "ess", "에너지저장장치", "무정전전원장치"),
+        )
+        if re.search(r"(?<![a-z0-9])ups(?![a-z0-9])", text):
+            renewable.append("ups")
+        renewable_context = matched_terms(
+            text, ("보급", "확대", "정책", "시장", "투자", "구축", "입찰", "검사", "인증", "안전")
+        )
+        if renewable and renewable_context:
+            return [*renewable, *renewable_context]
+        ev = matched_terms(text, ("전기차", "전기자동차"))
+        ev_context = matched_terms(
+            text, ("보급", "충전소", "충전기", "충전인프라", "배터리", "보조금", "정책", "안전")
+        )
+        if ev and ev_context:
+            return [*ev, *ev_context]
+        economy = matched_terms(
+            text, ("전기요금", "에너지요금", "공공요금", "유가", "물가", "금리", "경제성장률")
+        )
+        economy_context = matched_terms(text, ("인상", "인하", "전망", "발표", "정책", "대책"))
+        if economy and economy_context:
+            return [*economy, *economy_context]
+        ai = matched_terms(text, ("인공지능",))
+        if re.search(r"(?<![a-z0-9])ai(?![a-z0-9])", text):
+            ai.append("ai")
+        ai_context = matched_terms(
+            text, ("데이터센터", "전력수요", "전력망", "에너지", "안전점검", "안전관리", "공공기관", "정부")
+        )
+        if ai and ai_context:
+            return [*ai, *ai_context]
         return []
 
     criteria = [
@@ -141,7 +172,12 @@ def get_relevance(article: Article) -> dict[str, Any]:
                 text,
             ),
         ),
-        (7, "new_industry_or_strategy", "⑦ 신산업 설비안전·전략동향", new_industry_or_strategy),
+        (
+            7,
+            "industry_strategy_or_macro",
+            "⑦ 신산업·전략·거시환경 동향",
+            industry_strategy_or_macro,
+        ),
     ]
     matches = [
         (rank, rule, reason, finder(full_text))

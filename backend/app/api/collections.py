@@ -23,6 +23,7 @@ class CollectionQuery(BaseModel):
     id: str = "direct"
     label: str = ""
     query: str = ""
+    maxRecords: int | None = Field(default=None, ge=1)
 
 
 class CollectionRequest(BaseModel):

@@ -4,7 +4,7 @@ import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
-  settingsVersion: 3,
+  settingsVersion: 4,
   autoRun: true,
   enableYonhap: true,
   enableOpmPress: true,
@@ -35,7 +35,11 @@ export const DEFAULT_SETTINGS = {
     { id: "new_industry_safety", label: "ESS·배터리·충전시설 등 신산업 설비안전", enabled: true, query: '(ESS OR "에너지저장장치" OR 배터리 OR "전기차 충전") (화재 OR 감전 OR 폭발 OR 사고 OR 안전점검 OR 결함 OR 리콜)' },
     { id: "law_standard_plan", label: "법령·기준·기본계획", enabled: true, query: '("전기안전관리법" OR "전기사업법" OR "한국전기설비규정" OR KEC OR "전기설비기술기준" OR "전기안전관리 기본계획" OR "전력수급기본계획") (개정 OR 시행 OR 입법예고 OR 행정예고 OR 고시 OR 확정 OR 발표)' },
     { id: "kesco_achievement", label: "공사 성과·상생·예방활동", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO") (업무협약 OR 협약 OR 수상 OR 혁신 OR 합동점검 OR 특별점검 OR 예방점검 OR 캠페인 OR 봉사 OR 기부 OR 상생 OR 안전문화 OR 취약계층)' },
-    { id: "strategic_trend", label: "전력망·분산에너지·데이터센터 등 전략동향", enabled: true, query: '("전력망" OR "송전망" OR "배전망" OR "분산에너지" OR "데이터센터" OR "재생에너지" OR "전력수요") (전기안전 OR 안전관리 OR 전기설비 OR 화재 OR 정전 OR 검사 OR 규제 OR 기본계획)' }
+    { id: "strategic_trend", label: "전력망·분산에너지·데이터센터 등 전략동향", enabled: true, query: '("전력망" OR "송전망" OR "배전망" OR "분산에너지" OR "데이터센터" OR "재생에너지" OR "전력수요") (전기안전 OR 안전관리 OR 전기설비 OR 화재 OR 정전 OR 검사 OR 규제 OR 기본계획)' },
+    { id: "renewable_ess_industry", label: "재생에너지·ESS·UPS 산업동향", enabled: true, query: '(재생에너지 OR 태양광 OR 풍력 OR ESS OR "에너지저장장치" OR "무정전전원장치" OR UPS) (보급 OR 확대 OR 정책 OR 시장 OR 투자 OR 구축 OR 입찰 OR 검사 OR 인증 OR 안전)' },
+    { id: "ev_industry", label: "전기차·충전인프라 산업동향", enabled: true, query: '(전기차 OR 전기자동차) (보급 OR 충전소 OR 충전기 OR 충전인프라 OR 배터리 OR 보조금 OR 정책 OR 안전)' },
+    { id: "macro_economy", label: "에너지·공공요금 거시환경", enabled: true, query: '(전기요금 OR 에너지요금 OR 공공요금 OR 유가 OR 물가 OR 금리 OR 경제성장률) (인상 OR 인하 OR 전망 OR 발표 OR 정책 OR 대책)', maxRecords: 20 },
+    { id: "ai_trend", label: "AI·전력·공공부문 동향", enabled: true, query: '(AI OR 인공지능) (데이터센터 OR 전력수요 OR 전력망 OR 에너지 OR 안전점검 OR 안전관리 OR 공공기관 OR 정부)', maxRecords: 20 }
   ]
 };
 
@@ -45,7 +49,8 @@ export const CATEGORY_COLORS = {
   public_evaluation: "#b46a12", public_operations: "#9a7218", kesco_governance: "#8b5a2b",
   assembly_law: "#596481", electrical_accident: "#b64242", power_outage: "#b0533f",
   major_fire_breaking: "#8f3030", new_industry_safety: "#b05c75", law_standard_plan: "#70539b",
-  kesco_achievement: "#087f76", strategic_trend: "#397b62"
+  kesco_achievement: "#087f76", strategic_trend: "#397b62", renewable_ess_industry: "#247a73",
+  ev_industry: "#2f6fa3", macro_economy: "#9a6a20", ai_trend: "#5364a8"
 };
 export const RISK_LABELS = { critical: "긴급", watch: "주의", routine: "일상" };
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };

@@ -32,8 +32,8 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v4():
-    assert CLASSIFIER_VERSION == "rules-v4"
+def test_classifier_version_is_rules_v5():
+    assert CLASSIFIER_VERSION == "rules-v5"
 
 
 def test_classify_article_critical_risk_from_heavy_keyword():
@@ -82,6 +82,42 @@ def test_infer_category_matches_safety_keyword():
 
 def test_infer_category_defaults_to_other():
     assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "other"
+
+
+@pytest.mark.parametrize(
+    ("title", "category"),
+    [
+        ("태양광 보급 확대에 민간 투자 증가", "renewable_ess_industry"),
+        ("무정전전원장치 UPS 인증 시장 확대", "renewable_ess_industry"),
+        ("전기차 충전인프라 보급 정책 발표", "ev_industry"),
+        ("전기요금 인상 전망과 정부 대책", "macro_economy"),
+        ("AI 데이터센터 전력수요 관리 정책", "ai_trend"),
+    ],
+)
+def test_expanded_topic_categories_are_classified_and_relevant(title, category):
+    article = {"title": title, "description": ""}
+    assert infer_category(article) == category
+    relevance = get_relevance(article)
+    assert relevance["rank"] == 7
+    assert relevance["score"] == 47
+
+
+def test_expanded_industry_rules_do_not_override_accident_categories():
+    assert infer_category(
+        {"title": "전기차 충전기 전기화재 발생", "description": "충전소에서 불이 났다."}
+    ) == "electrical_accident"
+    assert infer_category(
+        {"title": "ESS 배터리 충전 중 화재 사고", "description": "설비 결함을 조사 중이다."}
+    ) == "new_industry_safety"
+
+
+def test_short_english_anchors_do_not_match_inside_other_words():
+    assert infer_category(
+        {"title": "스타트업 startups 시장 투자 확대", "description": "신산업 동향"}
+    ) == "other"
+    assert infer_category(
+        {"title": "retail 시장 전망 발표", "description": "유통 산업 동향"}
+    ) == "other"
 
 
 def test_official_press_release_without_kesco_mention_is_not_kesco_direct():

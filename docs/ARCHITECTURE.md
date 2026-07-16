@@ -1288,6 +1288,11 @@ schemaVersion 6이며 기사 전문·전문 수집 상태와 사고 Sentinel 정
 HTML은 자동 삭제하지 않는다. 운영 상태는 `GET /api/operations/status`에서 DB 무결성,
 최근 백업, 마지막 수집과 마지막 정상 수집을 함께 확인한다.
 
+설정 화면의 서버 재시작은 확인 헤더가 필요한 `POST /api/operations/restart`로 요청한다.
+응답 후 별도 로컬 도우미가 현재 프로세스가 launchd 관리 대상인지 판별해 launchd job을
+재시작하거나, 수동 실행 프로세스가 종료된 뒤 `scripts/run_server.py`를 다시 실행한다.
+브라우저는 새 health `instanceId`를 확인한 뒤 화면을 자동으로 새로고침한다.
+
 ---
 
 ## 18. 테스트 전략
