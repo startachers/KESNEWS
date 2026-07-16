@@ -4,7 +4,7 @@ import { parseDate } from "../utils/dates.js";
 import { refreshArticles } from "../features/collection.js";
 import * as api from "../api/client.js";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
-import { persistAndRender } from "../features/articles.js";
+import { persistAndRender } from "../features/articles.js?v=20260716-11";
 import { renderAll } from "./renderers.js";
 import { showToast } from "./notifications.js";
 

@@ -13,7 +13,9 @@ import { loadSample } from "./data-io.js";
 const expandedIssueIds = new Set();
 const representativeByIssueId = new Map();
 const manualGroupSelection = new Set();
-let manualGroupMode = false;
+const manualGroupSelectedKeys = new Set();
+let manualGroupPickerEntries = new Map();
+let manualGroupSearchText = "";
 
 function topIssueTagCount() {
   return state.issues.filter(issue => issue.selected).length
@@ -41,13 +43,10 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
     <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article)).join("")}</ul>
   </details>` : "";
-  const leadingCheckbox = manualGroupMode
-    ? `<input class="include-check group-mode-check" type="checkbox" aria-label="관련기사 선택" title="관련기사 선택" data-action="group-select" data-article-id="${escapeAttr(a.id)}" ${manualGroupSelection.has(a.id) ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`
-    : `<input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`;
   return `<article class="article-card ${issue ? "grouped-article-card" : ""} ${a.included ? "included" : ""} ${issue?.selected ? "top-tagged" : ""}" data-id="${escapeAttr(a.id)}" ${issue ? `data-issue-id="${escapeAttr(issue.id)}"` : ""}>
-    ${leadingCheckbox}
+    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
     <div class="article-main">
-      <div class="article-badges">${manualGroupMode ? '<span class="badge badge-group-mode">관련기사 선택 중</span>' : ""}<span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
+      <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
       ${titleEl}
       <div class="article-meta"><strong>${escapeHtml(a.source || "출처 미상")}</strong><span>${formatDateTime(a.pubDate)}</span><span>${escapeHtml(relevance.reasons.join(" · "))}</span><span>${escapeHtml((a.matchedKeywords || []).slice(0,4).join(" · ") || "키워드 자동 분류")}</span></div>
       ${a.description ? `<p class="article-desc">${escapeHtml(a.description)}</p>` : ""}
@@ -67,10 +66,7 @@ function renderRelatedArticle(a) {
   const titleEl = href
     ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
     : `<span class="related-article-title">${escapeHtml(a.title)}</span>`;
-  const checkbox = manualGroupMode
-    ? `<input class="related-group-check" type="checkbox" data-action="group-select" data-article-id="${escapeAttr(a.id)}" aria-label="관련기사 선택" title="관련기사 선택" ${manualGroupSelection.has(a.id) ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>`
-    : "";
-  return `<li class="related-article-row ${manualGroupMode ? "group-mode" : ""}">${checkbox}${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></li>`;
+  return `<li class="related-article-row">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></li>`;
 }
 
 function representativeFor(issue, members) {
@@ -152,13 +148,6 @@ export function renderArticles() {
 
 export function handleArticleChange(e) {
   if (state.status === "final") return;
-  if (e.target.dataset.action === "group-select") {
-    const articleId = e.target.dataset.articleId;
-    if (e.target.checked) manualGroupSelection.add(articleId);
-    else manualGroupSelection.delete(articleId);
-    updateManualGroupControls();
-    return;
-  }
   const item = e.target.closest("[data-id]"); if (!item) return;
   const article = state.articles.find(a => a.id === item.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
@@ -170,32 +159,104 @@ export function handleArticleChange(e) {
 }
 
 function updateManualGroupControls() {
-  if (!els.manualGroupBtn || !els.manualGroupModeBtn || !els.manualGroupCancelBtn) return;
+  if (!els.manualGroupBtn || !els.manualGroupModeBtn) return;
   const count = manualGroupSelection.size;
   els.manualGroupCount.textContent = count;
-  els.manualGroupModeBtn.hidden = manualGroupMode;
-  els.manualGroupBtn.hidden = !manualGroupMode;
-  els.manualGroupCancelBtn.hidden = !manualGroupMode;
-  els.manualGroupBtn.disabled = count < 2 || state.status === "final";
+  els.manualGroupUnitCount.textContent = manualGroupSelectedKeys.size;
+  els.manualGroupBtn.disabled = manualGroupSelectedKeys.size < 2 || count < 2 || state.status === "final";
   els.manualGroupModeBtn.disabled = state.status === "final";
 }
 
-export function enterManualGroupMode() {
-  if (state.status === "final") return;
-  manualGroupMode = true;
-  state.issues.forEach(issue => expandedIssueIds.add(issue.id));
-  renderArticles();
-  showToast("묶을 기사들을 왼쪽 체크박스로 선택하세요.");
+function buildManualGroupPickerEntries() {
+  const articleById = new Map(state.articles.map(article => [article.id, article]));
+  const groupedArticleIds = new Set();
+  const entries = [];
+  state.issues.forEach(issue => {
+    const members = issue.articleIds.map(articleId => articleById.get(articleId)).filter(Boolean);
+    if (members.length < 2) return;
+    members.forEach(article => groupedArticleIds.add(article.id));
+    const sources = [...new Set(members.map(article => article.source || "출처 미상"))];
+    entries.push({
+      key: `issue:${issue.id}`,
+      articleIds: members.map(article => article.id),
+      title: issue.effectiveTitle || members[0].title,
+      detail: `기존 묶음 · 기사 ${members.length}건 · ${sources.slice(0, 3).join(" · ")}${sources.length > 3 ? ` 외 ${sources.length - 3}개 매체` : ""}`,
+      searchText: members.map(article => `${article.title} ${article.source || ""}`).join(" "),
+      grouped: true,
+    });
+  });
+  state.articles.forEach(article => {
+    if (groupedArticleIds.has(article.id)) return;
+    entries.push({
+      key: `article:${article.id}`,
+      articleIds: [article.id],
+      title: article.title,
+      detail: `${article.source || "출처 미상"} · ${formatDateTime(article.pubDate)}`,
+      searchText: `${article.title} ${article.source || ""}`,
+      grouped: false,
+    });
+  });
+  return entries;
 }
 
-export function cancelManualGroupMode() {
-  manualGroupMode = false;
+function syncManualGroupArticleSelection() {
   manualGroupSelection.clear();
-  renderArticles();
+  manualGroupSelectedKeys.forEach(key => {
+    manualGroupPickerEntries.get(key)?.articleIds.forEach(articleId => manualGroupSelection.add(articleId));
+  });
+}
+
+function renderManualGroupPicker() {
+  const query = manualGroupSearchText.toLowerCase();
+  const entries = buildManualGroupPickerEntries();
+  manualGroupPickerEntries = new Map(entries.map(entry => [entry.key, entry]));
+  for (const key of manualGroupSelectedKeys) {
+    if (!manualGroupPickerEntries.has(key)) manualGroupSelectedKeys.delete(key);
+  }
+  syncManualGroupArticleSelection();
+  const visibleEntries = entries.filter(entry => !query || `${entry.title} ${entry.detail} ${entry.searchText}`.toLowerCase().includes(query));
+  els.manualGroupList.innerHTML = visibleEntries.length ? visibleEntries.map(entry => `<label class="manual-group-item ${entry.grouped ? "is-group" : ""}">
+    <input type="checkbox" data-action="group-picker-select" data-selection-key="${escapeAttr(entry.key)}" ${manualGroupSelectedKeys.has(entry.key) ? "checked" : ""}>
+    <span>${entry.grouped ? '<em class="manual-group-type">관련기사 묶음</em>' : ""}<strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.detail)}</small></span>
+  </label>`).join("") : '<div class="manual-group-empty">검색 결과가 없습니다.</div>';
+  updateManualGroupControls();
+}
+
+export function openManualGroupPicker() {
+  if (state.status === "final") return;
+  manualGroupSelection.clear();
+  manualGroupSelectedKeys.clear();
+  manualGroupSearchText = "";
+  els.manualGroupSearch.value = "";
+  renderManualGroupPicker();
+  els.manualGroupOverlay.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+export function closeManualGroupPicker() {
+  manualGroupSelection.clear();
+  manualGroupSelectedKeys.clear();
+  els.manualGroupOverlay.classList.remove("open");
+  if (!document.querySelector(".overlay.open")) document.body.style.overflow = "";
+  updateManualGroupControls();
+}
+
+export function handleManualGroupPickerChange(e) {
+  if (e.target.dataset.action !== "group-picker-select") return;
+  const selectionKey = e.target.dataset.selectionKey;
+  if (e.target.checked) manualGroupSelectedKeys.add(selectionKey);
+  else manualGroupSelectedKeys.delete(selectionKey);
+  syncManualGroupArticleSelection();
+  updateManualGroupControls();
+}
+
+export function handleManualGroupSearch(e) {
+  manualGroupSearchText = e.target.value.trim();
+  renderManualGroupPicker();
 }
 
 export async function createManualGroup() {
-  if (manualGroupSelection.size < 2 || state.status === "final") return;
+  if (manualGroupSelectedKeys.size < 2 || manualGroupSelection.size < 2 || state.status === "final") return;
   const articleIds = [...manualGroupSelection];
   els.manualGroupBtn.disabled = true;
   try {
@@ -204,13 +265,13 @@ export async function createManualGroup() {
     const issuesResult = await api.listIssues(state.date);
     state.issues = issuesResult.data.issues || [];
     manualGroupSelection.clear();
-    manualGroupMode = false;
+    closeManualGroupPicker();
     renderAll();
     showToast(`${articleIds.length}건을 관련기사로 묶었습니다.`, "success");
   } catch (error) {
     if (error.code === "BRIEFING_REVISION_CONFLICT") {
       setState(await loadDailyState(state.date));
-      manualGroupSelection.clear();
+      closeManualGroupPicker();
       renderAll();
     }
     showToast(`관련기사 묶기 실패: ${friendlyError(error)}`, "error");

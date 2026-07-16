@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
-  <link rel="stylesheet" href="css/app.css?v=20260716-9">
+  <link rel="stylesheet" href="css/app.css?v=20260716-11">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -147,9 +147,7 @@
             <label class="sr-only" for="selectionFilter">선정 상태 필터</label>
             <select id="selectionFilter" class="control-select"><option value="all">전체 기사</option><option value="selected">브리핑 선정만</option><option value="starred">중요 표시만</option><option value="unselected">미선정만</option></select>
             <button type="button" id="selectedOnlyBtn" class="selection-toggle" aria-pressed="false">✓ 선택 기사만 보기 <strong id="selectedOnlyCount">0</strong></button>
-            <button type="button" id="manualGroupModeBtn" class="manual-group-btn">수동 군집 선택</button>
-            <button type="button" id="manualGroupBtn" class="manual-group-btn" hidden disabled>관련기사로 묶기 <strong id="manualGroupCount">0</strong></button>
-            <button type="button" id="manualGroupCancelBtn" class="manual-group-cancel-btn" hidden>취소</button>
+            <button type="button" id="manualGroupModeBtn" class="manual-group-btn">관련기사 수동 묶기</button>
             <label class="sr-only" for="sortOrder">정렬</label>
             <select id="sortOrder" class="control-select"><option value="relevance">공사 관련도순</option><option value="priority">위험·중요도순</option><option value="newest">최신순</option><option value="source">매체순</option></select>
             <span class="count-label" id="visibleCount">0건 표시</span>
@@ -315,8 +313,19 @@
     </div>
   </div>
 
+  <div class="overlay" id="manualGroupOverlay" role="dialog" aria-modal="true" aria-labelledby="manualGroupTitle">
+    <div class="modal manual-group-modal">
+      <div class="modal-header"><div><h2 id="manualGroupTitle">관련기사 수동 묶기</h2><p>기존 묶음을 선택하면 그 안의 기사 전체가 함께 합쳐집니다. 브리핑 선정 상태에는 영향을 주지 않습니다.</p></div><button class="close-btn" id="manualGroupCloseBtn" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <div class="manual-group-search"><label class="sr-only" for="manualGroupSearch">묶을 기사 검색</label><input id="manualGroupSearch" type="search" placeholder="제목·매체 검색"></div>
+        <div class="manual-group-list" id="manualGroupList"></div>
+      </div>
+      <div class="modal-footer manual-group-footer"><span>선택 <strong id="manualGroupUnitCount">0</strong>개 · 전체 기사 <strong id="manualGroupCount">0</strong>건</span><button class="btn" id="manualGroupCancelBtn">취소</button><button class="btn btn-primary" id="manualGroupBtn" disabled>선택한 묶음·기사를 하나로 합치기</button></div>
+    </div>
+  </div>
+
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=20260716-9"></script>
+  <script type="module" src="js/app.js?v=20260716-11"></script>
 </body>
 </html>

@@ -40,11 +40,15 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text
-    assert 'data-action="group-select"' in articles_feature.text
-    assert "enterManualGroupMode" in articles_feature.text
+    assert 'data-action="group-picker-select"' in articles_feature.text
+    assert "openManualGroupPicker" in articles_feature.text
     assert "createManualIssueGroup" in articles_feature.text
     assert 'id="manualGroupModeBtn"' in page.text
+    assert 'id="manualGroupOverlay"' in page.text
     assert 'id="manualGroupCancelBtn"' in page.text
+    assert "기존 묶음을 선택하면 그 안의 기사 전체가 함께 합쳐집니다" in page.text
+    assert "buildManualGroupPickerEntries" in articles_feature.text
+    assert "issue.articleIds" in articles_feature.text
 
 
 def _create_briefing(report_date: str) -> None:
@@ -326,3 +330,58 @@ def test_manual_group_moves_articles_and_survives_reclustering():
     ).json()["data"]["issues"]
     restored_manual = next(issue for issue in restored if issue["manualGroup"])
     assert len(restored_manual["articleIds"]) == 2
+
+
+def test_manual_groups_can_be_merged_without_leaving_old_memberships():
+    report_date = "2026-08-09"
+    _create_briefing(report_date)
+    article_ids = [
+        _create_article(
+            report_date,
+            f"merge-group-{index}",
+            f"수동 묶음 병합 기사 {index}",
+            f"매체 {index}",
+            f"2026-08-09T0{index}:00:00Z",
+        )
+        for index in range(1, 5)
+    ]
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+
+    first_group = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids[:2],
+            "expectedRevision": revision,
+        },
+    )
+    assert first_group.status_code == 200
+    revision = first_group.json()["data"]["revision"]
+    second_group = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids[2:],
+            "expectedRevision": revision,
+        },
+    )
+    assert second_group.status_code == 200
+    revision = second_group.json()["data"]["revision"]
+
+    merged = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids,
+            "expectedRevision": revision,
+        },
+    )
+    assert merged.status_code == 200
+    assert set(merged.json()["data"]["issue"]["articleIds"]) == set(article_ids)
+
+    issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    assert len(issues) == 1
+    assert issues[0]["manualGroup"] is True
+    assert set(issues[0]["articleIds"]) == set(article_ids)

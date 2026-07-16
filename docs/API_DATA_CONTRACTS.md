@@ -555,6 +555,9 @@ POST /api/issues/manual-group
 요청은 `reportDate`, `articleIds`, `expectedRevision`을 받는다. 선택 기사는 기존 이슈에서
 `remove` 처리되고 새 수동 이슈에는 `add` 처리된다. 수동 이슈는 `manual_group=true`로
 기록하며, 이후 자동 재군집화에서도 해당 수동 구성의 배타성을 다시 적용한다.
+화면에서 기존 이슈 묶음을 선택하면 그 이슈의 유효 `articleIds` 전체를 요청에 포함한다.
+따라서 기존 묶음끼리 또는 기존 묶음과 개별 기사를 선택하면 구성 전체가 하나의 새 수동
+이슈로 합쳐지고, 이전 이슈에는 선택된 구성원이 남지 않는다.
 
 ```text
 POST /api/cluster-runs
