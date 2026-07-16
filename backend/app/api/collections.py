@@ -28,7 +28,7 @@ class CollectionRequest(BaseModel):
     reportDate: str | None = None
     lookbackHours: int = 48
     maxRecordsPerQuery: int = 50
-    collectionLimit: int = 200
+    collectionLimit: int = 400
     enableYonhap: bool = True
     queries: list[CollectionQuery] = Field(default_factory=list)
     coreKeywords: list[str] = Field(default_factory=list)

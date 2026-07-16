@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from backend.app.services.classification.service import get_relevance
+from backend.app.services.classification.sentinel import detect_incident_sentinel
 from backend.app.services.collection.http import CollectionHttpError, http_get
 from backend.app.services.collection.rss_parser import parse_rss_items
 
@@ -17,5 +18,10 @@ def fetch_yonhap_rss(
         raise CollectionHttpError(f"연합뉴스 RSS 응답 {status}", status=status)
     items = parse_rss_items(text, "연합뉴스 RSS", "연합뉴스")
     items = [item for item in items if within_lookback(item.get("pubDate"))]
-    items = [item for item in items if get_relevance(item)["rank"] < 99]
+    items = [
+        {**item, "_sentinel": sentinel}
+        for item in items
+        if (sentinel := detect_incident_sentinel(item))["matched"]
+        or get_relevance(item)["rank"] < 99
+    ]
     return {"items": items[:collection_limit], "provider": "연합뉴스 RSS"}

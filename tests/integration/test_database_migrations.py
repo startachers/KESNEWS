@@ -31,6 +31,7 @@ EXPECTED_MIGRATIONS = [
     "0005_article_body_extraction.sql",
     "0006_article_top_issue_tag.sql",
     "0007_manual_issue_group.sql",
+    "0008_query_groups_17.sql",
 ]
 
 
@@ -148,6 +149,21 @@ def test_manual_issue_group_migration_marks_manual_groups(tmp_path):
         connection.close()
 
 
+def test_query_groups_migration_adds_only_incident_assessment_column(tmp_path):
+    connection = get_connection(tmp_path / "incident.db")
+    try:
+        apply_migrations(connection)
+        assessment_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(article_assessments)")
+        }
+        article_columns = {row[1] for row in connection.execute("PRAGMA table_info(articles)")}
+        assert "incident_json" in assessment_columns
+        assert "publisher_id" not in article_columns
+        assert "publisher_allowed" not in article_columns
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -195,6 +211,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0005_article_body_extraction.sql",
         "0006_article_top_issue_tag.sql",
         "0007_manual_issue_group.sql",
+        "0008_query_groups_17.sql",
     ]
     upgraded = get_connection(db_path)
     try:

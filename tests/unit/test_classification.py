@@ -39,10 +39,12 @@ def test_classifier_version_is_rules_v3():
 def test_classify_article_critical_risk_from_heavy_keyword():
     raw = {"title": "공장 화재로 1명 사망", "description": "야간 화재로 근로자 1명이 사망했다."}
     result = classify_article(raw, RISK_KEYWORDS, POSITIVE_KEYWORDS)
-    # 공사·전기안전 관련성이 낮으므로 심각도는 높아도 자동 우선도는 cap 된다.
-    assert result["risk"] == "routine"
+    # 중대화재 Sentinel은 전기 원인 확인 전에도 rank 3으로 보존한다.
+    assert result["risk"] == "critical"
+    assert result["assessment"]["autoReasons"]["relevanceRank"] == 3
+    assert result["assessment"]["incident"]["cause_status"] == "unknown"
     assert result["assessment"]["autoSeverityScore"] == 100
-    assert "low_relevance_cap" in result["assessment"]["autoReasons"]["appliedCaps"]
+    assert "low_relevance_cap" not in result["assessment"]["autoReasons"]["appliedCaps"]
     assert result["sentiment"] == "negative"
     assert "사망" in result["matchedKeywords"]
 

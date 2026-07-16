@@ -19,6 +19,7 @@ from backend.app.services.classification.rule_engine import (
     matched_terms,
 )
 from backend.app.services.extraction.cleaner import clean_text
+from backend.app.services.classification.sentinel import detect_incident_sentinel
 from backend.app.services.ids import make_id
 from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
@@ -31,6 +32,7 @@ PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
 def get_relevance(article: Article) -> dict[str, Any]:
     title, full_text = article_text(article)
+    sentinel = article.get("_sentinel") or detect_incident_sentinel(article)
 
     def authority_context(text: str) -> list[str]:
         authority_terms = (
@@ -112,7 +114,7 @@ def get_relevance(article: Article) -> dict[str, Any]:
             3,
             "power_outage",
             "③ 정전·전력공급 장애",
-            lambda text: re.findall(
+            lambda text: (["사고 Sentinel"] if sentinel["matched"] else []) + re.findall(
                 r"대규모[\s·ㆍ-]*정전|광역[\s·ㆍ-]*정전|일대[\s·ㆍ-]*정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
                 text,
             ),
@@ -228,6 +230,7 @@ def _lower_priority(priority: str, maximum: str) -> str:
 
 
 def assess_article(article: Article) -> dict[str, Any]:
+    sentinel = article.get("_sentinel") or detect_incident_sentinel(article)
     relevance = get_relevance(article)
     event_type, event_rules = infer_event_type(article)
     severity_score, severity_rule, severity_terms = _severity(article, event_type)
@@ -299,6 +302,7 @@ def assess_article(article: Article) -> dict[str, Any]:
         "autoPriority": priority,
         "autoTone": tone,
         "autoReasons": reasons,
+        "incident": sentinel["incident"],
     }
 
 
@@ -311,6 +315,7 @@ def classify_article(
     ]
     return {
         **raw,
+        "_sentinel": raw.get("_sentinel") or detect_incident_sentinel(raw),
         "id": raw.get("id") or make_id(),
         "pubDate": raw.get("pubDate") or now_iso(),
         "description": clean_text(raw.get("description") or ""),

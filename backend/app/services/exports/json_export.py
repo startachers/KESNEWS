@@ -16,8 +16,8 @@ from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 5
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
+SCHEMA_VERSION = 6
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -225,6 +225,28 @@ def import_export(
             assessment=(article.get("assessment") or classified["assessment"]),
             classifier_version=CLASSIFIER_VERSION,
         )
+        matched_query_ids = [
+            str(query_id)
+            for query_id in (article.get("matchedQueryIds") or [])
+            if str(query_id).strip()
+        ]
+        for query_id in matched_query_ids:
+            article_repo.insert_observation(
+                connection,
+                article_id=article_id,
+                collection_run_provider_id=None,
+                provider="import",
+                provider_item_key=None,
+                query_group_id=query_id,
+                raw_url=article.get("url"),
+                raw_title=article.get("title"),
+                raw_source=article.get("source"),
+                raw_published_at=article.get("pubDate"),
+                raw_description=article.get("description"),
+                raw_payload_json=None,
+                dedup_method="imported_observation",
+                dedup_score=None,
+            )
         imported_assessment = article.get("assessment") or {}
         final_patch = {
             key: imported_assessment[key]

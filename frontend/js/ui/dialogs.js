@@ -4,7 +4,7 @@ import { parseDate } from "../utils/dates.js";
 import { refreshArticles } from "../features/collection.js";
 import * as api from "../api/client.js";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
-import { persistAndRender } from "../features/articles.js?v=20260716-11";
+import { persistAndRender } from "../features/articles.js?v=20260716-12";
 import { renderAll } from "./renderers.js";
 import { showToast } from "./notifications.js";
 
@@ -22,7 +22,7 @@ export function openSettings() {
   $("settingYonhap").checked = settings.enableYonhap !== false;
   $("settingLookback").value = String(settings.lookback);
   $("settingMaxRecords").value = String(settings.maxRecords);
-  $("settingCollectionLimit").value = String(settings.collectionLimit || 200);
+  $("settingCollectionLimit").value = String(settings.collectionLimit || 400);
   $("settingEndpoint").value = settings.endpoint;
   $("settingCoreKeywords").value = settings.coreKeywords.join(", ");
   $("settingRiskKeywords").value = settings.riskKeywords.join(", ");

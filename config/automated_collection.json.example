@@ -1,7 +1,7 @@
 {
   "lookbackHours": 48,
   "maxRecordsPerQuery": 50,
-  "collectionLimit": 200,
+  "collectionLimit": 400,
   "enableYonhap": true,
   "queries": [
     {"id": "kesco_direct", "label": "공사 직접 보도", "query": "(\"한국전기안전공사\" OR \"전기안전공사\" OR \"KESCO\")"},

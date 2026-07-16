@@ -226,8 +226,8 @@ def upsert_assessment(
             article_id, auto_category, auto_risk, auto_risk_score, auto_sentiment,
             auto_reasons_json, classifier_version, updated_at, auto_event_type,
             auto_relevance_score, auto_severity_score, auto_priority_score,
-            auto_priority, auto_tone
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            auto_priority, auto_tone, incident_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(article_id) DO UPDATE SET
             auto_category = excluded.auto_category,
             auto_risk = excluded.auto_risk,
@@ -241,6 +241,7 @@ def upsert_assessment(
             auto_priority_score = excluded.auto_priority_score,
             auto_priority = excluded.auto_priority,
             auto_tone = excluded.auto_tone,
+            incident_json = excluded.incident_json,
             updated_at = excluded.updated_at
         """,
         (
@@ -258,6 +259,9 @@ def upsert_assessment(
             assessment.get("autoPriorityScore"),
             priority,
             assessment.get("autoTone"),
+            json.dumps(assessment.get("incident"), ensure_ascii=False)
+            if assessment.get("incident") is not None
+            else None,
         ),
     )
 
@@ -304,6 +308,7 @@ def assessment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     auto_tone = row["auto_tone"] or row["auto_sentiment"]
     auto_category = row["auto_category"]
     auto_event_type = row["auto_event_type"]
+    incident = json.loads(row["incident_json"]) if row["incident_json"] else None
     return {
         "autoCategory": auto_category,
         "autoEventType": auto_event_type,
@@ -313,6 +318,7 @@ def assessment_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         "autoPriority": auto_priority,
         "autoTone": auto_tone,
         "autoReasons": reasons,
+        "incident": incident,
         "finalCategory": row["final_category"],
         "finalEventType": row["final_event_type"],
         "finalPriority": row["final_priority"],
@@ -355,6 +361,12 @@ latest_observation AS (
         FROM article_observations
     )
     WHERE rn = 1
+),
+matched_queries AS (
+    SELECT article_id, GROUP_CONCAT(DISTINCT query_group_id) AS query_group_ids
+    FROM article_observations
+    WHERE query_group_id IS NOT NULL AND query_group_id != ''
+    GROUP BY article_id
 )
 SELECT
     a.id AS id,
@@ -388,6 +400,8 @@ SELECT
     aa.final_tone AS final_tone,
     aa.manual_override AS manual_override,
     aa.classifier_version AS classifier_version,
+    aa.incident_json AS incident_json,
+    mq.query_group_ids AS query_group_ids,
     ba.selected AS selected,
     ba.starred AS starred,
     ba.top_issue AS top_issue,
@@ -398,6 +412,7 @@ FROM candidate_ids ci
 JOIN articles a ON a.id = ci.article_id
 LEFT JOIN latest_observation lo ON lo.article_id = a.id
 LEFT JOIN article_assessments aa ON aa.article_id = a.id
+LEFT JOIN matched_queries mq ON mq.article_id = a.id
 LEFT JOIN briefings b ON b.report_date = :report_date
 LEFT JOIN briefing_articles ba ON ba.briefing_id = b.id AND ba.article_id = a.id
 """
@@ -441,6 +456,10 @@ def list_candidates(
                 "severityScore": row["auto_severity_score"],
                 "priorityScore": row["auto_priority_score"],
                 "assessment": assessment,
+                "incident": assessment["incident"] if assessment else None,
+                "matchedQueryIds": sorted(
+                    query_id for query_id in (row["query_group_ids"] or "").split(",") if query_id
+                ),
                 "matchedKeywords": reasons.get("matchedTerms", []) if isinstance(reasons, dict) else reasons,
                 "included": bool(row["selected"]) if row["selected"] is not None else False,
                 "starred": bool(row["starred"]) if row["starred"] is not None else False,

@@ -1,3 +1,6 @@
+import csv
+import io
+
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -42,7 +45,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 5
+    assert payload["schemaVersion"] == 6
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -81,6 +84,41 @@ def test_json_import_rejects_unsupported_schema_version():
     assert response.json()["error"]["code"] == "IMPORT_SCHEMA_UNSUPPORTED"
 
 
+def test_json_schema_v6_round_trip_preserves_incident_and_accepts_v5():
+    report_date = "2025-02-13"
+    client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
+    client.post(
+        "/api/articles",
+        json={
+            "reportDate": report_date,
+            "title": "공장 화재 1명 사망, 원인 조사 중",
+            "source": "테스트일보",
+            "url": "https://example.com/exports/incident-fire",
+            "description": "재산피해 규모는 아직 확인되지 않았다.",
+            "category": "major_fire_breaking",
+        },
+    )
+
+    payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
+    assert payload["schemaVersion"] == 6
+    assert payload["articles"][0]["incident"]["incident_type"] == "fire"
+    assert payload["articles"][0]["incident"]["cause_status"] == "unknown"
+    assert payload["articles"][0]["incident"]["property_damage_krw"] is None
+    payload["articles"][0]["matchedQueryIds"] = ["major_fire_breaking", "strategy_trends"]
+
+    target_date = "2025-02-14"
+    imported = client.post(f"/api/exports/{target_date}.json", json=payload)
+    assert imported.status_code == 200
+    restored = client.get(f"/api/exports/{target_date}.json").json()["data"]
+    assert restored["articles"][0]["incident"] == payload["articles"][0]["incident"]
+    assert restored["articles"][0]["category"] == "major_fire_breaking"
+    assert restored["articles"][0]["matchedQueryIds"] == ["major_fire_breaking", "strategy_trends"]
+
+    legacy_payload = {**payload, "schemaVersion": 5, "articles": []}
+    legacy_import = client.post("/api/exports/2025-02-15.json", json=legacy_payload)
+    assert legacy_import.status_code == 200
+
+
 def test_json_round_trip_preserves_issue_editor_and_membership_override():
     report_date = "2025-02-09"
     first = _setup_briefing_with_article(report_date)
@@ -112,7 +150,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 5
+    assert payload["schemaVersion"] == 6
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -160,7 +198,7 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 5
+    assert payload["schemaVersion"] == 6
     assert payload["aiRuns"][0]["evidence"]
     assert payload["articles"][0]["bodyText"] == full_text
 
@@ -221,6 +259,47 @@ def test_csv_export_import_round_trip_preserves_risk_and_selection():
     assert len(listed) == 1
     assert listed[0]["starred"] is True
     assert listed[0]["note"] == "중요 메모"
+
+
+def test_csv_round_trip_preserves_incident_and_exports_unknowns_as_blanks():
+    report_date = "2025-02-16"
+    client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
+    client.post(
+        "/api/articles",
+        json={
+            "reportDate": report_date,
+            "title": "창고 화재, 피해 규모 파악 중",
+            "source": "테스트일보",
+            "url": "https://example.com/exports/csv-incident",
+            "description": "소방당국이 큰불을 진화하고 있다.",
+            "category": "major_fire_breaking",
+        },
+    )
+    csv_text = client.get(f"/api/exports/{report_date}.csv").text
+    rows = list(csv.DictReader(io.StringIO(csv_text.lstrip("﻿"))))
+    assert rows[0]["사고유형"] == "fire"
+    assert rows[0]["원인상태"] == "unknown"
+    assert rows[0]["사망"] == ""
+    assert rows[0]["재산피해"] == ""
+    rows[0]["검색일치항목"] = "major_fire_breaking|strategy_trends"
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=rows[0].keys(), lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+    csv_text = "﻿" + buffer.getvalue()
+
+    target_date = "2025-02-17"
+    client.put(f"/api/briefings/{target_date}", json={"expectedRevision": 0, "patch": {}})
+    imported = client.post(f"/api/exports/{target_date}.csv", json={"csv": csv_text})
+    assert imported.status_code == 200
+    restored = client.get("/api/articles", params={"report_date": target_date}).json()["data"]["articles"]
+    assert restored[0]["incident"]["incident_type"] == "fire"
+    assert restored[0]["incident"]["deaths"] is None
+    assert restored[0]["category"] == "major_fire_breaking"
+    assert restored[0]["matchedQueryIds"] == ["major_fire_breaking", "strategy_trends"]
+    restored_csv = client.get(f"/api/exports/{target_date}.csv").text
+    restored_row = next(csv.DictReader(io.StringIO(restored_csv.lstrip("﻿"))))
+    assert restored_row["검색일치항목"] == "major_fire_breaking|strategy_trends"
 
 
 def test_csv_import_requires_existing_briefing():

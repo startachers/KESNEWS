@@ -37,7 +37,7 @@ export async function runSearch(auto = false) {
       reportDate: state.date,
       lookbackHours: Number(settings.lookback),
       maxRecordsPerQuery: Number(settings.maxRecords),
-      collectionLimit: Number(settings.collectionLimit || 200),
+      collectionLimit: Number(settings.collectionLimit || 400),
       enableYonhap: !!settings.enableYonhap,
       queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query })),
       coreKeywords: settings.coreKeywords,

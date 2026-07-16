@@ -1273,7 +1273,7 @@ reports/YYYY/MM/KESCO_일일언론브리핑_YYYY-MM-DD_vN.html
 - 로그: 크기 기반 회전
 
 구현 기본값은 DB 최근 30개, 로그 파일당 5 MiB와 과거 파일 5개다. 현재 정식 백업은
-schemaVersion 5이며 기사 전문·전문 수집 상태까지 왕복한다. 최종 확정 시 JSON을
+schemaVersion 6이며 기사 전문·전문 수집 상태와 사고 Sentinel 정보를 왕복한다. 최종 확정 시 JSON을
 `backups/briefing/YYYY-MM-DD_vN.json`에도 저장하며 최종 snapshot과
 HTML은 자동 삭제하지 않는다. 운영 상태는 `GET /api/operations/status`에서 DB 무결성,
 최근 백업, 마지막 수집과 마지막 정상 수집을 함께 확인한다.

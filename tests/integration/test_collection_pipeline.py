@@ -13,7 +13,7 @@ def _yonhap_result(url, pub_date, **overrides):
         "source": "연합뉴스",
         "url": url,
         "pubDate": pub_date,
-        "description": "국정감사에서 안전관리 실태가 지적됐다.",
+        "description": "국정감사에서 전기안전 관리 실태가 지적됐다.",
         "provider": "연합뉴스 RSS",
     }
     item.update(overrides)

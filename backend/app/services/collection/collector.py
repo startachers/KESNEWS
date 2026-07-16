@@ -11,7 +11,13 @@ from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.classification.rule_engine import infer_category, should_exclude
-from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article, relevance_sort_key
+from backend.app.services.classification.sentinel import detect_incident_sentinel
+from backend.app.services.classification.service import (
+    CLASSIFIER_VERSION,
+    classify_article,
+    get_relevance,
+    relevance_sort_key,
+)
 from backend.app.services.collection.custom_endpoint import fetch_custom_endpoint
 from backend.app.services.collection.gdelt import fetch_gdelt_combined
 from backend.app.services.collection.google_news import fetch_google_rss
@@ -161,11 +167,24 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
     return article_id, "new", False
 
 
+def apply_collection_limit(items: list[Article], collection_limit: int) -> list[Article]:
+    """Sentinel·rank 1은 모두 보존하고 남은 자리만 관련도순으로 채운다."""
+    protected = [
+        item
+        for item in items
+        if item["_sentinel"]["matched"]
+        or item["assessment"]["autoReasons"]["relevanceRank"] == 1
+    ]
+    protected_ids = {id(item) for item in protected}
+    remaining = [item for item in items if id(item) not in protected_ids]
+    return protected + remaining[: max(0, collection_limit - len(protected))]
+
+
 async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     report_date = payload.get("reportDate") or today_seoul()
     lookback_hours = int(payload.get("lookbackHours") or 48)
     max_records = int(payload.get("maxRecordsPerQuery") or 50)
-    collection_limit = int(payload.get("collectionLimit") or 200)
+    collection_limit = int(payload.get("collectionLimit") or 400)
     enable_yonhap = payload.get("enableYonhap") is not False
     queries = replace_people_tokens(
         [q for q in (payload.get("queries") or []) if str(q.get("query") or "").strip()]
@@ -269,16 +288,25 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
+    sentinel_checked = [
+        {**article, "_sentinel": article.get("_sentinel") or detect_incident_sentinel(article)}
+        for article in collected
+    ]
+    relevant = [
+        article
+        for article in sentinel_checked
+        if article["_sentinel"]["matched"] or get_relevance(article)["rank"] < 99
+    ]
     eligible = [
         article
-        for article in collected
+        for article in relevant
         if not should_exclude(article, exclude_keywords) and within_lookback(article.get("pubDate"))
     ]
     first_pass_items, duplicates_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
 
     classified_items = [classify_article(raw, risk_keywords, positive_keywords) for raw in first_pass_items]
     classified_items.sort(key=relevance_sort_key)
-    classified_items = classified_items[:collection_limit]
+    classified_items = apply_collection_limit(classified_items, collection_limit)
 
     finished_at = now_iso()
     raw_count = len(collected)

@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS = {
   enableYonhap: true,
   lookback: 48,
   maxRecords: 50,
-  collectionLimit: 200,
+  collectionLimit: 400,
   aiModel: "gemma4:26b",
   endpoint: "",
   coreKeywords: ["한국전기안전공사", "전기안전공사", "KESCO"],

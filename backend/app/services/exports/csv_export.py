@@ -30,6 +30,18 @@ HEADERS = [
     "URL",
     "키워드",
     "메모",
+    "주분류",
+    "검색일치항목",
+    "사고유형",
+    "사고상태",
+    "원인상태",
+    "사망",
+    "부상",
+    "재산피해",
+    "정전세대",
+    "정전시간",
+    "중요시설",
+    "계획정전",
 ]
 
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
@@ -59,6 +71,7 @@ def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
     writer.writerow(HEADERS)
     for article in articles:
         relevance = get_relevance({"title": article["title"], "description": article["description"]})
+        incident = article.get("incident") or {}
         writer.writerow(
             [
                 _escape_cell("Y" if article["included"] else "N"),
@@ -75,6 +88,20 @@ def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
                 _escape_cell(article["url"]),
                 _escape_cell("|".join(article["matchedKeywords"] or [])),
                 _escape_cell(article["note"] or ""),
+                _escape_cell(article.get("category") or ""),
+                _escape_cell("|".join(article.get("matchedQueryIds") or [])),
+                _escape_cell(incident.get("incident_type")),
+                _escape_cell(incident.get("incident_status")),
+                _escape_cell(incident.get("cause_status")),
+                _escape_cell(incident.get("deaths")),
+                _escape_cell(incident.get("injuries")),
+                _escape_cell(incident.get("property_damage_krw")),
+                _escape_cell(incident.get("households")),
+                _escape_cell(incident.get("duration_minutes")),
+                _escape_cell(incident.get("critical_facility")),
+                _escape_cell(
+                    "Y" if incident.get("planned") is True else "N" if incident.get("planned") is False else ""
+                ),
             ]
         )
     return "﻿" + buffer.getvalue()
@@ -102,12 +129,44 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
         url = row.get("URL") or ""
         pub_date = row.get("보도일시") or None
         category = row.get("분류") or None
+        primary_category = row.get("주분류") or category
         risk = _REVERSE_RISK_LABELS.get(row.get("위험도", ""))
         sentiment = _REVERSE_SENTIMENT_LABELS.get(row.get("정서", ""))
         keywords = [k for k in (row.get("키워드") or "").split("|") if k]
         note = row.get("메모") or None
         selected = (row.get("브리핑선정") or "").strip().upper() == "Y"
         starred = (row.get("중요") or "").strip().upper() == "Y"
+        matched_query_ids = [item for item in (row.get("검색일치항목") or "").split("|") if item]
+        incident_type = row.get("사고유형") or None
+        incident = None
+        if incident_type:
+            def optional_int(field: str) -> int | None:
+                value = (row.get(field) or "").replace(",", "").strip()
+                return int(value) if value else None
+
+            planned_value = (row.get("계획정전") or "").strip().upper()
+            incident = {
+                "incident_type": incident_type,
+                "incident_status": row.get("사고상태") or None,
+                "critical_facility": row.get("중요시설") or None,
+            }
+            if incident_type == "fire":
+                incident.update(
+                    {
+                        "cause_status": row.get("원인상태") or None,
+                        "deaths": optional_int("사망"),
+                        "injuries": optional_int("부상"),
+                        "property_damage_krw": optional_int("재산피해"),
+                    }
+                )
+            elif incident_type == "outage":
+                incident.update(
+                    {
+                        "households": optional_int("정전세대"),
+                        "duration_minutes": optional_int("정전시간"),
+                        "planned": True if planned_value == "Y" else False if planned_value == "N" else None,
+                    }
+                )
 
         since = since_bound_iso(pub_date, 24 * 365)
         match = article_repo.find_matching_article(
@@ -143,6 +202,24 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
                 dedup_score=None,
             )
 
+        for query_id in matched_query_ids:
+            article_repo.insert_observation(
+                connection,
+                article_id=article_id,
+                collection_run_provider_id=None,
+                provider="import-csv",
+                provider_item_key=None,
+                query_group_id=query_id,
+                raw_url=url,
+                raw_title=title,
+                raw_source=source,
+                raw_published_at=pub_date,
+                raw_description="",
+                raw_payload_json=None,
+                dedup_method="imported_observation",
+                dedup_score=None,
+            )
+
         classified = classify_article(
             {"title": title, "description": "", "category": category}
         )
@@ -155,8 +232,9 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
             article_id=article_id,
             assessment={
                 **classified["assessment"],
-                "autoCategory": category or classified["assessment"]["autoCategory"],
+                "autoCategory": primary_category or classified["assessment"]["autoCategory"],
                 "autoTone": sentiment or classified["assessment"]["autoTone"],
+                "incident": incident,
             },
             classifier_version=CLASSIFIER_VERSION,
         )

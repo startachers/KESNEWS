@@ -3,7 +3,7 @@ import { escapeHtml, shortText } from "../utils/strings.js";
 import { formatDateTime, formatTime } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
 import { renderTopIssues } from "../features/issues.js";
-import { renderArticles } from "../features/articles.js?v=20260716-11";
+import { renderArticles } from "../features/articles.js?v=20260716-12";
 
 export function renderAll() {
   renderHeader();
