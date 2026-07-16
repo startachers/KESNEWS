@@ -6,6 +6,8 @@ import { finishSearchProgress, setSearchProgress, showToast, setStatus, setSearc
 import { renderSidePanel, renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
 
+const AUTO_CLUSTER_SIMILARITY_THRESHOLD = 0.15;
+
 export async function refreshArticles() {
   const result = await api.listArticles(state.date, false);
   const { articles, meta } = result.data;
@@ -72,7 +74,7 @@ export async function runSearch(auto = false) {
       if (state.articles.length) {
         setSearchButton(true, "이슈 묶는 중");
         try {
-          issueCount = await automaticallyRecluster(0.15);
+          issueCount = await automaticallyRecluster();
         } catch (error) {
           clusteringError = friendlyError(error);
         }
@@ -123,9 +125,9 @@ async function requestCollection(payload) {
   return response.data;
 }
 
-async function automaticallyRecluster(similarityThreshold) {
+async function automaticallyRecluster() {
   setSearchProgress(72, "15% 기준으로 동일 이슈 기사를 계산하는 중…");
-  const proposed = await api.createClusterRun(state.date, similarityThreshold);
+  const proposed = await api.createClusterRun(state.date, AUTO_CLUSTER_SIMILARITY_THRESHOLD);
   setSearchProgress(90, `${proposed.data.proposal?.length || 0}개 이슈 제안 생성 · 자동 적용 중…`);
   await api.applyClusterRun(proposed.data.id);
   setSearchProgress(97, "적용된 이슈 목록을 불러오는 중…");

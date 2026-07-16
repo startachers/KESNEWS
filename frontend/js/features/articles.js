@@ -11,15 +11,27 @@ import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
 
 const expandedIssueIds = new Set();
-const representativeByIssueId = new Map();
 const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
 let manualGroupPickerEntries = new Map();
 let manualGroupSearchText = "";
 
-export function collectionOrderSort(a, b) {
-  return dateValue(a.firstObservedAt) - dateValue(b.firstObservedAt)
+export function collectionOrderSort(a, b, relatedCounts = new Map()) {
+  return (relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)
+    || dateValue(a.firstObservedAt) - dateValue(b.firstObservedAt)
     || relevanceSort(a, b);
+}
+
+function relatedArticleCounts() {
+  const counts = new Map();
+  state.issues.forEach(issue => {
+    const relatedCount = Math.max(0, (issue.articleIds?.length || 0) - 1);
+    issue.articleIds?.forEach(articleId => counts.set(
+      articleId,
+      Math.max(counts.get(articleId) || 0, relatedCount),
+    ));
+  });
+  return counts;
 }
 
 function topIssueTagCount() {
@@ -80,15 +92,6 @@ function renderRelatedArticle(a) {
   return `<li class="related-article-row">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></li>`;
 }
 
-function representativeFor(issue, members) {
-  const savedId = representativeByIssueId.get(issue.id);
-  const saved = members.find(member => member.article.id === savedId);
-  if (saved) return saved;
-  const representative = members[Math.floor(Math.random() * members.length)];
-  representativeByIssueId.set(issue.id, representative.article.id);
-  return representative;
-}
-
 function rememberExpandedIssues() {
   expandedIssueIds.clear();
   els.articleList?.querySelectorAll(".related-articles[open]").forEach(details => {
@@ -101,19 +104,23 @@ function renderMediaGroups(items) {
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
-    const members = issue.articleIds.map(articleId => itemById.get(articleId)).filter(Boolean);
+    const members = issue.articleIds
+      .map(articleId => itemById.get(articleId))
+      .filter(Boolean)
+      .sort((left, right) => left.index - right.index);
     members.forEach(member => groupedIds.add(member.article.id));
-    return { issue, members, position: Math.min(...members.map(member => member.index)) };
-  }).filter(group => group.members.length).sort((left, right) => left.position - right.position);
-  const unclustered = items.filter(article => !groupedIds.has(article.id));
-  const groupedHtml = groups.map(({ issue, members }) => {
-    if (issue.articleIds.length === 1) return members.map(member => renderArticleCard(member.article)).join("");
-    const representative = representativeFor(issue, members);
+    return { issue, members, position: members[0]?.index };
+  }).filter(group => group.members.length);
+  const entries = groups.map(({ issue, members, position }) => {
+    if (issue.articleIds.length === 1) return { position, html: renderArticleCard(members[0].article) };
+    const representative = members[0];
     const related = members.filter(member => member.article.id !== representative.article.id);
-    return renderArticleCard(representative.article, issue, related);
-  }).join("");
-  const unclusteredHtml = unclustered.map(article => renderArticleCard(article)).join("");
-  return groupedHtml + unclusteredHtml;
+    return { position, html: renderArticleCard(representative.article, issue, related) };
+  });
+  items.forEach((article, index) => {
+    if (!groupedIds.has(article.id)) entries.push({ position: index, html: renderArticleCard(article) });
+  });
+  return entries.sort((left, right) => left.position - right.position).map(entry => entry.html).join("");
 }
 
 export function renderArticles() {
@@ -135,7 +142,10 @@ export function renderArticles() {
     return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && (filters.risk === "all" || a.risk === filters.risk) && selectionMatch;
   });
   if (filters.sort === "relevance") items.sort(relevanceSort);
-  else if (filters.sort === "collection") items.sort(collectionOrderSort);
+  else if (filters.sort === "collection") {
+    const counts = relatedArticleCounts();
+    items.sort((a, b) => collectionOrderSort(a, b, counts));
+  }
   else if (filters.sort === "newest") items.sort((a,b) => dateValue(b.pubDate)-dateValue(a.pubDate));
   else if (filters.sort === "source") items.sort((a,b) => (a.source || "").localeCompare(b.source || "", "ko"));
   else items.sort(prioritySort);

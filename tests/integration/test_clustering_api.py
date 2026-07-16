@@ -27,8 +27,9 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
 
     collection_feature = client.get("/js/features/collection.js")
     assert collection_feature.status_code == 200
-    assert "automaticallyRecluster(0.15)" in collection_feature.text
-    assert "createClusterRun(state.date, similarityThreshold)" in collection_feature.text
+    assert "AUTO_CLUSTER_SIMILARITY_THRESHOLD = 0.15" in collection_feature.text
+    assert "automaticallyRecluster()" in collection_feature.text
+    assert "createClusterRun(state.date, AUTO_CLUSTER_SIMILARITY_THRESHOLD)" in collection_feature.text
     assert "applyClusterRun(proposed.data.id)" in collection_feature.text
     assert "setSearchProgress(72" in collection_feature.text
     assert "finishSearchProgress(true)" in collection_feature.text
@@ -47,10 +48,12 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     articles_feature = client.get("/js/features/articles.js")
     assert articles_feature.status_code == 200
     assert "renderMediaGroups" in articles_feature.text
-    assert "unclustered.map(article => renderArticleCard(article))" in articles_feature.text
+    assert "function relatedArticleCounts()" in articles_feature.text
+    assert "(relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)" in articles_feature.text
+    assert "entries.sort((left, right) => left.position - right.position)" in articles_feature.text
     assert "renderRelatedArticle" in articles_feature.text
-    assert "representativeFor" in articles_feature.text
-    assert "Math.random()" in articles_feature.text
+    assert "const representative = members[0]" in articles_feature.text
+    assert "Math.random()" not in articles_feature.text
     assert "관련 기사 ${relatedMembers.length}건" in articles_feature.text
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text

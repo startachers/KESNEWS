@@ -27,15 +27,15 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260716-20" in response.text
+    assert "js/app.js?v=20260716-22" in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
     assert "css/app.css?v=20260716-13" in response.text
 
     app_script = client.get("/js/app.js")
-    assert 'dialogs.js?v=20260716-18' in app_script.text
-    assert 'articles.js?v=20260716-13' in app_script.text
-    assert 'collection.js?v=20260716-17' in app_script.text
+    assert 'dialogs.js?v=20260716-19' in app_script.text
+    assert 'articles.js?v=20260716-15' in app_script.text
+    assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
 
@@ -49,6 +49,10 @@ def test_index_html_is_served_at_root():
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
+    assert 'articles.js?v=20260716-15' in dialogs_script.text
+
+    renderers_script = client.get("/js/ui/renderers.js")
+    assert 'articles.js?v=20260716-15' in renderers_script.text
 
 
 def test_frontend_assets_disable_browser_cache():

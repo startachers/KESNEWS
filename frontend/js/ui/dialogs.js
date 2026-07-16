@@ -1,10 +1,10 @@
 import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, SETTINGS_KEY } from "../state/store.js";
 import { escapeHtml, escapeAttr, parseKeywordList, friendlyError } from "../utils/strings.js";
 import { parseDate } from "../utils/dates.js";
-import { refreshArticles } from "../features/collection.js?v=20260716-17";
+import { refreshArticles } from "../features/collection.js?v=20260716-19";
 import * as api from "../api/client.js?v=20260716-15";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
-import { persistAndRender } from "../features/articles.js?v=20260716-13";
+import { persistAndRender } from "../features/articles.js?v=20260716-15";
 import { renderAll } from "./renderers.js";
 import { setStatus, showToast } from "./notifications.js?v=20260716-1";
 
