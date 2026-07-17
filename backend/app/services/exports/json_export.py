@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from copy import deepcopy
+from datetime import date, timedelta
 from typing import Any
 
 from backend.app.core.clock import now_iso
@@ -12,15 +13,17 @@ from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories import report_draft_repository as report_draft_repo
+from backend.app.repositories import weather_repository as weather_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
+from backend.app.services.ids import make_id
 from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.report_draft import build_exchange_context, validate_content
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 11
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+SCHEMA_VERSION = 12
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -74,6 +77,7 @@ def build_export(connection: sqlite3.Connection, report_date: str) -> dict[str, 
         "reportDraft": report_draft_repo.serialize(
             report_draft_repo.get(connection, briefing["id"])
         ),
+        "weather": weather_repo.export_for_briefing(connection, briefing["id"]),
         "briefingVersions": [
             version_repo.serialize(row)
             for row in reversed(version_repo.list_versions(connection, briefing["id"]))
@@ -94,6 +98,7 @@ def build_version_export(row: sqlite3.Row, report_date: str) -> dict[str, Any]:
         "issues": snapshot.get("issues") or [],
         "aiRuns": [ai_run] if ai_run else [],
         "reportDraft": snapshot.get("reportDraft"),
+        "weather": snapshot.get("weather"),
         "briefingVersions": [serialized],
     }
 
@@ -138,6 +143,26 @@ def _remap_snapshot(
         item["articleId"] = new_id
         if isinstance(item.get("article"), dict):
             item["article"]["id"] = new_id
+    weather = result.get("weather") or {}
+    weather_context = weather.get("context") or {}
+    source_period_from = (weather_context.get("period") or {}).get("from")
+    if weather_context:
+        weather_context["reportDate"] = report_date
+        weather_context["period"] = {
+            "from": report_date,
+            "to": (date.fromisoformat(report_date) + timedelta(days=6)).isoformat(),
+        }
+        if source_period_from:
+            for day in weather_context.get("days") or []:
+                if not day.get("date"):
+                    continue
+                offset = (
+                    date.fromisoformat(day["date"])
+                    - date.fromisoformat(source_period_from)
+                ).days
+                day["date"] = (
+                    date.fromisoformat(report_date) + timedelta(days=offset)
+                ).isoformat()
     return result
 
 
@@ -174,6 +199,12 @@ def import_export(
 
     if existing is not None and mode == "replace":
         backup_database()
+        connection.execute(
+            "DELETE FROM briefing_weather_signals WHERE briefing_id = ?", (existing["id"],)
+        )
+        connection.execute(
+            "DELETE FROM briefing_weather WHERE briefing_id = ?", (existing["id"],)
+        )
         connection.execute(
             "DELETE FROM briefing_report_drafts WHERE briefing_id = ?", (existing["id"],)
         )
@@ -343,6 +374,76 @@ def import_export(
             evidence=context.evidence,
             input_signature=context.signature,
             based_on_ai_run_id=None,
+        )
+
+    imported_weather = payload.get("weather") or {}
+    imported_weather_context = imported_weather.get("context") or {}
+    imported_weather_attachment = imported_weather.get("attachment") or {}
+    if imported_weather_context:
+        imported_days = []
+        source_period_from = imported_weather_context.get("period", {}).get("from")
+        for item in imported_weather_context.get("days") or []:
+            copied = dict(item)
+            if source_period_from and copied.get("date"):
+                offset = (
+                    date.fromisoformat(copied["date"])
+                    - date.fromisoformat(source_period_from)
+                ).days
+                copied["date"] = (
+                    date.fromisoformat(report_date) + timedelta(days=offset)
+                ).isoformat()
+            imported_days.append(copied)
+        signals = [
+            {key: value for key, value in signal.items() if key != "id"}
+            for signal in imported_weather_context.get("riskSignals") or []
+        ]
+        weather_context = weather_repo.create_context(
+            connection,
+            report_date=report_date,
+            period_from=report_date,
+            period_to=(date.fromisoformat(report_date) + timedelta(days=6)).isoformat(),
+            overall_level=imported_weather_context.get("overallLevel") or "unknown",
+            issued_at=imported_weather_context.get("issuedAt"),
+            region_config_version=imported_weather_context.get("regionConfigVersion") or "imported",
+            risk_rule_version=imported_weather_context.get("riskRuleVersion") or "imported",
+            source_status=imported_weather_context.get("sourceStatus") or {},
+            days=imported_days,
+            alerts=imported_weather_context.get("alerts") or [],
+            input_signature=f"import-{report_date}-{imported_weather_context.get('inputSignature') or make_id()}",
+            signals=signals,
+        )
+        imported_by_key = {
+            item["signalKey"]: item["id"]
+            for item in weather_repo.list_signals(connection, weather_context["id"])
+        }
+        original_by_id = {
+            item["id"]: item["signalKey"]
+            for item in imported_weather_context.get("riskSignals") or []
+        }
+        selected_signals = [
+            {
+                "id": imported_by_key[original_by_id[item["id"]]],
+                "selected": bool(item.get("selected")),
+                "editorLevel": item.get("editorLevel"),
+                "editorNote": item.get("editorNote") or "",
+            }
+            for item in imported_weather_attachment.get("signals") or []
+            if item.get("id") in original_by_id
+            and original_by_id[item["id"]] in imported_by_key
+        ]
+        briefing = weather_repo.attach_context(
+            connection,
+            report_date=report_date,
+            expected_revision=briefing_repo.get_by_id(connection, briefing["id"])["revision"],
+            context_id=weather_context["id"],
+            include_in_report=bool(imported_weather_attachment.get("includeInReport")),
+            review_status=(
+                imported_weather_attachment.get("reviewStatus")
+                if imported_weather_attachment.get("reviewStatus") in {"pending", "reviewed"}
+                else "pending"
+            ),
+            selected_signals=selected_signals,
+            editor_note=imported_weather_attachment.get("editorNote") or "",
         )
 
     versions_imported = 0

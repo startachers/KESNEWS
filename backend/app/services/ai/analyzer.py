@@ -20,6 +20,7 @@ from backend.app.services.ai.schemas import (
     validate_basis_evidence,
     validate_evidence,
 )
+from backend.app.services.weather.ai_context import validated_weather_message
 
 
 class AiClient(Protocol):
@@ -115,11 +116,16 @@ def build_evidence_input(
 
 
 def input_signature(
-    model: str, evidence_input: list[dict[str, Any]], context_length: int | None = None
+    model: str,
+    evidence_input: list[dict[str, Any]],
+    context_length: int | None = None,
+    weather_context: dict[str, Any] | None = None,
 ) -> str:
     signature_input: dict[str, Any] = {"model": model, "articles": evidence_input}
     if context_length is not None:
         signature_input["contextLength"] = context_length
+    if weather_context is not None:
+        signature_input["weatherContext"] = weather_context
     raw = json.dumps(
         signature_input,
         ensure_ascii=False,
@@ -171,6 +177,8 @@ def analyze(
     prepared_by: str,
     evidence_input: list[dict[str, Any]],
     evidence: dict[str, str],
+    weather_context: dict[str, Any] | None = None,
+    weather_fallback: dict[str, Any] | None = None,
     cancel_token: CancellationToken | None = None,
 ) -> AnalysisOutput:
     basis_prompt = build_basis_prompt(report_date, prepared_by, evidence_input)
@@ -218,7 +226,13 @@ def analyze(
 
     accepted_ids = {article_id for item in accepted for article_id in item.articleIds}
     accepted_payload = [item.model_dump() for item in accepted]
-    prompt = build_prompt(report_date, prepared_by, evidence_input, accepted_payload)
+    prompt = build_prompt(
+        report_date,
+        prepared_by,
+        evidence_input,
+        accepted_payload,
+        weather_context=weather_context,
+    )
     raw = ""
     last_error = None
     for attempt in range(1, 3):
@@ -249,6 +263,16 @@ def analyze(
             for warning in validation_warnings:
                 if warning.get("stage") == "final" and warning.get("resolution") == "correction_requested":
                     warning["resolution"] = "corrected"
+            weather_message, weather_warning = validated_weather_message(
+                result.weatherManagementMessage.model_dump(),
+                weather_context,
+                weather_fallback or {"text": "", "weatherSignalIds": []},
+            )
+            if weather_warning:
+                validation_warnings.append(weather_warning)
+            result.weatherManagementMessage = type(result.weatherManagementMessage)(
+                **weather_message
+            )
             return AnalysisOutput(
                 result=result.model_dump(),
                 basis={

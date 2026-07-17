@@ -158,6 +158,24 @@ export function getLatestCollection(date) {
   return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
 }
 
+export function getWeatherBriefing(date) {
+  return request(`/weather/briefing?report_date=${encodeURIComponent(date)}`);
+}
+
+export function refreshWeather(date) {
+  return request(`/weather/refresh`, {
+    method: "POST",
+    body: JSON.stringify({ reportDate: date }),
+  }, 120000);
+}
+
+export function putBriefingWeather(date, payload) {
+  return request(`/briefings/${encodeURIComponent(date)}/weather`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getKescoPressStatus() {
   return request(`/kesco-press-releases/status`);
 }

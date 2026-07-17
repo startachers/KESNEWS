@@ -3,7 +3,7 @@ import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
 import { renderAll } from "./ui/renderers.js?v=20260717-4";
-import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260717-20";
+import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, openOverlay, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260717-20";
 import { runSearch } from "./features/collection.js?v=20260716-19";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260717-17";
@@ -13,11 +13,14 @@ import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput,
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
 import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260716-1";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260717-5";
+import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
 async function init() {
-  ["report", "statusDot", "globalStatus", "searchProgress", "searchProgressBar", "searchProgressPercent", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "star5Bar", "star4Bar", "star3Bar", "star2Bar", "star1Bar", "star5Count", "star4Count", "star3Count", "star2Count", "star1Count", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "autoSelectBtn", "autoSelectionOverlay", "autoSelectionMeta", "autoSelectionList", "autoSelectionLimitations", "autoSelectionApplyBtn", "autoSelectionCloseBtn", "manualGroupModeBtn", "manualGroupOverlay", "manualGroupSearch", "manualGroupList", "manualGroupCloseBtn", "manualGroupBtn", "manualGroupUnitCount", "manualGroupCount", "manualGroupCancelBtn", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState", "reportDraftOverlay", "externalAnalysisPaste", "reportDraftContent", "reportDraftSource", "reportDraftStatus"].forEach(id => els[id] = $(id));
+  ["report", "statusDot", "globalStatus", "searchProgress", "searchProgressBar", "searchProgressPercent", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "weatherPanel", "weatherSourceMeta", "weatherRegionSelect", "weatherRefreshBtn", "weatherReviewBtn", "weatherOverviewCard", "weatherLevelLabel", "weatherLevel", "weatherAlertCount", "weatherDays", "weatherStatus", "weatherRiskList", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "star5Bar", "star4Bar", "star3Bar", "star2Bar", "star1Bar", "star5Count", "star4Count", "star3Count", "star2Count", "star1Count", "topIssues", "articleList", "articleSearch", "categoryFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "autoSelectBtn", "autoSelectionOverlay", "autoSelectionMeta", "autoSelectionList", "autoSelectionLimitations", "autoSelectionApplyBtn", "autoSelectionCloseBtn", "manualGroupModeBtn", "manualGroupOverlay", "manualGroupSearch", "manualGroupList", "manualGroupCloseBtn", "manualGroupBtn", "manualGroupUnitCount", "manualGroupCount", "manualGroupCancelBtn", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "finalizeBtn", "finalReportBtn", "reopenBtn", "briefingState", "reportDraftOverlay", "externalAnalysisPaste", "reportDraftContent", "reportDraftSource", "reportDraftStatus"].forEach(id => els[id] = $(id));
+  ["weatherDetailPanel", "weatherDetailRainfall", "weatherDetailRainfallPlace", "weatherDetailTemperature", "weatherDetailTemperaturePlace", "weatherDetailAlertSummary", "weatherDetailPriority", "weatherResponseTabCount", "weatherSourceGrid", "weatherOfficialAlerts", "weatherComparisonDaySelect", "weatherRegionComparison", "weatherCompactSource", "weatherOpenBtn", "weatherCompactLevel", "weatherCompactAlerts", "weatherCompactFocus", "weatherCompactForecast", "weatherCompactTemperature", "weatherCompactRainfall", "weatherCompactProbability", "weatherCompactNotice", "weatherOverlay"].forEach(id => els[id] = $(id));
+  els.weatherExcludeBtn = $("weatherExcludeBtn");
 
   setState(await loadDailyState(localDateKey()));
   bindEvents();
@@ -58,6 +61,32 @@ function bindEvents() {
   $("addArticleBtn").addEventListener("click", openArticleModal);
   $("articleForm").addEventListener("submit", addManualArticle);
   els.refreshBtn.addEventListener("click", () => runSearch(false));
+  const activateWeatherTab = tab => {
+    document.querySelectorAll("[data-weather-tab]").forEach(button => {
+      const active = button.dataset.weatherTab === tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-weather-tab-panel]").forEach(panel => {
+      const active = panel.dataset.weatherTabPanel === tab;
+      panel.classList.toggle("active", active);
+      panel.hidden = !active;
+    });
+    els.weatherOverlay.querySelector(".modal").scrollTop = 0;
+  };
+  els.weatherOpenBtn.addEventListener("click", () => { activateWeatherTab("overview"); openOverlay("weatherOverlay"); });
+  document.querySelectorAll("[data-weather-tab]").forEach(button => button.addEventListener("click", () => activateWeatherTab(button.dataset.weatherTab)));
+  els.weatherRefreshBtn.addEventListener("click", refreshWeather);
+  els.weatherReviewBtn.addEventListener("click", toggleWeatherReview);
+  els.weatherExcludeBtn.addEventListener("click", excludeWeatherFromReport);
+  els.weatherRegionSelect.addEventListener("change", () => {
+    state.weatherRegionId = els.weatherRegionSelect.value;
+    renderAll();
+  });
+  els.weatherComparisonDaySelect.addEventListener("change", () => {
+    state.weatherComparisonDate = els.weatherComparisonDaySelect.value;
+    renderAll();
+  });
   els.reclusterBtn.addEventListener("click", openClusterProposal);
   els.autoSelectBtn.addEventListener("click", openAutoSelectionProposal);
   els.autoSelectionApplyBtn.addEventListener("click", applyAutoSelectionProposal);

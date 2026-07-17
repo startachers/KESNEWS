@@ -929,7 +929,7 @@ JSON은 정식 백업 형식이다.
 - `schemaVersion` 필수
 - 작업본, 기사 선정 상태, 중요 표시, 개별 기사 Top 이슈 태그, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
   보도자료 원문과 기사 출처 판정, 이슈 편집값, AI run, action note를 포함한다.
-- 공사 직접 보도 수동 override를 포함하는 현재 형식은 `schemaVersion=11`이다. 1~10 형식은 계속
+- 기상 컨텍스트를 포함하는 현재 형식은 `schemaVersion=12`이다. 1~11 형식은 계속
   읽을 수 있고, 신규 필드가 없는 과거 데이터는 자동 판정값을 사용한다.
 - 가져오기 전 schema 검증을 수행한다.
 - 내보내기→새 DB 가져오기→다시 내보내기의 의미상 동등성을 통합 테스트한다.
@@ -972,3 +972,42 @@ AI_EVIDENCE_INVALID
 IMPORT_SCHEMA_UNSUPPORTED
 IMPORT_CONFLICT
 ```
+
+---
+
+## 9. 기상 기반 선제대응 계약
+
+### 9.1 도메인 분리
+
+기상예보·기상특보·전기재해 위험 신호는 `articles` 또는 `issues`에 저장하지 않는다.
+기상청 원본 observation, 불변 정규화 context, 규칙 기반 위험 신호, 보고일별 담당자 검토
+상태를 각각 분리한다.
+
+### 9.2 조회·수집
+
+```text
+GET  /api/weather/briefing?report_date=YYYY-MM-DD
+POST /api/weather/refresh
+GET  /api/weather/runs/{run_id}
+PUT  /api/briefings/{date}/weather
+```
+
+- refresh는 서울 기준 오늘 보고일만 허용하며 브리핑 revision을 변경하지 않는다.
+- 수집 실행 조회는 provider별 성공·부분 실패·실패 상태와 오류를 반환하며, 없는 실행은
+  `404 WEATHER_RUN_NOT_FOUND`로 응답한다.
+- provider 일부 실패 시 성공한 신규값과 provider별 오류를 함께 보존한다.
+- 특보 source가 stale 또는 failed이면 `특보 없음`이나 `normal`로 판정하지 않는다.
+- 최신 context는 담당자가 검토하기 전까지 CEO 보고와 AI 입력에 자동 반영하지 않는다.
+- `PUT /api/briefings/{date}/weather`는 `expectedRevision`을 검증하고 성공 시 revision을
+  증가시킨다. final 작업본은 변경할 수 없다.
+- 보고 제외는 `includeInReport=false`로 저장하며 association row를 삭제하지 않는다.
+- 자동 재수집은 담당자 선택·단계 override·메모를 덮어쓰지 않는다.
+
+### 9.3 최종 보고
+
+- `includeInReport=true`인 기상 context는 `reviewStatus=reviewed`여야 finalize에 사용할 수 있다.
+- 최종 snapshot에는 첨부된 불변 context, 선택된 위험 신호, source 상태, 담당자 검토값을
+  복사한다.
+- 이후 기상 갱신은 과거 최종 snapshot과 생성된 HTML을 변경하지 않는다.
+- 기사 근거 `Axx`와 기상 근거 `Wxx`는 별도 index로 관리한다. 기상 ID를 기존
+  `articleIds`에 넣지 않는다.

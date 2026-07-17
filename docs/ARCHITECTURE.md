@@ -26,6 +26,22 @@
 → 날짜별 보관·복구
 ```
 
+기상 기반 선제대응은 기사 흐름과 독립적으로 다음 파이프라인을 가진다.
+
+```text
+기상청 예보·특보 수집
+→ 원본 observation 보존
+→ 7일 기상 context 정규화
+→ 규칙 기반 전기재해 위험 신호
+→ 담당자 검토·브리핑 첨부
+→ CEO 보고 snapshot
+```
+
+최신 기상 context와 보고에 첨부된 context를 구분한다. 자동 수집은 최신 context만 추가하며
+이미 검토된 브리핑 association을 바꾸지 않는다.
+서비스키가 설정된 경우 앱 시작 시 비동기로 한 번 갱신하며, 기사 자동수집과 분리된
+launchd 작업이 2시간 간격으로 같은 refresh API를 호출한다.
+
 1차 완성 목표는 “기능이 많은 플랫폼”이 아니라 다음 조건을 만족하는 안정적인 로컬 업무도구다.
 
 - Mac에서 원클릭 실행된다.
@@ -1425,7 +1441,7 @@ reports/YYYY/MM/KESCO_일일언론브리핑_YYYY-MM-DD_vN.html
 - 로그: 크기 기반 회전
 
 구현 기본값은 DB 최근 30개, 로그 파일당 5 MiB와 과거 파일 5개다. 현재 정식 백업은
-schemaVersion 11이며 기사 전문·전문 수집 상태, 사고 Sentinel, 원인 확정 수준·분야,
+schemaVersion 12이며 기사 전문·전문 수집 상태, 사고 Sentinel, 원인 확정 수준·분야,
 공사 직접 보도 수동 override를 왕복한다. 최종 확정 시 JSON을
 `backups/briefing/YYYY-MM-DD_vN.json`에도 저장하며 최종 snapshot과
 HTML은 자동 삭제하지 않는다. 운영 상태는 `GET /api/operations/status`에서 DB 무결성,

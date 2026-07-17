@@ -95,6 +95,38 @@
           </div>
         </section>
 
+        <section class="section weather-briefing weather-briefing-compact" id="weatherPanel" aria-labelledby="weatherTitle">
+          <div class="weather-compact-heading">
+            <div>
+              <p class="weather-eyebrow">DAILY WEATHER NOTE</p>
+              <h2 id="weatherTitle">기상 특이사항</h2>
+              <p id="weatherCompactSource">기상청 예보·특보를 확인하는 중입니다.</p>
+            </div>
+            <button class="mini-action no-print" id="weatherOpenBtn" type="button">상세 기상정보 · 관리</button>
+          </div>
+          <div class="weather-compact-content">
+            <div class="weather-compact-level">
+              <div class="weather-compact-label"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg><span>현재 상태</span></div>
+              <strong id="weatherCompactLevel">확인 중</strong>
+            </div>
+            <div class="weather-compact-item">
+              <div class="weather-compact-label"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg><span>기상특보</span></div>
+              <strong id="weatherCompactAlerts">특보 상태 확인 중</strong>
+              <p class="weather-compact-focus"><span>최우선 확인</span><b id="weatherCompactFocus">지역 확인 중</b></p>
+            </div>
+            <div class="weather-compact-item weather-compact-forecast">
+              <div class="weather-compact-label"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.3 9 4.5 4.5 0 0 0 7 18Z"/><path d="m9 20-1 2m5-2-1 2m5-2-1 2"/></svg><span>주요 예보</span></div>
+              <strong id="weatherCompactForecast">예보를 불러오는 중입니다.</strong>
+              <div class="weather-compact-metrics" aria-label="핵심 기상 수치">
+                <span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 14.8V5a4 4 0 0 0-8 0v9.8a5 5 0 1 0 8 0Z"/><path d="M10 8v9"/></svg><b>예보기간 최저·최고</b><strong id="weatherCompactTemperature">확인 중</strong></span>
+                <span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/></svg><b>예상 최대 시간강수량</b><strong id="weatherCompactRainfall">확인 중</strong></span>
+                <span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.3 9 4.5 4.5 0 0 0 7 18Z"/><path d="m9 20-1 2m5-2-1 2m5-2-1 2"/></svg><b>최고 강수확률</b><strong id="weatherCompactProbability">확인 중</strong></span>
+              </div>
+            </div>
+          </div>
+          <p class="weather-compact-notice" id="weatherCompactNotice" role="status"></p>
+        </section>
+
         <section class="section">
           <div class="section-heading">
             <div><h2>오늘의 핵심 경영 메시지</h2><p>브리핑 선정 기사의 본문·RSS 요약을 Gemma 4가 분석합니다. 보고 전 담당자가 근거를 확인·수정하세요.</p></div>
@@ -235,6 +267,72 @@
   </main>
 
   <input id="fileInput" type="file" accept=".json,.csv,application/json,text/csv" hidden>
+
+  <div class="overlay" id="weatherOverlay" role="dialog" aria-modal="true" aria-labelledby="weatherDetailTitle">
+    <div class="modal weather-detail-modal">
+      <div class="modal-header"><div><h2 id="weatherDetailTitle">상세 기상정보·선제대응 검토</h2><p id="weatherSourceMeta">기상청 예보·특보 연결 상태를 확인하는 중입니다.</p></div><button class="close-btn" data-close="weatherOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <div class="weather-detail-toolbar no-print">
+          <label class="weather-region-control">표시 권역
+            <select id="weatherRegionSelect">
+              <option value="national">전국</option>
+              <option value="capital">수도권</option>
+              <option value="gangwon">강원권</option>
+              <option value="chungcheong">충청권</option>
+              <option value="honam">호남권</option>
+              <option value="yeongnam">영남권</option>
+              <option value="jeju">제주권</option>
+            </select>
+          </label>
+        </div>
+        <div class="weather-detail-tabs no-print" role="tablist" aria-label="상세 기상정보 구분">
+          <button class="active" type="button" role="tab" aria-selected="true" data-weather-tab="overview">종합판단</button>
+          <button type="button" role="tab" aria-selected="false" data-weather-tab="response">특보·대응 <span id="weatherResponseTabCount">0</span></button>
+          <button type="button" role="tab" aria-selected="false" data-weather-tab="regions">권역비교</button>
+        </div>
+        <div class="weather-briefing weather-detail-shell" id="weatherDetailPanel">
+          <div class="weather-tab-panel active" data-weather-tab-panel="overview" role="tabpanel">
+            <div class="weather-overview-card" id="weatherOverviewCard">
+              <div class="weather-level-box">
+                <span id="weatherLevelLabel">전국 위험도</span>
+                <strong id="weatherLevel">확인 중</strong>
+                <small id="weatherAlertCount">특보 상태 확인 중</small>
+              </div>
+              <div class="weather-days" id="weatherDays" aria-label="7일 기상 전망"></div>
+            </div>
+            <div class="weather-detail-insights" id="weatherDetailInsights" aria-label="핵심 위험 판단">
+              <article class="priority"><span>최우선 확인 지역</span><strong id="weatherDetailPriority">확인 중</strong><small>공식 특보 최고 단계 기준</small></article>
+              <article><span>최대 시간강수량</span><strong id="weatherDetailRainfall">확인 중</strong><small id="weatherDetailRainfallPlace"></small></article>
+              <article><span>예상 최고기온</span><strong id="weatherDetailTemperature">확인 중</strong><small id="weatherDetailTemperaturePlace"></small></article>
+              <article><span>공식 특보</span><strong id="weatherDetailAlertSummary">확인 중</strong><small>현재·예비 구분</small></article>
+            </div>
+            <div class="weather-status" id="weatherStatus" role="status">기상정보를 불러오는 중입니다.</div>
+            <section class="weather-detail-section weather-source-section">
+              <div class="weather-detail-section-head"><div><h3>정보 최신성</h3><p>기상청 발표시각과 수집 상태</p></div></div>
+              <div class="weather-source-grid" id="weatherSourceGrid"></div>
+            </section>
+          </div>
+          <div class="weather-tab-panel" data-weather-tab-panel="response" role="tabpanel" hidden>
+            <section class="weather-detail-section first">
+              <div class="weather-detail-section-head"><div><h3>선제대응 위험 신호</h3><p>전기안전 영향과 점검사항을 확인하고 보고 반영 여부를 편집합니다.</p></div></div>
+              <div class="weather-risk-list" id="weatherRiskList"></div>
+            </section>
+            <section class="weather-detail-section">
+              <div class="weather-detail-section-head"><div><h3>공식 기상특보 원문</h3><p>현재·예비특보의 발효 지역과 시각</p></div></div>
+              <div class="weather-official-alerts" id="weatherOfficialAlerts"></div>
+            </section>
+          </div>
+          <div class="weather-tab-panel" data-weather-tab-panel="regions" role="tabpanel" hidden>
+            <section class="weather-detail-section first">
+              <div class="weather-detail-section-head"><div><h3>권역별 예보 비교</h3><p>선택 날짜의 기온·강수량·확률·풍속을 6개 권역에서 비교합니다.</p></div><label>비교 날짜 <select id="weatherComparisonDaySelect"></select></label></div>
+              <div class="weather-region-comparison" id="weatherRegionComparison"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn" data-close="weatherOverlay">닫기</button><button class="mini-action" id="weatherRefreshBtn" type="button">기상정보 새로고침</button><button class="mini-action" id="weatherExcludeBtn" type="button" hidden>보고 반영 해제</button><button class="btn btn-primary" id="weatherReviewBtn" type="button">CEO 보고 반영 검토</button></div>
+    </div>
+  </div>
 
   <div class="overlay" id="historyOverlay" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
     <div class="modal">

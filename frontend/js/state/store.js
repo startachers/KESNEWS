@@ -66,7 +66,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", naverStatus: "네이버 뉴스 API 미설정", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiValidationWarnings: [], aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0, sourceFilterStats: null };
+  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], weather: { configured: false, latestContext: null, attached: null, attachedContext: null, newerContextAvailable: false, latestRun: null }, weatherLoading: false, weatherRegionId: "national", fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", naverStatus: "네이버 뉴스 API 미설정", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiValidationWarnings: [], aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0, sourceFilterStats: null };
 }
 
 export function loadSettings() {
@@ -108,13 +108,14 @@ export async function loadDailyState(date) {
       if (error.code === "BRIEFING_NOT_FOUND") briefing = (await api.putBriefing(date, 0, {})).data;
       else throw error;
     }
-    const [articlesResult, issuesResult, latestCollectionResult] = await Promise.all([
+    const [articlesResult, issuesResult, latestCollectionResult, weatherResult] = await Promise.all([
       api.listArticles(date, false),
       api.listIssues(date),
       api.getLatestCollection(date).catch(error => {
         if (error.code === "COLLECTION_FAILED") return null;
         throw error;
       }),
+      api.getWeatherBriefing(date),
     ]);
     const articles = articlesResult.data.articles.map(a => ({ ...a, isDemo: false }));
     const successfulRun = briefing.aiState?.lastSuccessfulRun;
@@ -132,6 +133,7 @@ export async function loadDailyState(date) {
       ...makeEmptyState(date),
       articles,
       issues: issuesResult.data.issues || [],
+      weather: weatherResult.data,
       revision: briefing.revision,
       status: briefing.status || "draft",
       latestFinalVersion: briefing.latestFinalVersion,

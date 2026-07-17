@@ -26,6 +26,13 @@ EXPECTED_TABLES = {
     "issue_review_assessments",
     "briefing_report_drafts",
     "ai_selection_runs",
+    "weather_collection_runs",
+    "weather_run_providers",
+    "weather_observations",
+    "weather_contexts",
+    "weather_risk_signals",
+    "briefing_weather",
+    "briefing_weather_signals",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -49,6 +56,7 @@ EXPECTED_MIGRATIONS = [
     "0018_issue_direct_coverage_override.sql",
     "0019_article_direct_coverage_override.sql",
     "0020_top_issue_implies_briefing_selection.sql",
+    "0021_weather_briefing.sql",
 ]
 
 
@@ -548,8 +556,9 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0017_repair_post_deploy_grouped_top_tags.sql",
         "0018_issue_direct_coverage_override.sql",
         "0019_article_direct_coverage_override.sql",
-        "0020_top_issue_implies_briefing_selection.sql",
-    ]
+            "0020_top_issue_implies_briefing_selection.sql",
+            "0021_weather_briefing.sql",
+        ]
     upgraded = get_connection(db_path)
     try:
         row = upgraded.execute(

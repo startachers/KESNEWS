@@ -72,3 +72,10 @@ def test_input_signature_changes_when_context_length_changes():
     assert input_signature("model-a", evidence_input, 32_768) != input_signature(
         "model-a", evidence_input, 65_536
     )
+
+
+def test_input_signature_changes_when_weather_context_changes():
+    evidence_input = [{"id": "A01", "title": "기사", "editorNote": ""}]
+    baseline = input_signature("model-a", evidence_input, 32_768, {"signature": "one"})
+    changed = input_signature("model-a", evidence_input, 32_768, {"signature": "two"})
+    assert baseline != changed

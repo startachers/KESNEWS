@@ -12,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 SERVER_LABEL = "kr.or.kesco.media-briefing.server"
 COLLECTION_LABEL = "kr.or.kesco.media-briefing.collection"
+WEATHER_LABEL = "kr.or.kesco.media-briefing.weather"
 
 
 def _paths(label: str) -> Path:
@@ -52,6 +53,7 @@ def install() -> int:
     }
     server_path = _paths(SERVER_LABEL)
     collection_path = _paths(COLLECTION_LABEL)
+    weather_path = _paths(WEATHER_LABEL)
     _write_plist(
         server_path,
         {
@@ -80,18 +82,33 @@ def install() -> int:
             "StandardErrorPath": str(logs / "collection.log"),
         },
     )
-    for path in (server_path, collection_path):
+    _write_plist(
+        weather_path,
+        {
+            **common,
+            "Label": WEATHER_LABEL,
+            "ProgramArguments": [
+                str(python),
+                str(BASE_DIR / "scripts" / "run_automated_weather.py"),
+            ],
+            "StartInterval": 7200,
+            "ThrottleInterval": 300,
+            "StandardOutPath": str(logs / "weather.log"),
+            "StandardErrorPath": str(logs / "weather.log"),
+        },
+    )
+    for path in (server_path, collection_path, weather_path):
         _bootout(path)
         subprocess.run(
             ["launchctl", "bootstrap", f"gui/{os.getuid()}", str(path)], check=True
         )
-    print("launchd 설치 완료: 로그인 시 서버 시작, 2시간마다 자동수집")
+    print("launchd 설치 완료: 로그인 시 서버 시작, 2시간마다 기사·기상 자동수집")
     print(f"자동수집 설정: {config}")
     return 0
 
 
 def uninstall() -> int:
-    for label in (COLLECTION_LABEL, SERVER_LABEL):
+    for label in (WEATHER_LABEL, COLLECTION_LABEL, SERVER_LABEL):
         path = _paths(label)
         _bootout(path)
         path.unlink(missing_ok=True)
@@ -101,7 +118,7 @@ def uninstall() -> int:
 
 def status() -> int:
     result = 0
-    for label in (SERVER_LABEL, COLLECTION_LABEL):
+    for label in (SERVER_LABEL, COLLECTION_LABEL, WEATHER_LABEL):
         completed = subprocess.run(
             ["launchctl", "print", f"gui/{os.getuid()}/{label}"],
             check=False,

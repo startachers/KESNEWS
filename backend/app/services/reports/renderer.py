@@ -231,6 +231,92 @@ def _critical_alerts(snapshot: dict[str, Any]) -> str:
     )
 
 
+WEATHER_LEVEL_LABELS = {
+    "critical": "긴급",
+    "watch": "주의",
+    "info": "참고",
+    "normal": "정상",
+    "unknown": "확인 불가",
+}
+
+WEATHER_HAZARD_LABELS = {
+    "heavy_rain": "호우",
+    "typhoon": "태풍",
+    "heat": "폭염",
+    "strong_wind": "강풍",
+    "snow": "대설",
+    "cold": "한파",
+    "dry": "건조",
+    "other": "위험기상",
+}
+
+
+def _render_weather(snapshot: dict[str, Any], analysis: dict[str, Any]) -> str:
+    weather = snapshot.get("weather") or {}
+    context = weather.get("context") or {}
+    attachment = weather.get("attachment") or {}
+    if not context or not attachment.get("includeInReport"):
+        return ""
+    signals = context.get("riskSignals") or []
+    rows = []
+    for index, signal in enumerate(signals[:3], 1):
+        regions = ", ".join(signal.get("regionIds") or ["전국"])
+        risks = ", ".join(signal.get("electricalRisks") or [])
+        checks = ", ".join(signal.get("recommendedChecks") or [])
+        rows.append(
+            f'<article class="weather-risk weather-{_text(signal.get("level"), "info")}">'
+            f'<div class="weather-risk-head"><span>W{index:02d}</span>'
+            f'<strong>{_text(WEATHER_HAZARD_LABELS.get(signal.get("hazard"), signal.get("hazard")), "위험기상")}</strong>'
+            f'<em>{_text(WEATHER_LEVEL_LABELS.get(signal.get("level"), signal.get("level")))}</em></div>'
+            f'<p><b>영향 권역</b> {_text(regions)}</p><p><b>전기안전 우려</b> {_text(risks)}</p>'
+            f'<p><b>우선 확인</b> {_text(checks)}</p></article>'
+        )
+    if not rows:
+        rows.append('<p class="weather-normal">최신 특보 기준 별도 전기재해 위험 신호가 없습니다.</p>')
+    day_cards = []
+    for day in (context.get("days") or [])[:7]:
+        temperature = day.get("temperature") or {}
+        low, high = temperature.get("min"), temperature.get("max")
+        temp = f"{low}~{high}℃" if low is not None and high is not None else "기온 정보 없음"
+        pop = day.get("maxPrecipitationProbability")
+        pop_text = f"강수 {pop}%" if pop is not None else ""
+        day_cards.append(
+            f'<div class="weather-day weather-{_text(day.get("riskLevel"), "normal")}">'
+            f'<strong>{_text(str(day.get("date") or "")[-5:])}</strong>'
+            f'<span>{_text(day.get("weatherText"), "정보 없음")}</span>'
+            f'<small>{_text(temp)} { _text(pop_text) }</small></div>'
+        )
+    source_warnings = [
+        f"{name}: {item.get('status')}"
+        for name, item in (context.get("sourceStatus") or {}).items()
+        if item.get("status") != "success"
+    ]
+    warning = (
+        f'<p class="warning">일부 기상정보 상태: {_text(", ".join(source_warnings))}</p>'
+        if source_warnings
+        else ""
+    )
+    level = context.get("overallLevel") or "unknown"
+    note = attachment.get("editorNote") or ""
+    note_html = f'<p class="weather-note">담당자 검토: {_text(note)}</p>' if note else ""
+    management_message = (analysis.get("weatherManagementMessage") or {}).get("text") or ""
+    message_html = (
+        f'<p class="weather-management-message">{_text(management_message)}</p>'
+        if management_message
+        else ""
+    )
+    return (
+        '<section class="section weather-section"><h2><span class="sec-num">①</span>'
+        '기상 기반 선제대응</h2>'
+        f'<div class="weather-overview weather-{_text(level)}"><div><small>전국 위험도</small>'
+        f'<strong>{_text(WEATHER_LEVEL_LABELS.get(level, level))}</strong></div>'
+        f'<p>기상청 발표 {_text(_datetime_label(context.get("issuedAt"), "시각 미상"))} · '
+        f'담당자 검토 {_text(_datetime_label(attachment.get("reviewedAt"), "미검토"))}</p></div>'
+        f'{warning}{message_html}<div class="weather-days">{"".join(day_cards)}</div>'
+        f'<div class="weather-risks">{"".join(rows)}</div>{note_html}</section>'
+    )
+
+
 def _issue_cards(snapshot: dict[str, Any]) -> str:
     issues = snapshot.get("issues") or []
     articles_by_id = {item.get("id"): item for item in snapshot.get("articles") or []}
@@ -401,6 +487,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
         if (report_draft.get("stale") if report_draft else ai_run.get("stale"))
         else ""
     )
+    weather_html = _render_weather(snapshot, analysis)
+    section_numbers = ("②", "③", "④", "⑤") if weather_html else ("①", "②", "③", "④")
     styles = """
     :root{color-scheme:light;--navy:#12243a;--navy2:#173b51;--teal:#087f76;--mint:#dff3ef;--red:#b02a2a;--amber:#b06a12;--line:#d7dfe3;--soft:#f4f7f7;--ink:#22303a;--muted:#66757f}
     *{box-sizing:border-box}
@@ -479,8 +567,12 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .action{padding:18px 20px;border-left:4px solid var(--amber);background:#fff8e9;white-space:pre-wrap;font-size:14.5px}
     .empty{color:#7c8991}
     .warning{padding:10px 14px;border-left:3px solid #c97a16;background:#fff4df;color:#72501f;font-size:12.5px}
+    .weather-overview{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-left:6px solid var(--teal);background:#eff8f6}.weather-overview small{display:block;color:var(--muted);font-size:11px}.weather-overview strong{font-size:22px;color:var(--teal)}.weather-overview p{margin:0;color:var(--muted);font-size:12px}.weather-overview.weather-critical{border-color:var(--red);background:#fdf0f0}.weather-overview.weather-critical strong{color:var(--red)}.weather-overview.weather-watch{border-color:var(--amber);background:#fff8e9}.weather-overview.weather-watch strong{color:var(--amber)}.weather-overview.weather-unknown{border-color:#66757f;background:#f1f3f4}.weather-overview.weather-unknown strong{color:#4c5961}
+    .weather-days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px}.weather-day{padding:9px 7px;border:1px solid var(--line);border-radius:7px;text-align:center}.weather-day strong,.weather-day span,.weather-day small{display:block}.weather-day strong{font-size:11px;color:var(--navy)}.weather-day span{margin:3px 0;font-weight:800}.weather-day small{font-size:9.5px;color:var(--muted)}.weather-day.weather-critical{border-color:#d99191;background:#fdf3f3}.weather-day.weather-watch{border-color:#e2bd78;background:#fff8e9}
+    .weather-risks{display:grid;gap:8px;margin-top:10px}.weather-risk{padding:13px 15px;border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:8px;break-inside:avoid}.weather-risk.weather-critical{border-left-color:var(--red)}.weather-risk-head{display:flex;align-items:center;gap:9px}.weather-risk-head span{font-size:10px;font-weight:900;color:var(--teal)}.weather-risk-head strong{color:var(--navy)}.weather-risk-head em{margin-left:auto;font-style:normal;font-size:11px;font-weight:800}.weather-risk p{margin:5px 0 0;font-size:12.5px}.weather-risk b{color:var(--teal);margin-right:5px}.weather-normal{margin:0;padding:13px;background:#eff8f6;color:#22625d}.weather-note{padding:8px 11px;background:#fff8e9;color:#6d5324;font-size:12px}
+    .weather-management-message{margin:10px 0 0;padding:12px 14px;border-left:3px solid var(--teal);background:#f4faf9;font-weight:700}
     .footer{margin-top:38px;padding-top:14px;border-top:1px solid var(--line);color:#77858e;font-size:11px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    @media(max-width:760px){.masthead,.body{padding-left:24px;padding-right:24px}.kpis{padding:0 24px;grid-template-columns:1fr}.masthead .top{display:block}.date{text-align:left;margin-top:16px}.article-title-row{display:block}.article .meta{margin-top:4px}.article .desc{white-space:normal}.analysis-lead p{font-size:15px}}
+    @media(max-width:760px){.masthead,.body{padding-left:24px;padding-right:24px}.kpis{padding:0 24px;grid-template-columns:1fr}.masthead .top{display:block}.date{text-align:left;margin-top:16px}.article-title-row{display:block}.article .meta{margin-top:4px}.article .desc{white-space:normal}.analysis-lead p{font-size:15px}.weather-days{grid-template-columns:repeat(2,1fr)}}
     @page{size:A4;margin:12mm}
     @media print{body{background:#fff;font-size:10pt}.toolbar{display:none}main{width:auto;margin:0;box-shadow:none}
     .masthead{padding:10mm 8mm 8mm}.masthead h1{font-size:22pt}.kpis{padding:0 8mm;gap:.3mm}.body{padding:0 8mm 8mm}
@@ -498,11 +590,12 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     </header>
     <div class="kpis">{_kpi_strip(snapshot)}</div>
     <div class="body">
+    {weather_html}
     <div class="analysis-source">{stale_notice}{ai_caption}</div>
-    <section class="section"><h2><span class="sec-num">①</span>오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'), evidence)}</section>
-    <section class="section"><h2><span class="sec-num">②</span>경영 시사점</h2>{_render_trend_analysis(analysis, evidence)}</section>
-    <section class="section"><h2><span class="sec-num">③</span>참고 동향</h2>{_render_management_reference(analysis, evidence)}</section>
-    <section class="section"><h2><span class="sec-num">04</span>CEO 참고·지시사항</h2><div class="action">{_text(action_note)}</div></section>
+    <section class="section"><h2><span class="sec-num">{section_numbers[0]}</span>오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'), evidence)}</section>
+    <section class="section"><h2><span class="sec-num">{section_numbers[1]}</span>경영 시사점</h2>{_render_trend_analysis(analysis, evidence)}</section>
+    <section class="section"><h2><span class="sec-num">{section_numbers[2]}</span>참고 동향</h2>{_render_management_reference(analysis, evidence)}</section>
+    <section class="section"><h2><span class="sec-num">{section_numbers[3]}</span>CEO 참고·지시사항</h2><div class="action">{_text(action_note)}</div></section>
     <section class="section appendix" id="appendix-articles"><h2><span class="sec-tag">붙임</span>선정 기사 요약</h2><p class="section-caption">외부 AI 분석에 제공된 선정 기사입니다. 제목·핵심 1줄·언론사 정보로 빠르게 원문 근거를 확인할 수 있습니다.</p><div class="articles">{_article_cards(snapshot, evidence_by_article=evidence_by_article)}</div></section>
     {_unselected_evidence_cards(snapshot)}
     <footer class="footer"><span>최종본은 확정 당시 기사·평가·메모·AI 근거의 불변 snapshot입니다.</span><span>확정시각 {_text(_datetime_label(snapshot.get('finalizedAt'), '미확정', with_year=True))}</span></footer>

@@ -13,6 +13,7 @@ from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.core.clock import now_iso
 from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
+from backend.app.repositories import weather_repository as weather_repo
 from backend.app.repositories.database import backup_database, get_connection
 from backend.app.services.exports.json_export import build_version_export
 from backend.app.services.reports.renderer import render_report
@@ -79,6 +80,16 @@ async def finalize_briefing(report_date: str, request: RevisionRequest) -> Any:
         if briefing["revision"] != request.expectedRevision:
             return error_response(
                 "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+            )
+        weather_attachment = weather_repo.get_attachment(connection, briefing["id"])
+        if (
+            weather_attachment is not None
+            and weather_attachment["include_in_report"]
+            and weather_attachment["review_status"] != "reviewed"
+        ):
+            return error_response(
+                "WEATHER_REVIEW_REQUIRED",
+                "CEO 보고에 포함할 기상정보를 검토 완료해 주세요.",
             )
         backup_database()
         with connection:

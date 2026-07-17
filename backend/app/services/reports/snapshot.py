@@ -7,9 +7,11 @@ from backend.app.repositories import ai_run_repository as ai_run_repo
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories import report_draft_repository as report_draft_repo
+from backend.app.repositories import weather_repository as weather_repo
 from backend.app.services.ai.analyzer import build_evidence_input, input_signature
 from backend.app.services.ai.ollama_client import DEFAULT_CONTEXT_LENGTH
 from backend.app.services.reports.report_draft import build_exchange_context
+from backend.app.services.weather.ai_context import build_weather_ai_context
 
 SNAPSHOT_SCHEMA_VERSION = 1
 
@@ -106,8 +108,13 @@ def build_snapshot(
         run_context_length = (ai_run.get("request") or {}).get(
             "contextLength", DEFAULT_CONTEXT_LENGTH
         )
+        weather_context, _, _ = build_weather_ai_context(
+            weather_repo.snapshot_for_briefing(connection, briefing["id"])
+        )
         ai_run["stale"] = (
-            input_signature(ai_run["model"], current_input, run_context_length)
+            input_signature(
+                ai_run["model"], current_input, run_context_length, weather_context
+            )
             != ai_run["inputSignature"]
         )
     report_draft_row = report_draft_repo.get(connection, briefing["id"])
@@ -141,6 +148,7 @@ def build_snapshot(
         "aiRun": ai_run,
         "reportDraft": report_draft,
         "evidence": evidence,
+        "weather": weather_repo.snapshot_for_briefing(connection, briefing["id"]),
     }
     if version is not None:
         snapshot["briefing"]["status"] = "final"

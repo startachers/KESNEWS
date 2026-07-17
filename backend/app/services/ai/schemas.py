@@ -32,6 +32,11 @@ class RiskOutlook(Claim):
     isInference: Literal[True]
 
 
+class WeatherClaim(_StrictModel):
+    text: str = ""
+    weatherSignalIds: list[str] = Field(default_factory=list)
+
+
 class AnalysisBasisItem(_StrictModel):
     section: Literal["core", "implication", "reference"]
     articleFact: str
@@ -71,6 +76,7 @@ class AnalysisResult(_StrictModel):
     riskOutlook: RiskOutlook
     limitations: list[Claim] = Field(default_factory=list)
     confidence: Literal["low", "medium", "high"]
+    weatherManagementMessage: WeatherClaim = Field(default_factory=WeatherClaim)
 
     @model_validator(mode="after")
     def require_claim_evidence(self) -> "AnalysisResult":

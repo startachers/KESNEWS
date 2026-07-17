@@ -139,6 +139,12 @@ def reset_daily_work(
         "DELETE FROM briefing_report_drafts WHERE briefing_id = ?", (briefing["id"],)
     )
     connection.execute(
+        "DELETE FROM briefing_weather_signals WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute(
+        "DELETE FROM briefing_weather WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute(
         "DELETE FROM ai_selection_runs WHERE briefing_id = ?", (briefing["id"],)
     )
     connection.execute("DELETE FROM ai_runs WHERE briefing_id = ?", (briefing["id"],))

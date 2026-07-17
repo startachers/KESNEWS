@@ -20,6 +20,12 @@ from backend.app.api.operations import router as operations_router
 from backend.app.api.press_releases import router as press_releases_router
 from backend.app.api.reports import router as reports_router
 from backend.app.api.report_drafts import router as report_drafts_router
+from backend.app.api.weather import (
+    WeatherRefreshRequest,
+    refresh_weather,
+    router as weather_router,
+)
+from backend.app.core.clock import today_seoul
 from backend.app.core.logging import configure_logging
 from backend.app.repositories.database import check_database_integrity, get_connection, init_db
 from backend.app.repositories import ai_run_repository as ai_runs_repo
@@ -70,6 +76,13 @@ async def _run_migrations_on_startup() -> None:
         app.state.kesco_press_refresh_task = asyncio.create_task(
             _refresh_kesco_press_on_startup()
         )
+    if (
+        os.environ.get("KESCO_WEATHER_REFRESH_ON_STARTUP", "1") != "0"
+        and os.environ.get("KMA_SERVICE_KEY", "").strip()
+    ):
+        app.state.weather_refresh_task = asyncio.create_task(
+            _refresh_weather_on_startup()
+        )
 
 
 async def _refresh_kesco_press_on_startup() -> None:
@@ -83,6 +96,26 @@ async def _refresh_kesco_press_on_startup() -> None:
     except Exception:
         logger.warning(
             "KESCO 보도자료 시작 갱신 실패, 기존 저장 원문을 사용합니다.",
+            exc_info=True,
+        )
+
+
+async def _refresh_weather_on_startup() -> None:
+    try:
+        result = await refresh_weather(WeatherRefreshRequest(reportDate=today_seoul()))
+        if isinstance(result, dict):
+            run = (result.get("data") or {}).get("latestRun") or {}
+            logger.info(
+                "기상정보 시작 갱신: 상태 %s, 경고 %s건, 오류 %s건",
+                run.get("status"),
+                run.get("warningCount", 0),
+                run.get("errorCount", 0),
+            )
+        else:
+            logger.warning("기상정보 시작 갱신이 API 오류로 끝났습니다.")
+    except Exception:
+        logger.warning(
+            "기상정보 시작 갱신 실패, 마지막 정상 데이터를 유지합니다.",
             exc_info=True,
         )
 
@@ -150,4 +183,5 @@ app.include_router(issues_router)
 app.include_router(reports_router)
 app.include_router(report_drafts_router)
 app.include_router(operations_router)
+app.include_router(weather_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

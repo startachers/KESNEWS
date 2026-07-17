@@ -15,6 +15,7 @@ from backend.app.repositories import ai_run_repository as ai_runs_repo
 from backend.app.repositories import article_repository as articles_repo
 from backend.app.repositories import briefing_repository as briefings_repo
 from backend.app.repositories import issue_repository as issues_repo
+from backend.app.repositories import weather_repository as weather_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.ai.analyzer import (
     AnalysisError,
@@ -36,6 +37,7 @@ from backend.app.services.ai.runtime import (
 )
 from backend.app.services.ai.prompt_builder import PROMPT_VERSION
 from backend.app.services.extraction import article_body
+from backend.app.services.weather.ai_context import build_weather_ai_context
 
 router = APIRouter()
 ANALYSIS_TIMEOUT_SECONDS = max(30, int(os.environ.get("KESCO_AI_TIMEOUT_SECONDS", "300")))
@@ -70,6 +72,19 @@ def _inputs(connection, report_date: str) -> tuple[list[dict[str, Any]], dict[st
     for item in inputs:
         item["issueReviews"] = [reviews[issue_id] for issue_id in item["issueIds"] if issue_id in reviews]
     return inputs, evidence
+
+
+def _weather_inputs(connection, briefing) -> tuple[dict[str, Any] | None, dict[str, str], dict[str, Any]]:
+    attachment = weather_repo.get_attachment(connection, briefing["id"])
+    if (
+        attachment is None
+        or not attachment["include_in_report"]
+        or attachment["review_status"] != "reviewed"
+    ):
+        return build_weather_ai_context(None)
+    return build_weather_ai_context(
+        weather_repo.snapshot_for_briefing(connection, briefing["id"])
+    )
 
 
 def _refresh_selected_bodies(report_date: str) -> None:
@@ -125,10 +140,12 @@ def ai_state(
     serialized_success = None
     if success is not None:
         evidence_input, _ = _inputs(connection, briefing["report_date"])
+        weather_context, _, _ = _weather_inputs(connection, briefing)
         model = desired_model or success["model"]
         context_length = desired_context_length or default_client.context_length
         stale = (
-            input_signature(model, evidence_input, context_length) != success["input_signature"]
+            input_signature(model, evidence_input, context_length, weather_context)
+            != success["input_signature"]
         )
         serialized_success = ai_runs_repo.serialize(success, stale=stale)
     return {
@@ -202,6 +219,16 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 분석할 수 없습니다.")
         if briefing["revision"] != body.expectedRevision:
             return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
+        weather_attachment = weather_repo.get_attachment(connection, briefing["id"])
+        if (
+            weather_attachment is not None
+            and weather_attachment["include_in_report"]
+            and weather_attachment["review_status"] != "reviewed"
+        ):
+            return error_response(
+                "WEATHER_REVIEW_REQUIRED",
+                "AI 분석에 포함할 기상정보를 검토 완료해 주세요.",
+            )
         await asyncio.to_thread(_refresh_selected_bodies, report_date)
         connection.execute("BEGIN IMMEDIATE")
         orphan = ai_runs_repo.latest_running(connection)
@@ -222,10 +249,15 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             connection.rollback()
             return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
         evidence_input, evidence = _inputs(connection, report_date)
+        weather_context, weather_evidence, weather_fallback = _weather_inputs(
+            connection, briefing
+        )
         if not evidence:
             connection.rollback()
             return error_response("AI_SCHEMA_INVALID", "분석할 선정 기사가 없습니다.")
-        signature = input_signature(body.model, evidence_input, context_length)
+        signature = input_signature(
+            body.model, evidence_input, context_length, weather_context
+        )
         request_snapshot = {
             "reportDate": report_date,
             "preparedBy": briefing["prepared_by"] or "",
@@ -233,6 +265,7 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             "attemptLimitPerStage": 2,
             "pipeline": ["basis", "automatic_grounding", "final"],
             "contextLength": context_length,
+            "weatherContext": weather_context,
         }
         run = ai_runs_repo.create(
             connection,
@@ -272,6 +305,8 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
                 prepared_by=prepared_by,
                 evidence_input=evidence_input,
                 evidence=evidence,
+                weather_context=weather_context,
+                weather_fallback=weather_fallback,
                 cancel_token=cancel_token,
             )
         )
@@ -341,10 +376,16 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
     try:
         current = briefings_repo.get_by_date(connection, report_date)
         current_input, _ = _inputs(connection, report_date)
+        current_weather, _, _ = (
+            _weather_inputs(connection, current) if current is not None else (None, {}, {})
+        )
         if (
             current is None
             or current["revision"] != body.expectedRevision
-            or input_signature(body.model, current_input, context_length) != signature
+            or input_signature(
+                body.model, current_input, context_length, current_weather
+            )
+            != signature
         ):
             with connection:
                 ai_runs_repo.finish_failed(

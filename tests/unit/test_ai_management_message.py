@@ -45,7 +45,7 @@ def test_format_analysis_does_not_invent_reference_trend():
 def test_prompt_requests_the_management_message_direction_and_no_duplicate_headings():
     prompt = build_prompt("2026-07-17", "홍보실", [])
 
-    assert PROMPT_VERSION == "phase7-management-message-v4"
+    assert PROMPT_VERSION == "phase7-management-message-weather-v1"
     assert "① 오늘의 핵심 — managementMessage.text" in prompt
     assert "② 경영 시사점 — situationSummary.text" in prompt
     assert "③ 참고 동향 — keyIssues 중 urgency가 reference인 항목" in prompt

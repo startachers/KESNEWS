@@ -15,10 +15,11 @@
 
 ## launchd
 
-`./install_launchd.command install`은 두 LaunchAgent를 등록한다.
+`./install_launchd.command install`은 세 LaunchAgent를 등록한다.
 
 - `kr.or.kesco.media-briefing.server`: 로그인 시 시작, 비정상 종료 시 재시작
 - `kr.or.kesco.media-briefing.collection`: 2시간 간격 자동수집
+- `kr.or.kesco.media-briefing.weather`: 2시간 간격 기상정보 수집
 
 상태는 `./install_launchd.command status`, 제거는 `./install_launchd.command uninstall`로
 확인한다. 자동수집 설정은 Git 비추적 파일 `config/automated_collection.json`이다.
@@ -29,12 +30,16 @@
 ```text
 NAVER_CLIENT_ID=발급받은_Client_ID
 NAVER_CLIENT_SECRET=발급받은_Client_Secret
+KMA_SERVICE_KEY=공공데이터포털_기상청_서비스키
 ```
 
 서버와 자동수집 실행 스크립트가 시작할 때 단순 `KEY=value` 형식만 읽으며, 이미 설정된
 프로세스 환경변수가 있으면 그 값을 우선한다. 키를 바꾼 뒤 launchd 재설치는 필요 없지만
 서버 프로세스는 다시 시작해야 한다. 화면에는 `네이버 뉴스 API 연결됨 / 미설정 / 오류`
 세 상태만 표시하고 자격정보는 표시하지 않는다.
+
+기상정보는 서버 시작 시 비동기로 한 번 갱신하고 별도 LaunchAgent가 2시간 간격으로
+갱신한다. 시작 갱신만 끄려면 `KESCO_WEATHER_REFRESH_ON_STARTUP=0`을 설정한다.
 
 ## 장애별 복구
 

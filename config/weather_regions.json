@@ -1,0 +1,11 @@
+{
+  "version": "weather-region-v1",
+  "regions": [
+    {"id":"capital","label":"수도권","shortForecastPoints":[{"id":"seoul","label":"서울","nx":60,"ny":127},{"id":"incheon","label":"인천","nx":55,"ny":124}],"midLandCodes":["11B00000"],"midTemperaturePoints":[{"id":"11B10101","label":"서울"}],"areaTokens":["서울","인천","경기","수도권"]},
+    {"id":"gangwon","label":"강원권","shortForecastPoints":[{"id":"chuncheon","label":"춘천","nx":73,"ny":134},{"id":"gangneung","label":"강릉","nx":92,"ny":131}],"midLandCodes":["11D10000","11D20000"],"midTemperaturePoints":[{"id":"11D10301","label":"춘천"},{"id":"11D20501","label":"강릉"}],"areaTokens":["강원","영서","영동"]},
+    {"id":"chungcheong","label":"충청권","shortForecastPoints":[{"id":"daejeon","label":"대전","nx":67,"ny":100},{"id":"cheongju","label":"청주","nx":69,"ny":106}],"midLandCodes":["11C10000","11C20000"],"midTemperaturePoints":[{"id":"11C20401","label":"대전"},{"id":"11C10301","label":"청주"}],"areaTokens":["대전","세종","충북","충남","충청"]},
+    {"id":"honam","label":"호남권","shortForecastPoints":[{"id":"gwangju","label":"광주","nx":58,"ny":74},{"id":"jeonju","label":"전주","nx":63,"ny":89}],"midLandCodes":["11F10000","11F20000"],"midTemperaturePoints":[{"id":"11F20501","label":"광주"},{"id":"11F10201","label":"전주"}],"areaTokens":["광주","전북","전남","전라북도","전라남도","호남"]},
+    {"id":"yeongnam","label":"영남권","shortForecastPoints":[{"id":"daegu","label":"대구","nx":89,"ny":90},{"id":"busan","label":"부산","nx":98,"ny":76}],"midLandCodes":["11H10000","11H20000"],"midTemperaturePoints":[{"id":"11H10701","label":"대구"},{"id":"11H20201","label":"부산"}],"areaTokens":["부산","울산","대구","경북","경남","경상북도","경상남도","영남","울릉도","독도"]},
+    {"id":"jeju","label":"제주권","shortForecastPoints":[{"id":"jeju","label":"제주","nx":52,"ny":38},{"id":"seogwipo","label":"서귀포","nx":53,"ny":33}],"midLandCodes":["11G00000"],"midTemperaturePoints":[{"id":"11G00201","label":"제주"},{"id":"11G00401","label":"서귀포"}],"areaTokens":["제주","서귀포"]}
+  ]
+}

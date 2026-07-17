@@ -4,10 +4,12 @@ import { formatDateTime, formatTime, localDateKey } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
 import { renderTopIssues } from "../features/issues.js";
 import { renderArticles } from "../features/articles.js?v=20260717-16";
+import { renderWeather } from "../features/weather.js";
 
 export function renderAll() {
   renderHeader();
   renderMetrics();
+  renderWeather();
   renderSummary();
   renderTopIssues();
   renderArticles();
