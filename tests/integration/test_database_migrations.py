@@ -46,6 +46,9 @@ EXPECTED_MIGRATIONS = [
     "0015_incident_cause_axes.sql",
     "0016_promote_grouped_article_top_tags.sql",
     "0017_repair_post_deploy_grouped_top_tags.sql",
+    "0018_issue_direct_coverage_override.sql",
+    "0019_article_direct_coverage_override.sql",
+    "0020_top_issue_implies_briefing_selection.sql",
 ]
 
 
@@ -84,6 +87,14 @@ def test_apply_migrations_creates_expected_tables(tmp_path):
         applied = apply_migrations(connection)
         assert applied == EXPECTED_MIGRATIONS
         assert EXPECTED_TABLES.issubset(_table_names(connection))
+        issue_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(briefing_issues)")
+        }
+        assert "direct_coverage_override" in issue_columns
+        article_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(briefing_articles)")
+        }
+        assert "direct_coverage_override" in article_columns
         assert pending_migrations(connection) == []
     finally:
         connection.close()
@@ -259,6 +270,184 @@ def test_manual_issue_group_migration_marks_manual_groups(tmp_path):
         connection.close()
 
 
+def test_direct_coverage_migration_deselects_existing_briefing_and_top_tags(tmp_path):
+    connection = get_connection(tmp_path / "direct-coverage.db")
+    try:
+        apply_migrations(connection)
+        now = "2026-07-17T00:00:00Z"
+        connection.execute(
+            """
+            INSERT INTO articles (
+                id, content_key, title, first_observed_at, last_observed_at,
+                created_at, updated_at
+            ) VALUES ('direct-article', 'direct-content', '공사 직접 보도', ?, ?, ?, ?)
+            """,
+            (now, now, now, now),
+        )
+        connection.execute(
+            "INSERT INTO briefings (id, report_date, created_at, updated_at) "
+            "VALUES ('direct-briefing', '2026-07-17', ?, ?)",
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO cluster_runs (
+                id, report_date, status, input_signature, proposal_json, diff_json,
+                algorithm_version, created_at, applied_at
+            ) VALUES ('direct-run', '2026-07-17', 'applied', 'sig', '[]', '{}',
+                      'test', ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO issues (
+                id, representative_article_id, auto_title, spread_score,
+                direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
+            ) VALUES ('direct-issue', 'direct-article', '공사 직접 보도', 0, 1, 0,
+                      'direct-run', ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO issue_auto_articles "
+            "(issue_id, article_id, cluster_run_id, created_at) "
+            "VALUES ('direct-issue', 'direct-article', 'direct-run', ?)",
+            (now,),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefing_articles (
+                briefing_id, article_id, selected, top_issue, created_at, updated_at
+            ) VALUES ('direct-briefing', 'direct-article', 1, 1, ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefing_issues (
+                briefing_id, issue_id, selected, created_at, updated_at
+            ) VALUES ('direct-briefing', 'direct-issue', 1, ?, ?)
+            """,
+            (now, now),
+        )
+
+        migration = Path(
+            "backend/app/db/migrations/0018_issue_direct_coverage_override.sql"
+        ).read_text(encoding="utf-8")
+        repair_sql = migration.split(";", 1)[1]
+        connection.executescript(repair_sql)
+
+        article = connection.execute(
+            "SELECT selected, top_issue FROM briefing_articles "
+            "WHERE briefing_id = 'direct-briefing' AND article_id = 'direct-article'"
+        ).fetchone()
+        issue = connection.execute(
+            "SELECT selected FROM briefing_issues "
+            "WHERE briefing_id = 'direct-briefing' AND issue_id = 'direct-issue'"
+        ).fetchone()
+        assert (article["selected"], article["top_issue"]) == (0, 0)
+        assert issue["selected"] == 0
+    finally:
+        connection.close()
+
+
+def test_standalone_direct_coverage_migration_deselects_existing_article(tmp_path):
+    connection = get_connection(tmp_path / "standalone-direct-coverage.db")
+    try:
+        apply_migrations(connection)
+        now = "2026-07-17T00:00:00Z"
+        connection.execute(
+            """
+            INSERT INTO articles (
+                id, content_key, title, category_hint, first_observed_at,
+                last_observed_at, created_at, updated_at
+            ) VALUES ('standalone-direct', 'standalone-content', '공사 직접 보도',
+                      'kesco_direct', ?, ?, ?, ?)
+            """,
+            (now, now, now, now),
+        )
+        connection.execute(
+            "INSERT INTO briefings (id, report_date, created_at, updated_at) "
+            "VALUES ('standalone-briefing', '2026-07-17', ?, ?)",
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefing_articles (
+                briefing_id, article_id, selected, top_issue, created_at, updated_at
+            ) VALUES ('standalone-briefing', 'standalone-direct', 1, 1, ?, ?)
+            """,
+            (now, now),
+        )
+
+        migration = Path(
+            "backend/app/db/migrations/0019_article_direct_coverage_override.sql"
+        ).read_text(encoding="utf-8")
+        repair_sql = migration.split(";", 1)[1]
+        connection.executescript(repair_sql)
+
+        article = connection.execute(
+            "SELECT selected, top_issue FROM briefing_articles "
+            "WHERE briefing_id = 'standalone-briefing' AND article_id = 'standalone-direct'"
+        ).fetchone()
+        assert (article["selected"], article["top_issue"]) == (0, 0)
+    finally:
+        connection.close()
+
+
+def test_top_issue_migration_selects_existing_issue_representative(tmp_path):
+    connection = get_connection(tmp_path / "top-implies-selection.db")
+    try:
+        apply_migrations(connection)
+        now = "2026-07-17T00:00:00Z"
+        connection.execute(
+            """
+            INSERT INTO articles (
+                id, content_key, title, first_observed_at, last_observed_at,
+                created_at, updated_at
+            ) VALUES ('top-representative', 'top-representative-content', 'Top 대표 기사',
+                      ?, ?, ?, ?)
+            """,
+            (now, now, now, now),
+        )
+        connection.execute(
+            "INSERT INTO briefings (id, report_date, created_at, updated_at) "
+            "VALUES ('top-briefing', '2026-07-17', ?, ?)",
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO issues (
+                id, representative_article_id, auto_title, spread_score,
+                direct_mention, needs_review, created_at, updated_at
+            ) VALUES ('top-issue', 'top-representative', 'Top 이슈', 0, 0, 0, ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefing_issues (
+                briefing_id, issue_id, selected, created_at, updated_at
+            ) VALUES ('top-briefing', 'top-issue', 1, ?, ?)
+            """,
+            (now, now),
+        )
+
+        migration = Path(
+            "backend/app/db/migrations/0020_top_issue_implies_briefing_selection.sql"
+        ).read_text(encoding="utf-8")
+        connection.executescript(migration)
+
+        article = connection.execute(
+            "SELECT selected, dismissed FROM briefing_articles "
+            "WHERE briefing_id = 'top-briefing' AND article_id = 'top-representative'"
+        ).fetchone()
+        assert (article["selected"], article["dismissed"]) == (1, 0)
+    finally:
+        connection.close()
+
+
 def test_query_groups_and_trusted_media_migrations_keep_columns_separate(tmp_path):
     connection = get_connection(tmp_path / "incident.db")
     try:
@@ -357,6 +546,9 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0015_incident_cause_axes.sql",
         "0016_promote_grouped_article_top_tags.sql",
         "0017_repair_post_deploy_grouped_top_tags.sql",
+        "0018_issue_direct_coverage_override.sql",
+        "0019_article_direct_coverage_override.sql",
+        "0020_top_issue_implies_briefing_selection.sql",
     ]
     upgraded = get_connection(db_path)
     try:

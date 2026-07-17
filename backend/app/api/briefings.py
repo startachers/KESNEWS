@@ -41,6 +41,7 @@ class ArticleStatePatchRequest(BaseModel):
     note: str | None = None
     dismissed: bool | None = None
     sortOrder: int | None = None
+    directCoverage: bool | None = None
 
 
 class ArticleOrderRequest(BaseModel):
@@ -56,6 +57,8 @@ class IssueStatePatchRequest(BaseModel):
     sortOrder: int | None = None
     editorReviewStars: int | None = Field(default=None, ge=1, le=5)
     editorReviewReason: str | None = Field(default=None, max_length=500)
+    directCoverage: bool | None = None
+    articleId: str | None = None
 
 
 class DailyWorkResetRequest(BaseModel):
@@ -221,6 +224,11 @@ async def patch_briefing_article(
         return error_response(
             "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 6개까지 선정할 수 있습니다."
         )
+    except repo.DirectCoverageNotSelectable:
+        return error_response(
+            "DIRECT_COVERAGE_NOT_SELECTABLE",
+            "공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다.",
+        )
     finally:
         connection.close()
     return ok_envelope(_serialize(row), meta={"revision": row["revision"]})
@@ -272,6 +280,11 @@ async def patch_briefing_issue(
     except repo.TopIssueLimitExceeded:
         return error_response(
             "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 6개까지 선정할 수 있습니다."
+        )
+    except repo.DirectCoverageNotSelectable:
+        return error_response(
+            "DIRECT_COVERAGE_NOT_SELECTABLE",
+            "공사 직접 보도는 CEO 일반 브리핑이나 Top Issues에 선정할 수 없습니다.",
         )
     finally:
         connection.close()

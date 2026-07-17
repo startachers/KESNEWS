@@ -46,7 +46,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 10
+    assert payload["schemaVersion"] == 11
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -96,7 +96,7 @@ def test_json_schema_v7_round_trip_preserves_kesco_press_origin():
         connection.close()
 
     payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 10
+    assert payload["schemaVersion"] == 11
     assert payload["articles"][0]["origin"]["pressRelease"]["bodyText"].startswith(
         "정식 백업"
     )
@@ -176,7 +176,7 @@ def test_json_schema_v6_round_trip_preserves_incident_and_accepts_v5():
     )
 
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 10
+    assert payload["schemaVersion"] == 11
     assert payload["articles"][0]["incident"]["incident_type"] == "fire"
     assert payload["articles"][0]["incident"]["cause_status"] == "unknown"
     assert payload["articles"][0]["incident"]["cause_certainty"] == "under_investigation"
@@ -228,7 +228,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 10
+    assert payload["schemaVersion"] == 11
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -239,6 +239,102 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
     assert restored_issue["effectivePriority"] == "required"
     assert len(restored_issue["articleIds"]) == 2
     assert restored_issue["membershipOverrides"][0]["action"] == "add"
+
+
+def test_json_round_trip_preserves_direct_coverage_manual_override():
+    source_date = "2025-03-21"
+    client.put(
+        f"/api/briefings/{source_date}",
+        json={"expectedRevision": 0, "patch": {}},
+    )
+    article_id = client.post(
+        "/api/articles",
+        json={
+            "reportDate": source_date,
+            "title": "한국전기안전공사 해외사업 성과 소개",
+            "source": "전기신문",
+            "url": "https://example.com/exports/direct-coverage",
+            "description": "공사 직접 보도 백업 테스트",
+            "category": "kesco_direct",
+        },
+    ).json()["data"]["id"]
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": source_date, "asOf": "2025-03-21T12:00:00Z"},
+    ).json()["data"]
+    client.post(f"/api/cluster-runs/{run['id']}/apply")
+    issue = client.get(
+        "/api/issues", params={"report_date": source_date}
+    ).json()["data"]["issues"][0]
+    revision = client.get(f"/api/briefings/{source_date}").json()["data"]["revision"]
+    overridden = client.patch(
+        f"/api/briefings/{source_date}/issues/{issue['id']}",
+        json={"expectedRevision": revision, "directCoverage": False},
+    ).json()["data"]
+    selected = client.patch(
+        f"/api/briefings/{source_date}/articles/{article_id}",
+        json={"expectedRevision": overridden["revision"], "selected": True},
+    )
+    assert selected.status_code == 200
+
+    payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
+    assert payload["schemaVersion"] == 11
+    assert payload["issues"][0]["editorDirectCoverage"] is False
+    assert payload["issues"][0]["directCoverage"] is False
+
+    target_date = "2025-03-22"
+    imported = client.post(f"/api/exports/{target_date}.json", json=payload)
+    assert imported.status_code == 200
+    restored_issue = client.get(
+        "/api/issues", params={"report_date": target_date}
+    ).json()["data"]["issues"][0]
+    assert restored_issue["editorDirectCoverage"] is False
+    assert restored_issue["directCoverage"] is False
+    restored_article = client.get(
+        "/api/articles", params={"report_date": target_date}
+    ).json()["data"]["articles"][0]
+    assert restored_article["included"] is True
+
+
+def test_json_round_trip_preserves_standalone_direct_coverage_override():
+    source_date = "2025-03-23"
+    client.put(
+        f"/api/briefings/{source_date}",
+        json={"expectedRevision": 0, "patch": {}},
+    )
+    article_id = client.post(
+        "/api/articles",
+        json={
+            "reportDate": source_date,
+            "title": "KESCO 단독 직접 보도",
+            "source": "전기신문",
+            "url": "https://example.com/exports/standalone-direct",
+            "description": "군집화 전 수동 해제 백업 테스트",
+            "category": "kesco_direct",
+        },
+    ).json()["data"]["id"]
+    revision = client.get(f"/api/briefings/{source_date}").json()["data"]["revision"]
+    overridden = client.patch(
+        f"/api/briefings/{source_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "directCoverage": False},
+    ).json()["data"]
+    selected = client.patch(
+        f"/api/briefings/{source_date}/articles/{article_id}",
+        json={"expectedRevision": overridden["revision"], "selected": True},
+    )
+    assert selected.status_code == 200
+
+    payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
+    assert payload["articles"][0]["editorDirectCoverage"] is False
+    assert payload["articles"][0]["directCoverage"] is False
+    target_date = "2025-03-24"
+    assert client.post(f"/api/exports/{target_date}.json", json=payload).status_code == 200
+    restored = client.get(
+        "/api/articles", params={"report_date": target_date}
+    ).json()["data"]["articles"][0]
+    assert restored["editorDirectCoverage"] is False
+    assert restored["directCoverage"] is False
+    assert restored["included"] is True
 
 
 def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch):
@@ -276,7 +372,7 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 10
+    assert payload["schemaVersion"] == 11
     assert payload["aiRuns"][0]["evidence"]
     assert payload["articles"][0]["bodyText"] == full_text
 

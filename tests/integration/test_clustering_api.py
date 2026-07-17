@@ -53,12 +53,14 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "(relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)" in articles_feature.text
     assert "entries.sort((left, right) => left.position - right.position)" in articles_feature.text
     assert "renderRelatedArticle" in articles_feature.text
-    assert "const representative = members[0]" in articles_feature.text
+    assert "members.find(member => member.article.included) || members[0]" in articles_feature.text
     assert "Math.random()" not in articles_feature.text
     assert "관련 기사 ${relatedMembers.length}건" in articles_feature.text
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text
+    assert 'data-action="direct-coverage"' in articles_feature.text
+    assert "공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다" in articles_feature.text
     assert "topIssueTagCount() >= MAX_TOP_ISSUES" in articles_feature.text
     assert 'data-action="group-picker-select"' in articles_feature.text
     assert "openManualGroupPicker" in articles_feature.text
@@ -76,7 +78,15 @@ def _create_briefing(report_date: str) -> None:
     assert response.status_code == 200
 
 
-def _create_article(report_date: str, suffix: str, title: str, source: str, pub_date: str) -> str:
+def _create_article(
+    report_date: str,
+    suffix: str,
+    title: str,
+    source: str,
+    pub_date: str,
+    *,
+    category: str = "safety",
+) -> str:
     response = client.post(
         "/api/articles",
         json={
@@ -86,7 +96,7 @@ def _create_article(report_date: str, suffix: str, title: str, source: str, pub_
             "url": f"https://cluster.example.com/{suffix}",
             "pubDate": pub_date,
             "description": "전주 완산구 아파트 변압기 고장으로 주민들이 불편을 겪었다",
-            "category": "safety",
+            "category": category,
         },
     )
     assert response.status_code == 200
@@ -269,6 +279,147 @@ def test_briefing_issue_patch_checks_revision_and_persists_state():
     assert stale.status_code == 409
 
 
+def test_direct_coverage_is_auto_tagged_excluded_and_manual_override_is_preserved():
+    report_date = "2026-08-18"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "direct-coverage",
+        "한국전기안전공사 해외사업 성과와 전기안전 수출 확대",
+        "전기신문",
+        "2026-08-18T05:00:00Z",
+        category="kesco_direct",
+    )
+    initial_article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert initial_article["included"] is False
+    assert initial_article["autoDirectCoverage"] is True
+    assert initial_article["editorDirectCoverage"] is None
+    assert initial_article["directCoverage"] is True
+
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-18T12:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{run['id']}/apply").status_code == 200
+
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert issue["autoDirectCoverage"] is True
+    assert issue["editorDirectCoverage"] is None
+    assert issue["directCoverage"] is True
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["included"] is False
+    assert article["topIssue"] is False
+
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    blocked = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "selected": True},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "DIRECT_COVERAGE_NOT_SELECTABLE"
+    blocked_top = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": revision, "selected": True},
+    )
+    assert blocked_top.status_code == 409
+    assert blocked_top.json()["error"]["code"] == "DIRECT_COVERAGE_NOT_SELECTABLE"
+
+    overridden = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": revision, "directCoverage": False},
+    )
+    assert overridden.status_code == 200
+    revision = overridden.json()["data"]["revision"]
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert issue["editorDirectCoverage"] is False
+    assert issue["directCoverage"] is False
+
+    selected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "selected": True},
+    )
+    assert selected.status_code == 200
+    revision = selected.json()["data"]["revision"]
+
+    rerun = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-18T13:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{rerun['id']}/apply").status_code == 200
+    preserved = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert preserved["editorDirectCoverage"] is False
+    assert preserved["directCoverage"] is False
+    assert client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]["included"] is True
+
+    retagged = client.patch(
+        f"/api/briefings/{report_date}/issues/{preserved['id']}",
+        json={"expectedRevision": revision, "directCoverage": True},
+    )
+    assert retagged.status_code == 200
+    assert client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]["included"] is False
+
+
+def test_ungrouped_direct_coverage_manual_override_survives_first_clustering():
+    report_date = "2026-08-19"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "direct-standalone",
+        "KESCO 해외사업 성과와 전기안전 수출 확대",
+        "전기신문",
+        "2026-08-19T05:00:00Z",
+        category="kesco_direct",
+    )
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["directCoverage"] is True
+    assert article["included"] is False
+
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    overridden = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "directCoverage": False},
+    )
+    assert overridden.status_code == 200
+    revision = overridden.json()["data"]["revision"]
+    selected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "selected": True},
+    )
+    assert selected.status_code == 200
+
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-19T12:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{run['id']}/apply").status_code == 200
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert issue["autoDirectCoverage"] is True
+    assert issue["editorDirectCoverage"] is False
+    assert issue["directCoverage"] is False
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["included"] is True
+
+
 def test_issue_review_stars_are_ranked_and_editor_override_is_preserved():
     report_date = "2026-08-14"
     _create_briefing(report_date)
@@ -303,7 +454,7 @@ def test_issue_review_stars_are_ranked_and_editor_override_is_preserved():
     assert preserved["effectiveReviewStars"] == 2
 
 
-def test_individual_article_top_issue_tag_persists_independently():
+def test_individual_article_top_issue_tag_selects_article_and_untag_keeps_selection():
     report_date = "2026-08-06"
     _create_briefing(report_date)
     article_id = _create_article(
@@ -314,9 +465,14 @@ def test_individual_article_top_issue_tag_persists_independently():
         "2026-08-06T05:00:00Z",
     )
     briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    deselected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": briefing["revision"], "selected": False},
+    )
+    assert deselected.status_code == 200
     patched = client.patch(
         f"/api/briefings/{report_date}/articles/{article_id}",
-        json={"expectedRevision": briefing["revision"], "topIssue": True},
+        json={"expectedRevision": deselected.json()["data"]["revision"], "topIssue": True},
     )
     assert patched.status_code == 200
 
@@ -325,8 +481,64 @@ def test_individual_article_top_issue_tag_persists_independently():
     ).json()["data"]["articles"]
     assert articles[0]["topIssue"] is True
     assert articles[0]["starred"] is False
-    # 직접 추가 기사의 기존 브리핑 선정 상태와는 독립적으로 저장된다.
     assert articles[0]["included"] is True
+    untagged = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": patched.json()["data"]["revision"], "topIssue": False},
+    )
+    assert untagged.status_code == 200
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["topIssue"] is False
+    assert article["included"] is True
+
+
+def test_issue_top_tag_selects_clicked_article_and_untag_keeps_selection():
+    report_date = "2026-08-20"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "issue-top-select",
+        "전기화재 예방 점검 확대",
+        "지역일보",
+        "2026-08-20T05:00:00Z",
+    )
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-20T12:00:00Z"},
+    ).json()["data"]
+    client.post(f"/api/cluster-runs/{run['id']}/apply")
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    deselected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": revision, "selected": False},
+    ).json()["data"]
+    tagged = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={
+            "expectedRevision": deselected["revision"],
+            "selected": True,
+            "articleId": article_id,
+        },
+    )
+    assert tagged.status_code == 200
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["included"] is True
+    untagged = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={"expectedRevision": tagged.json()["data"]["revision"], "selected": False},
+    )
+    assert untagged.status_code == 200
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["included"] is True
 
 
 def test_top_issues_allow_six_and_promote_article_tags_after_clustering():

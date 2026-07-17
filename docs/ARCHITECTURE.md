@@ -608,6 +608,7 @@ briefing_id
 article_id
 selected
 starred
+direct_coverage_override
 note
 dismissed
 sort_order
@@ -617,6 +618,7 @@ updated_at
 
 - 선택 해제: `selected=false`
 - 목록 숨김: `dismissed=true`, 동시에 `selected=false`
+- 기사 또는 군집 Top 태그 활성화: 해당 기사 `selected=true`; Top 해제 시 선정은 유지
 - UI의 일반 동작에서 row를 DELETE하지 않는다.
 
 ### 7.7 BriefingIssue
@@ -627,6 +629,7 @@ updated_at
 briefing_id
 issue_id
 selected
+direct_coverage_override
 sort_order
 management_impact
 action_required
@@ -634,6 +637,13 @@ editor_note
 created_at
 updated_at
 ```
+
+단독 기사의 `공사 직접 보도` 자동값은 `effective_category == kesco_direct`이고,
+군집 자동값은 `issues.direct_mention`이다. 보고일별 담당자 override는 각각
+`briefing_articles.direct_coverage_override`, `briefing_issues.direct_coverage_override`에
+저장하며 단독 기사 override는 최초 군집화 뒤에도 상속한다. 유효값이 참인 기사·군집은 일반 브리핑과
+Top Issues에서 배타적으로 제외한다. `false` 수동 override도 명시적 담당자 판단이므로
+재수집·재군집화로 덮어쓰지 않는다.
 
 ### 7.7.1 BriefingReportDraft
 
@@ -1406,7 +1416,8 @@ reports/YYYY/MM/KESCO_일일언론브리핑_YYYY-MM-DD_vN.html
 - 로그: 크기 기반 회전
 
 구현 기본값은 DB 최근 30개, 로그 파일당 5 MiB와 과거 파일 5개다. 현재 정식 백업은
-schemaVersion 10이며 기사 전문·전문 수집 상태, 사고 Sentinel, 원인 확정 수준·분야를 왕복한다. 최종 확정 시 JSON을
+schemaVersion 11이며 기사 전문·전문 수집 상태, 사고 Sentinel, 원인 확정 수준·분야,
+공사 직접 보도 수동 override를 왕복한다. 최종 확정 시 JSON을
 `backups/briefing/YYYY-MM-DD_vN.json`에도 저장하며 최종 snapshot과
 HTML은 자동 삭제하지 않는다. 운영 상태는 `GET /api/operations/status`에서 DB 무결성,
 최근 백업, 마지막 수집과 마지막 정상 수집을 함께 확인한다.

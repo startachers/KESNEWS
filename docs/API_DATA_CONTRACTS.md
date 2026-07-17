@@ -127,8 +127,9 @@ updated_at
 | 브리핑 선정 | true | false | 요약·보고 대상 |
 | 숨김 | false | true | 해당 날짜 작업목록에서 숨김, 복원 가능 |
 
-`top_issue`는 개별 기사를 Top Issues에 직접 올리는 태그다. `selected`(브리핑 선정),
-`starred`(중요 기사)와 서로 독립이다. `dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
+`top_issue`는 개별 기사를 Top Issues에 직접 올리는 태그다. Top 태그 활성화는 해당 기사를
+동시에 `selected=true`로 만들며, Top 태그 해제는 기사 선정을 해제하지 않는다. `starred`(중요 기사)는
+별도 상태다. `dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
 담당자가 직접 편집할 수 있지만 Gemma 기사 추천을 명시적으로 적용하면 기존 군집·기사 Top 태그를
 초기화하고 적용된 추천 순위 상위 6건으로 교체한다.
 
@@ -186,8 +187,19 @@ DELETE /api/articles/{article_id}
 
 Top Issues는 담당자가 직접 태그하거나 Gemma 추천을 검토·적용한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
 개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 6개로 제한한다.
+군집 Top 태그를 활성화하면 사용자가 누른 대표 카드 기사(미지정 시 이슈 대표 기사)를
+`briefing_articles.selected=true`로 함께 저장한다. 군집 Top 태그를 해제해도 기사 선정은 유지한다.
 7번째 항목을 선택하는 mutation은 `TOP_ISSUE_LIMIT_EXCEEDED`(409)로 거부한다.
 재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
+
+`kesco_direct`로 분류된 단독 기사와 `issues.direct_mention=true`인 군집은 보고일별
+`공사 직접 보도` 자동 태그가 활성화된다. 단독 기사의 유효값은
+`briefing_articles.direct_coverage_override ?? (effective_category == kesco_direct)`, 군집은
+`briefing_issues.direct_coverage_override ?? 구성 기사의 수동 override ?? issues.direct_mention`이며 담당자의
+수동 해제·재태그는 이후 자동 수집·재분석·재군집화로 덮어쓰지 않는다. 유효 태그가 켜지면
+기사에는 `selected=false`, `top_issue=false`, 군집에는 `selected=false`를 강제한다.
+이 상태에서 기사 또는 Top Issues 선정을 요청하면 `DIRECT_COVERAGE_NOT_SELECTABLE`(409)로 거부한다.
+태그를 해제해도 이전 선정 상태를 자동 복원하지 않는다.
 
 ### 2.6 정렬 변경
 
@@ -879,8 +891,8 @@ JSON은 정식 백업 형식이다.
 - `schemaVersion` 필수
 - 작업본, 기사 선정 상태, 중요 표시, 개별 기사 Top 이슈 태그, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
   보도자료 원문과 기사 출처 판정, 이슈 편집값, AI run, action note를 포함한다.
-- 원인 확정 수준·원인 분야를 포함하는 현재 형식은 `schemaVersion=10`이다. 1~9 형식은 계속
-  읽을 수 있고, 신규 필드가 없는 과거 사고 데이터는 기존 `cause_status`를 보존한다.
+- 공사 직접 보도 수동 override를 포함하는 현재 형식은 `schemaVersion=11`이다. 1~10 형식은 계속
+  읽을 수 있고, 신규 필드가 없는 과거 데이터는 자동 판정값을 사용한다.
 - 가져오기 전 schema 검증을 수행한다.
 - 내보내기→새 DB 가져오기→다시 내보내기의 의미상 동등성을 통합 테스트한다.
 - 미지원 미래 version은 읽지 않고 명확한 오류를 반환한다.

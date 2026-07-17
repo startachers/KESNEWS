@@ -342,6 +342,8 @@ a { color: inherit; }
 .badge-same-issue { color: var(--teal-dark); background: var(--teal-soft); border: 1px solid #b7ddd7; }
 .article-top-toggle { min-width: 48px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); font-size: 9px; font-weight: 800; cursor: pointer; }
 .article-top-toggle.active { border-color: #d5a536; background: #fff5d9; color: #795000; }
+.article-direct-toggle { min-width: 66px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); font-size: 9px; font-weight: 800; cursor: pointer; }
+.article-direct-toggle.active { border-color: #65b9ad; background: #e6f7f4; color: var(--teal-dark); }
 .grouped-article-card.top-tagged { border-color: #d5a536; box-shadow: inset 3px 0 0 #d5a536; }
 .media-top-toggle.active { border-color: #d5a536; background: #fff5d9; color: #795000; }
 .grouped-article-card .related-articles { grid-column: 2 / -1; border-top: 1px solid #e6ebed; }

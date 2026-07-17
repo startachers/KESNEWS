@@ -634,6 +634,29 @@ def import_snapshots(
                     snapshot.get("reviewScoringVersion") or "review-v1", now, now,
                 ),
             )
+            connection.execute(
+                """
+                INSERT INTO briefing_issues (
+                    briefing_id, issue_id, selected, starred, note, sort_order,
+                    direct_coverage_override, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    briefing["id"],
+                    issue_id,
+                    1 if snapshot.get("selected") else 0,
+                    1 if snapshot.get("starred") else 0,
+                    snapshot.get("note") or None,
+                    snapshot.get("sortOrder") or 0,
+                    (
+                        1 if snapshot.get("editorDirectCoverage") is True
+                        else 0 if snapshot.get("editorDirectCoverage") is False
+                        else None
+                    ),
+                    now,
+                    now,
+                ),
+            )
         imported += 1
     _enforce_manual_group_exclusivity(connection, report_date)
     return imported

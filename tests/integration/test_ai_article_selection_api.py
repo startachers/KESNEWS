@@ -31,8 +31,8 @@ def setup_candidates(report_date: str, count: int = 3):
             "title": f"전기안전 경영 현안 후보 {index}",
             "source": f"테스트일보 {index}",
             "url": f"https://example.com/selection/{report_date}/{index}",
-            "description": f"한국전기안전공사 관련 후보 내용 {index}",
-            "category": "kesco_direct",
+            "description": f"전기화재 예방과 전기안전 정책 관련 후보 내용 {index}",
+            "category": "safety",
         }).json()["data"]
         article_ids.append(created["id"])
         revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]

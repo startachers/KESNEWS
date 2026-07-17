@@ -465,6 +465,7 @@ SELECT
     ba.selected AS selected,
     ba.starred AS starred,
     ba.top_issue AS top_issue,
+    ba.direct_coverage_override AS direct_coverage_override,
     ba.note AS note,
     ba.dismissed AS dismissed,
     ba.sort_order AS sort_order
@@ -520,6 +521,12 @@ def list_candidates(
         effective_priority = assessment["effectivePriority"] if assessment else None
         effective_tone = assessment["effectiveTone"] if assessment else row["auto_sentiment"]
         effective_category = assessment["effectiveCategory"] if assessment else row["category_hint"]
+        auto_direct_coverage = effective_category == "kesco_direct"
+        editor_direct_coverage = (
+            bool(row["direct_coverage_override"])
+            if row["direct_coverage_override"] is not None
+            else None
+        )
         reasons = assessment["autoReasons"] if assessment else {}
         result.append(
             {
@@ -561,6 +568,13 @@ def list_candidates(
                 "included": bool(row["selected"]) if row["selected"] is not None else False,
                 "starred": bool(row["starred"]) if row["starred"] is not None else False,
                 "topIssue": bool(row["top_issue"]) if row["top_issue"] is not None else False,
+                "autoDirectCoverage": auto_direct_coverage,
+                "editorDirectCoverage": editor_direct_coverage,
+                "directCoverage": (
+                    editor_direct_coverage
+                    if editor_direct_coverage is not None
+                    else auto_direct_coverage
+                ),
                 "note": row["note"] or "",
                 "dismissed": dismissed,
                 "sortOrder": row["sort_order"],

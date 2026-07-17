@@ -105,6 +105,11 @@ def test_reset_today_deletes_work_but_preserves_article_origin_and_other_date(mo
     }).json()["data"]
     issue_id = grouped["issue"]["id"]
     revision = grouped["revision"]
+    direct_override = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue_id}",
+        json={"expectedRevision": revision, "directCoverage": False},
+    ).json()["data"]
+    revision = direct_override["revision"]
     tagged_issue = client.patch(
         f"/api/briefings/{report_date}/issues/{issue_id}",
         json={"expectedRevision": revision, "selected": True, "note": "삭제할 이슈 메모"},

@@ -19,8 +19,8 @@ from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.report_draft import build_exchange_context, validate_content
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 10
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+SCHEMA_VERSION = 11
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -50,13 +50,23 @@ def build_export(connection: sqlite3.Connection, report_date: str) -> dict[str, 
     if briefing is None:
         return None
     articles = article_repo.list_candidates(connection, report_date, include_dismissed=True)
+    issues = issue_repo.list_for_report_date(connection, report_date)
+    issue_states = briefing_repo.list_issue_states(connection, report_date)
+    for issue in issues:
+        state = issue_states.get(issue["id"], {})
+        issue.update(state)
+        issue["autoDirectCoverage"] = bool(issue["directMention"])
+        override = state.get("editorDirectCoverage")
+        issue["directCoverage"] = (
+            override if override is not None else issue["autoDirectCoverage"]
+        )
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reportDate": report_date,
         "exportedAt": now_iso(),
         "briefing": {key: briefing[column] for key, column in _BRIEFING_EXPORT_FIELDS.items()},
         "articles": articles,
-        "issues": issue_repo.list_for_report_date(connection, report_date),
+        "issues": issues,
         "aiRuns": [
             ai_run_repo.serialize(row)
             for row in ai_run_repo.list_for_briefing(connection, briefing["id"])
@@ -298,6 +308,7 @@ def import_export(
             note=article.get("note") or None,
             dismissed=bool(article.get("dismissed")),
             sort_order=article.get("sortOrder") if article.get("sortOrder") is not None else index,
+            direct_coverage_override=article.get("editorDirectCoverage"),
         )
         if article.get("id"):
             article_id_map[article["id"]] = article_id
@@ -308,6 +319,7 @@ def import_export(
         payload.get("issues") or [],
         article_id_map,
     )
+    briefing_repo.normalize_direct_coverage(connection, report_date)
     ai_runs_imported = ai_run_repo.import_runs(
         connection,
         briefing["id"],

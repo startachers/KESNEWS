@@ -101,8 +101,12 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
   if (a.stale) badges.push('<span class="badge badge-watch" title="이전 수집 실패로 최신 상태를 확인하지 못했습니다">최신 미확인</span>');
   const topIssueButton = issue
-    ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="군집을 Top 이슈로 태그" aria-label="군집 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
-    : `<button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="개별 기사를 Top 이슈로 태그" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>`;
+    ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="${issue.directCoverage ? "공사 직접 보도는 Top Issues에 선정할 수 없습니다" : "군집을 Top 이슈로 태그"}" aria-label="군집 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" || issue.directCoverage ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
+    : `<button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="${a.directCoverage ? "공사 직접 보도는 Top Issues에 선정할 수 없습니다" : "개별 기사를 Top 이슈로 태그"}" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" || a.directCoverage ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>`;
+  const directCoverageButton = issue
+    ? `<button class="article-direct-toggle ${issue.directCoverage ? "active" : ""}" data-action="direct-coverage" title="${issue.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!issue.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${issue.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`
+    : `<button class="article-direct-toggle ${a.directCoverage ? "active" : ""}" data-action="article-direct-coverage" title="${a.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!a.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${a.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`;
+  const effectiveDirectCoverage = !!(issue?.directCoverage || (!issue && a.directCoverage));
   const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
     <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
     <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article)).join("")}</ul>
@@ -112,7 +116,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     ${[5,4,3,2,1].map(stars => `<option value="${stars}" ${issue.editorReviewStars === stars ? "selected" : ""}>${starsText(stars)}</option>`).join("")}
   </select>` : "";
   return `<article class="article-card ${issue ? "grouped-article-card" : ""} ${a.included ? "included" : ""} ${issue?.selected ? "top-tagged" : ""}" data-id="${escapeAttr(a.id)}" ${issue ? `data-issue-id="${escapeAttr(issue.id)}"` : ""}>
-    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="브리핑 선정" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
+    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="${effectiveDirectCoverage ? "공사 직접 보도는 CEO 일반 브리핑에서 제외됩니다" : "브리핑 선정"}" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" || effectiveDirectCoverage ? "disabled" : ""}>
     <div class="article-main">
       <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
       ${titleEl}
@@ -122,6 +126,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     </div>
     <div class="article-actions">
       ${reviewControl}
+      ${directCoverageButton}
       ${topIssueButton}
       <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
       <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제" ${state.status === "final" ? "disabled" : ""}>${ICONS.trash}</button>
@@ -167,7 +172,9 @@ function renderMediaGroups(items) {
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, position }) => {
     if (members.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
-    const representative = members[0];
+    const representative = issue.selected
+      ? members.find(member => member.article.included) || members[0]
+      : members[0];
     const related = members.filter(member => member.article.id !== representative.article.id);
     return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
   });
@@ -247,6 +254,12 @@ export function handleArticleChange(e) {
   const item = e.target.closest("[data-id]"); if (!item) return;
   const article = state.articles.find(a => a.id === item.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
+    const issue = primaryIssueByArticle(state.issues).get(article.id);
+    if (issue?.directCoverage || (!issue && article.directCoverage)) {
+      e.target.checked = false;
+      showToast("공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다.", "error");
+      return;
+    }
     article.included = e.target.checked;
     afterArticleMutation();
     trackArticlePatch(article.id, { selected: article.included });
@@ -425,11 +438,21 @@ export function handleArticleClick(e) {
       showToast(`Top Issues는 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
       return;
     }
-    toggleTopIssue(issue);
+    toggleTopIssue(issue, group.dataset.id);
+    return;
+  }
+  if (action === "direct-coverage") {
+    const group = e.target.closest("[data-issue-id]");
+    const issue = state.issues.find(item => item.id === group?.dataset.issueId);
+    if (issue) toggleDirectCoverage(issue);
     return;
   }
   const item = e.target.closest("[data-id]");
   const article = state.articles.find(a => a.id === item?.dataset.id); if (!article) return;
+  if (action === "article-direct-coverage") {
+    toggleArticleDirectCoverage(article);
+    return;
+  }
   if (action === "article-top-issue") {
     if (!article.topIssue && topIssueTagCount() >= MAX_TOP_ISSUES) {
       showToast(`Top Issues는 군집과 개별 기사를 합쳐 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
@@ -449,33 +472,130 @@ export function handleArticleClick(e) {
 
 async function toggleArticleTopIssue(article) {
   const topIssue = !article.topIssue;
+  const previousIncluded = article.included;
   article.topIssue = topIssue;
+  if (topIssue) article.included = true;
   renderAll();
   const saved = await patchArticle(article.id, { topIssue });
   if (!saved) {
     article.topIssue = !topIssue;
+    article.included = previousIncluded;
     renderAll();
     return;
   }
   showToast(topIssue ? "개별 기사를 Top 이슈로 태그했습니다." : "개별 기사 Top 이슈 태그를 해제했습니다.", topIssue ? "success" : "");
 }
 
-async function toggleTopIssue(issue) {
+async function toggleArticleDirectCoverage(article) {
+  const directCoverage = !article.directCoverage;
+  const previous = {
+    directCoverage: article.directCoverage,
+    editorDirectCoverage: article.editorDirectCoverage,
+    included: article.included,
+    topIssue: article.topIssue,
+  };
+  article.directCoverage = directCoverage;
+  article.editorDirectCoverage = directCoverage;
+  if (directCoverage) {
+    article.included = false;
+    article.topIssue = false;
+  }
+  renderAll();
+  const saved = await patchArticle(article.id, { directCoverage });
+  if (!saved) {
+    Object.assign(article, previous);
+    renderAll();
+    return;
+  }
+  showToast(
+    directCoverage
+      ? "공사 직접 보도로 태그하고 일반 브리핑에서 제외했습니다."
+      : "공사 직접 보도 태그를 해제했습니다.",
+    "success",
+  );
+}
+
+async function toggleTopIssue(issue, articleId) {
   const selected = !issue.selected;
+  const article = state.articles.find(item => item.id === articleId);
+  const previousIncluded = article?.included;
   issue.selected = selected;
+  if (selected && article) article.included = true;
   renderAll();
   try {
-    const result = await api.patchBriefingIssue(state.date, issue.id, state.revision, { selected });
+    const result = await api.patchBriefingIssue(
+      state.date,
+      issue.id,
+      state.revision,
+      { selected, articleId },
+    );
     state.revision = result.data.revision;
     showToast(selected ? "Top 이슈로 태그했습니다." : "Top 이슈 태그를 해제했습니다.", selected ? "success" : "");
   } catch (error) {
     issue.selected = !selected;
+    if (article) article.included = previousIncluded;
     if (error.code === "BRIEFING_REVISION_CONFLICT") {
       showToast("다른 화면에서 변경 사항이 있어 최신 내용을 다시 불러옵니다.", "error");
       setState(await loadDailyState(state.date));
     } else {
       showToast(`Top 이슈 저장 실패: ${friendlyError(error)}`, "error");
     }
+    renderAll();
+  }
+}
+
+async function toggleDirectCoverage(issue) {
+  const directCoverage = !issue.directCoverage;
+  const previous = {
+    directCoverage: issue.directCoverage,
+    editorDirectCoverage: issue.editorDirectCoverage,
+    selected: issue.selected,
+    articles: state.articles
+      .filter(article => issue.articleIds.includes(article.id))
+      .map(article => ({ id: article.id, included: article.included, topIssue: article.topIssue })),
+  };
+  issue.directCoverage = directCoverage;
+  issue.editorDirectCoverage = directCoverage;
+  if (directCoverage) {
+    issue.selected = false;
+    previous.articles.forEach(saved => {
+      const article = state.articles.find(item => item.id === saved.id);
+      if (article) {
+        article.included = false;
+        article.topIssue = false;
+      }
+    });
+  }
+  renderAll();
+  try {
+    const result = await api.patchBriefingIssue(
+      state.date,
+      issue.id,
+      state.revision,
+      { directCoverage },
+    );
+    state.revision = result.data.revision;
+    showToast(
+      directCoverage
+        ? "공사 직접 보도로 태그하고 일반 브리핑에서 제외했습니다."
+        : "공사 직접 보도 태그를 해제했습니다.",
+      "success",
+    );
+  } catch (error) {
+    issue.directCoverage = previous.directCoverage;
+    issue.editorDirectCoverage = previous.editorDirectCoverage;
+    issue.selected = previous.selected;
+    previous.articles.forEach(saved => {
+      const article = state.articles.find(item => item.id === saved.id);
+      if (article) {
+        article.included = saved.included;
+        article.topIssue = saved.topIssue;
+      }
+    });
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      setState(await loadDailyState(state.date));
+    }
+    showToast(`공사 직접 보도 태그 저장 실패: ${friendlyError(error)}`, "error");
     renderAll();
   }
 }

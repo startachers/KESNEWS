@@ -51,14 +51,33 @@ async def list_issues(report_date: str = Query(...)) -> Any:
         legacy_article_top_ids = briefings_repo.list_article_top_issue_ids(
             connection, report_date
         )
+        briefing = briefings_repo.get_by_date(connection, report_date)
         for issue in issues:
-            issue.update(
-                briefing_states.get(
-                    issue["id"],
-                    {"selected": False, "starred": False, "note": "", "sortOrder": None},
-                )
+            issue_state = briefing_states.get(
+                issue["id"],
+                {
+                    "selected": False,
+                    "starred": False,
+                    "note": "",
+                    "sortOrder": None,
+                    "editorDirectCoverage": None,
+                },
             )
-            if legacy_article_top_ids.intersection(issue["articleIds"]):
+            issue.update(issue_state)
+            issue["autoDirectCoverage"] = bool(issue["directMention"])
+            override = issue_state.get("editorDirectCoverage")
+            if override is None and briefing is not None:
+                override = briefings_repo.direct_coverage_override_for_issue(
+                    connection, briefing["id"], issue["id"]
+                )
+                issue["editorDirectCoverage"] = override
+            issue["directCoverage"] = (
+                override if override is not None else issue["autoDirectCoverage"]
+            )
+            if (
+                not issue["directCoverage"]
+                and legacy_article_top_ids.intersection(issue["articleIds"])
+            ):
                 issue["selected"] = True
     finally:
         connection.close()
@@ -196,6 +215,7 @@ async def apply_cluster_run(cluster_run_id: str) -> Any:
                 connection, run["report_date"], serialized["proposal"], issue_ids
             )
             runs_repo.mark_applied(connection, cluster_run_id)
+            briefings_repo.normalize_direct_coverage(connection, run["report_date"])
         applied = runs_repo.get(connection, cluster_run_id)
         return ok_envelope(runs_repo.serialize(applied))
     finally:

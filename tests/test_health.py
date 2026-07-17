@@ -27,16 +27,16 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260717-8" in response.text
+    assert "js/app.js?v=20260717-9" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
-    assert "css/app.css?v=20260717-15" in response.text
+    assert "css/app.css?v=20260717-16" in response.text
     assert 'id="autoSelectBtn" type="button" aria-busy="false"' in response.text
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260717-20' in app_script.text
-    assert 'articles.js?v=20260717-16' in app_script.text
+    assert 'articles.js?v=20260717-17' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text

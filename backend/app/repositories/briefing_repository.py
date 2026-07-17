@@ -37,6 +37,10 @@ class TopIssueLimitExceeded(Exception):
     pass
 
 
+class DirectCoverageNotSelectable(Exception):
+    pass
+
+
 class DailyWorkResetBlocked(Exception):
     pass
 
@@ -426,6 +430,135 @@ def _effective_article_ids_for_issue(
     return [row["article_id"] for row in rows]
 
 
+def direct_coverage_override_for_issue(
+    connection: sqlite3.Connection, briefing_id: str, issue_id: str
+) -> bool | None:
+    row = connection.execute(
+        """
+        SELECT bi.direct_coverage_override
+        FROM issues i
+        LEFT JOIN briefing_issues bi
+          ON bi.briefing_id = ? AND bi.issue_id = i.id
+        WHERE i.id = ?
+        """,
+        (briefing_id, issue_id),
+    ).fetchone()
+    if row is None:
+        return None
+    if row["direct_coverage_override"] is not None:
+        return bool(row["direct_coverage_override"])
+    member_ids = _effective_article_ids_for_issue(connection, issue_id)
+    if not member_ids:
+        return None
+    placeholders = ",".join("?" for _ in member_ids)
+    inherited = connection.execute(
+        f"SELECT direct_coverage_override FROM briefing_articles "  # noqa: S608
+        f"WHERE briefing_id = ? AND article_id IN ({placeholders}) "
+        "AND direct_coverage_override IS NOT NULL ORDER BY updated_at DESC LIMIT 1",
+        (briefing_id, *member_ids),
+    ).fetchone()
+    if inherited is None:
+        return None
+    return bool(inherited["direct_coverage_override"])
+
+
+def is_direct_coverage_issue(
+    connection: sqlite3.Connection, briefing_id: str, issue_id: str
+) -> bool:
+    override = direct_coverage_override_for_issue(connection, briefing_id, issue_id)
+    if override is not None:
+        return override
+    row = connection.execute(
+        "SELECT direct_mention FROM issues WHERE id = ?", (issue_id,)
+    ).fetchone()
+    return bool(row["direct_mention"]) if row is not None else False
+
+
+def _effective_direct_coverage_for_article(
+    connection: sqlite3.Connection,
+    briefing_id: str,
+    report_date: str,
+    article_id: str,
+) -> bool:
+    issue_id = _effective_issue_id_for_article(connection, report_date, article_id)
+    if issue_id:
+        return is_direct_coverage_issue(connection, briefing_id, issue_id)
+    row = connection.execute(
+        """
+        SELECT COALESCE(
+            ba.direct_coverage_override,
+            CASE WHEN COALESCE(aa.final_category, aa.auto_category, a.category_hint)
+                      = 'kesco_direct' THEN 1 ELSE 0 END
+        ) AS direct_coverage
+        FROM articles a
+        LEFT JOIN article_assessments aa ON aa.article_id = a.id
+        LEFT JOIN briefing_articles ba
+          ON ba.briefing_id = ? AND ba.article_id = a.id
+        WHERE a.id = ?
+        """,
+        (briefing_id, article_id),
+    ).fetchone()
+    return bool(row["direct_coverage"]) if row is not None else False
+
+
+def normalize_direct_coverage(
+    connection: sqlite3.Connection, report_date: str
+) -> dict[str, int]:
+    """공사 직접 보도 군집을 일반 브리핑과 Top Issues에서 배타적으로 제거한다."""
+    briefing = get_by_date(connection, report_date)
+    if briefing is None:
+        return {"articlesDeselected": 0, "topIssuesCleared": 0}
+    article_count = 0
+    top_count = 0
+    issue_rows = connection.execute(
+        """
+        SELECT i.id
+        FROM issues i
+        JOIN cluster_runs cr ON cr.id = i.last_cluster_run_id
+        WHERE i.direct_mention = 1 AND cr.report_date = ?
+        """,
+        (report_date,),
+    ).fetchall()
+    now = now_iso()
+    for row in issue_rows:
+        issue_id = row["id"]
+        if not is_direct_coverage_issue(connection, briefing["id"], issue_id):
+            continue
+        member_ids = _effective_article_ids_for_issue(connection, issue_id)
+        if member_ids:
+            placeholders = ",".join("?" for _ in member_ids)
+            cursor = connection.execute(
+                f"UPDATE briefing_articles SET selected = 0, top_issue = 0, updated_at = ? "  # noqa: S608
+                f"WHERE briefing_id = ? AND article_id IN ({placeholders}) "
+                "AND (selected = 1 OR top_issue = 1)",
+                (now, briefing["id"], *member_ids),
+            )
+            article_count += max(0, cursor.rowcount)
+        cursor = connection.execute(
+            "UPDATE briefing_issues SET selected = 0, updated_at = ? "
+            "WHERE briefing_id = ? AND issue_id = ? AND selected = 1",
+            (now, briefing["id"], issue_id),
+        )
+        top_count += max(0, cursor.rowcount)
+    standalone_rows = connection.execute(
+        "SELECT article_id FROM briefing_articles WHERE briefing_id = ?",
+        (briefing["id"],),
+    ).fetchall()
+    for row in standalone_rows:
+        article_id = row["article_id"]
+        if not _effective_direct_coverage_for_article(
+            connection, briefing["id"], report_date, article_id
+        ):
+            continue
+        cursor = connection.execute(
+            "UPDATE briefing_articles SET selected = 0, top_issue = 0, updated_at = ? "
+            "WHERE briefing_id = ? AND article_id = ? AND (selected = 1 OR top_issue = 1)",
+            (now, briefing["id"], article_id),
+        )
+        article_count += max(0, cursor.rowcount)
+    return {"articlesDeselected": article_count, "topIssuesCleared": top_count}
+
+
 def bump_revision(connection: sqlite3.Connection, briefing_id: str, expected_revision: int) -> sqlite3.Row:
     cursor = connection.execute(
         """
@@ -441,8 +574,15 @@ def bump_revision(connection: sqlite3.Connection, briefing_id: str, expected_rev
     return row
 
 
-_ARTICLE_STATE_COLUMNS = {"selected", "starred", "topIssue", "note", "dismissed", "sortOrder"}
-_ARTICLE_STATE_DB_COLUMN = {"selected": "selected", "starred": "starred", "topIssue": "top_issue", "note": "note", "dismissed": "dismissed", "sortOrder": "sort_order"}
+_ARTICLE_STATE_COLUMNS = {
+    "selected", "starred", "topIssue", "note", "dismissed", "sortOrder",
+    "directCoverage",
+}
+_ARTICLE_STATE_DB_COLUMN = {
+    "selected": "selected", "starred": "starred", "topIssue": "top_issue",
+    "note": "note", "dismissed": "dismissed", "sortOrder": "sort_order",
+    "directCoverage": "direct_coverage_override",
+}
 
 
 def patch_article_state(
@@ -463,6 +603,15 @@ def patch_article_state(
     _ensure_briefing_article_row(connection, briefing["id"], article_id)
 
     patch = {key: value for key, value in fields.items() if key in _ARTICLE_STATE_COLUMNS}
+    if patch.get("directCoverage") is True:
+        patch["selected"] = False
+        patch["topIssue"] = False
+    if patch.get("topIssue") is True:
+        patch["selected"] = True
+    if patch.get("selected") is True and _effective_direct_coverage_for_article(
+        connection, briefing["id"], report_date, article_id
+    ):
+        raise DirectCoverageNotSelectable()
     if patch.get("topIssue") is True:
         issue_id = _effective_issue_id_for_article(connection, report_date, article_id)
         if issue_id is not None:
@@ -512,9 +661,17 @@ def patch_article_state(
 def mark_selected(connection: sqlite3.Connection, briefing_id: str, article_id: str) -> None:
     """수동 기사 추가 직후 기본값(선정=true, 숨김 해제)을 부여한다. revision 검증은 하지 않는다."""
     _ensure_briefing_article_row(connection, briefing_id, article_id)
+    briefing = get_by_id(connection, briefing_id)
+    selected = bool(
+        briefing
+        and not _effective_direct_coverage_for_article(
+            connection, briefing_id, briefing["report_date"], article_id
+        )
+    )
     connection.execute(
-        "UPDATE briefing_articles SET selected = 1, dismissed = 0, updated_at = ? WHERE briefing_id = ? AND article_id = ?",
-        (now_iso(), briefing_id, article_id),
+        "UPDATE briefing_articles SET selected = ?, dismissed = 0, updated_at = ? "
+        "WHERE briefing_id = ? AND article_id = ?",
+        (1 if selected else 0, now_iso(), briefing_id, article_id),
     )
 
 
@@ -555,7 +712,14 @@ def apply_ai_recommendations(
             """,
             (briefing["id"], article_id),
         ).fetchone()
-        if candidate is None or bool(candidate["dismissed"]) or bool(candidate["selected"]):
+        if (
+            candidate is None
+            or bool(candidate["dismissed"])
+            or bool(candidate["selected"])
+            or _effective_direct_coverage_for_article(
+                connection, briefing["id"], report_date, article_id
+            )
+        ):
             continue
         _ensure_briefing_article_row(connection, briefing["id"], article_id)
         connection.execute(
@@ -628,13 +792,15 @@ def set_article_state(
     dismissed: bool,
     sort_order: int,
     top_issue: bool = False,
+    direct_coverage_override: bool | None = None,
 ) -> None:
     """JSON/CSV import 등 대량 반영 시 revision 검증 없이 상태를 직접 설정한다."""
     _ensure_briefing_article_row(connection, briefing_id, article_id)
     connection.execute(
         """
         UPDATE briefing_articles
-        SET selected = ?, starred = ?, top_issue = ?, note = ?, dismissed = ?, sort_order = ?, updated_at = ?
+        SET selected = ?, starred = ?, top_issue = ?, note = ?, dismissed = ?, sort_order = ?,
+            direct_coverage_override = ?, updated_at = ?
         WHERE briefing_id = ? AND article_id = ?
         """,
         (
@@ -644,6 +810,11 @@ def set_article_state(
             note,
             1 if dismissed else 0,
             sort_order,
+            (
+                1 if direct_coverage_override is True
+                else 0 if direct_coverage_override is False
+                else None
+            ),
             now_iso(),
             briefing_id,
             article_id,
@@ -705,8 +876,18 @@ def patch_issue_state(
         """,
         (briefing["id"], issue_id, briefing["id"], now, now, briefing["id"], issue_id),
     )
-    column_map = {"selected": "selected", "starred": "starred", "note": "note", "sortOrder": "sort_order"}
+    column_map = {
+        "selected": "selected",
+        "starred": "starred",
+        "note": "note",
+        "sortOrder": "sort_order",
+        "directCoverage": "direct_coverage_override",
+    }
     patch = {key: value for key, value in fields.items() if key in column_map}
+    if patch.get("selected") is True and is_direct_coverage_issue(
+        connection, briefing["id"], issue_id
+    ):
+        raise DirectCoverageNotSelectable()
     if patch.get("selected") is True:
         current = connection.execute(
             "SELECT selected FROM briefing_issues WHERE briefing_id = ? AND issue_id = ?",
@@ -729,6 +910,27 @@ def patch_issue_state(
             and limit_reached
         ):
             raise TopIssueLimitExceeded()
+        target_article_id = fields.get("articleId")
+        if target_article_id not in member_ids:
+            representative = connection.execute(
+                "SELECT representative_article_id FROM issues WHERE id = ?",
+                (issue_id,),
+            ).fetchone()
+            target_article_id = (
+                representative["representative_article_id"]
+                if representative
+                and representative["representative_article_id"] in member_ids
+                else member_ids[0] if member_ids else None
+            )
+        if target_article_id:
+            _ensure_briefing_article_row(
+                connection, briefing["id"], target_article_id
+            )
+            connection.execute(
+                "UPDATE briefing_articles SET selected = 1, dismissed = 0, updated_at = ? "
+                "WHERE briefing_id = ? AND article_id = ?",
+                (now, briefing["id"], target_article_id),
+            )
     if "selected" in patch:
         member_ids = _effective_article_ids_for_issue(connection, issue_id)
         if member_ids:
@@ -738,6 +940,16 @@ def patch_issue_state(
                 f"WHERE briefing_id = ? AND article_id IN ({placeholders}) AND top_issue = 1",
                 (now, briefing["id"], *member_ids),
             )
+    if patch.get("directCoverage") is True:
+        member_ids = _effective_article_ids_for_issue(connection, issue_id)
+        if member_ids:
+            placeholders = ",".join("?" for _ in member_ids)
+            connection.execute(
+                f"UPDATE briefing_articles SET selected = 0, top_issue = 0, updated_at = ? "  # noqa: S608
+                f"WHERE briefing_id = ? AND article_id IN ({placeholders})",
+                (now, briefing["id"], *member_ids),
+            )
+        patch["selected"] = False
     if patch:
         assignments = ", ".join(f"{column_map[key]} = ?" for key in patch)
         values = [1 if value is True else 0 if value is False else value for value in patch.values()]
@@ -776,7 +988,8 @@ def patch_issue_state(
 def list_issue_states(connection: sqlite3.Connection, report_date: str) -> dict[str, dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT bi.issue_id, bi.selected, bi.starred, bi.note, bi.sort_order
+        SELECT bi.issue_id, bi.selected, bi.starred, bi.note, bi.sort_order,
+               bi.direct_coverage_override
         FROM briefing_issues bi
         JOIN briefings b ON b.id = bi.briefing_id
         WHERE b.report_date = ?
@@ -789,6 +1002,11 @@ def list_issue_states(connection: sqlite3.Connection, report_date: str) -> dict[
             "starred": bool(row["starred"]),
             "note": row["note"] or "",
             "sortOrder": row["sort_order"],
+            "editorDirectCoverage": (
+                bool(row["direct_coverage_override"])
+                if row["direct_coverage_override"] is not None
+                else None
+            ),
         }
         for row in rows
     }

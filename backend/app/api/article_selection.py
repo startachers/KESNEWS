@@ -52,6 +52,20 @@ def _selection_input(connection, report_date: str, model: str):
         for article in articles
     ]
     issues = issues_repo.list_for_report_date(connection, report_date)
+    briefing = briefings_repo.get_by_date(connection, report_date)
+    if briefing is not None:
+        excluded_ids = {
+            article_id
+            for issue in issues
+            if briefings_repo.is_direct_coverage_issue(
+                connection, briefing["id"], issue["id"]
+            )
+            for article_id in issue.get("articleIds") or []
+        }
+        articles = [
+            article for article in articles
+            if article["id"] not in excluded_ids and not article.get("directCoverage")
+        ]
     selected_ids = [str(item["id"]) for item in articles if item.get("included")]
     candidates, evidence = build_candidate_input(articles, issues)
     target_count = min(
