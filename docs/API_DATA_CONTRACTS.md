@@ -249,10 +249,21 @@ POST /api/briefings/{date}/selection-recommendations/apply
   정상 추천과 실제 기사 선정 상태를 변경하지 않는다.
 - apply는 `expectedRevision`, `runId`를 받고 입력 서명을 다시 검증한다. 성공한 미적용 실행만
   적용할 수 있다.
-- apply는 추천 기사에 `selected=true`를 설정하는 같은 transaction에서 기존
-  `briefing_issues.selected`와 `briefing_articles.top_issue`를 모두 해제하고, 실제 적용된 추천 순위
-  상위 6건에만 `top_issue=true`를 설정한다. 기존 기사 선정 상태와 `starred`, `note`, `dismissed`,
-  수동 분류는 변경하지 않는다. `dismissed=true`는 적용 대상에서 제외한다.
+- apply는 추천 기사에 `selected=true`를 설정하는 같은 transaction에서 기존 수동 Top 태그를
+  보존하고, 비어 있는 Top Issues 자리만 실제 적용된 핵심 추천 순위 1~6위 순서로 채운다.
+  추천 기사가 유효 군집에 속하면 `briefing_issues.selected=true`로 군집 Top 태그를 활성화하고,
+  군집이 없는 단독 기사만 `briefing_articles.top_issue=true`로 설정한다. 같은 군집은 Top Issue
+  하나로 취급한다. 기존 기사 선정 상태와 `starred`, `note`, `dismissed`, 수동 분류는 변경하지
+  않는다. `dismissed=true`는 적용 대상에서 제외한다.
+- apply 응답은 새로 활성화한 군집을 `topIssueIssueIds`, 단독 기사를 `topIssueArticleIds`, 두
+  종류의 합계를 `activatedTopIssueCount`로 반환한다. 보존된 수동 Top 태그까지 포함한 적용 후
+  전체 개수는 `topIssueCount`로 반환한다.
+- Top Issues 상한은 화면에 표시되는 고유 군집과 군집이 없는 단독 기사를 합산해 계산한다.
+  군집 구성 기사에 남은 구버전 개별 Top 태그는 같은 군집의 중복 항목으로 세지 않는다.
+- migration `0016_promote_grouped_article_top_tags.sql`은 기존 DB의 군집 구성 기사
+  `top_issue=true`를 대응하는 `briefing_issues.selected=true`로 승격하고 기사 태그를 해제한다.
+  migration 적용 전 상태를 읽더라도 이슈 API는 해당 군집을 선택 상태로 반환하며, 군집 Top
+  해제 mutation은 구성 기사에 남은 개별 Top 태그도 함께 해제한다.
 - 추천 생성은 AI 결과의 자동 확정이 아니다. 담당자가 화면에서 추천 목록과 이유를 확인하고
   명시적으로 apply해야 실제 선정 상태가 바뀐다.
 

@@ -329,7 +329,7 @@ def test_individual_article_top_issue_tag_persists_independently():
     assert articles[0]["included"] is True
 
 
-def test_top_issues_allow_six_and_reject_seventh_tag():
+def test_top_issues_allow_six_and_promote_article_tags_after_clustering():
     report_date = "2026-08-15"
     _create_briefing(report_date)
     article_ids = [
@@ -381,23 +381,29 @@ def test_top_issues_allow_six_and_reject_seventh_tag():
     issue = client.get(
         "/api/issues", params={"report_date": report_date}
     ).json()["data"]["issues"][0]
+    assert issue["selected"] is True
     revision = replacement.json()["data"]["revision"]
-    rejected_issue = client.patch(
+    cleared_issue = client.patch(
         f"/api/briefings/{report_date}/issues/{issue['id']}",
-        json={"expectedRevision": revision, "selected": True},
+        json={"expectedRevision": revision, "selected": False},
     )
-    assert rejected_issue.status_code == 409
-    assert rejected_issue.json()["error"]["code"] == "TOP_ISSUE_LIMIT_EXCEEDED"
-
-    removed = client.patch(
-        f"/api/briefings/{report_date}/articles/{article_ids[1]}",
-        json={"expectedRevision": revision, "topIssue": False},
+    assert cleared_issue.status_code == 200
+    articles = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"]
+    assert not any(
+        article["topIssue"]
+        for article in articles
+        if article["id"] in issue["articleIds"]
     )
-    selected_issue = client.patch(
+    retagged_issue = client.patch(
         f"/api/briefings/{report_date}/issues/{issue['id']}",
-        json={"expectedRevision": removed.json()["data"]["revision"], "selected": True},
+        json={
+            "expectedRevision": cleared_issue.json()["data"]["revision"],
+            "selected": True,
+        },
     )
-    assert selected_issue.status_code == 200
+    assert retagged_issue.status_code == 200
 
 
 def test_manual_group_moves_articles_and_survives_reclustering():

@@ -6,6 +6,8 @@
 - 추천 1~6위를 핵심 선정, 7~12위를 추가 참고로 구분
 - Top Issues 합산 상한을 5개에서 6개로 변경
 - 추천 적용 시 기존 수동 Top 태그를 보존하고 빈 Top Issues 자리만 추천 순위순으로 채움
+- 추천 기사가 군집에 속하면 기사 태그 대신 해당 군집의 Top 태그를 활성화
+- 구버전의 숨은 기사 Top 태그를 군집 Top 태그로 승격하는 migration 및 화면 fallback
 - 공사 직접성·법정업무 연관성을 사회적 심각성보다 우선
 - 전기·설비·검사·점검·안전관리 연결이 없는 일반 화재 제외
 - 국내 정책·기준·대응 또는 공사 해외사업과 연결되지 않는 해외 사고 제외
@@ -17,7 +19,7 @@
 
 ```text
 .venv/bin/python -m pytest -q
-250 passed, 3 warnings
+269 passed, 3 warnings
 
 .venv/bin/ruff check .
 All checks passed!
@@ -25,6 +27,7 @@ All checks passed!
 node --check frontend/js/app.js
 node --check frontend/js/features/auto-selection.js
 node --check frontend/js/features/issues.js
+node --check frontend/js/features/articles.js
 node --check frontend/js/ui/renderers.js
 성공
 
@@ -34,8 +37,9 @@ git diff --check
 
 단위 테스트에서 일반 화재 제외, 해외 사고의 국내 연결 조건, 동일 이슈 대표 1건 압축,
 조건부 분야 요구를 확인했다. 통합 테스트에서 명시적 적용 전 무변경, 12건 선정, Top Issues
-6칸을 추천 중요도 1~6위 순서로 채움, 기존 수동 선정·메모·중요·Top 태그 보존, 7번째 Top
-태그 거부를 확인했다. 모든
+6칸을 추천 중요도 1~6위 순서로 채움, 추천 기사의 군집 Top 태그 활성화, 군집이 없는 기사의
+개별 Top 태그 fallback, 기존 수동 선정·메모·중요·Top 태그 보존, 7번째 Top 태그 거부를
+확인했다. 모든
 테스트는 외부 Ollama와 언론사 네트워크를 호출하지 않는다.
 
 ## 수동 회귀
@@ -56,3 +60,4 @@ git diff --check
   제목·RSS 요약도 짧은 경우 관련 기사를 놓칠 수 있다.
 - 기존 군집 품질이 낮으면 동일 이슈 대표 1건 제한이 완전하게 작동하지 않을 수 있다.
 - Top Issues 자동 채움은 담당자가 추천 결과를 명시적으로 적용한 경우에만 발생한다.
+- 앱 재시작 시 migration 0016이 적용되며, 적용 전 DB는 자동 백업된다.

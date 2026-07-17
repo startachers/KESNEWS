@@ -6,6 +6,7 @@ import {
 import { autoResize } from "../utils/dom.js";
 import { countBy, friendlyError, escapeHtml, escapeAttr } from "../utils/strings.js";
 import { formatDateTime } from "../utils/dates.js";
+import { primaryIssueByArticle } from "../utils/issues.js";
 import { fetchWithTimeout } from "../utils/net.js";
 import { prioritySort, relevanceSort } from "./collection.js";
 import { renderAll } from "../ui/renderers.js";
@@ -27,8 +28,7 @@ export function generateSummary() {
   if (!items.length) return "• 현재 CEO 보고 대상으로 선택된 기사가 없습니다.\n• 기사를 검색하거나 직접 추가한 뒤 포함 여부를 확인해 주세요.";
   const positive = items.filter(a => a.sentiment === "positive");
   const sources = new Set(items.map(a => a.source).filter(Boolean)).size;
-  const issueByArticle = new Map();
-  state.issues.forEach(issue => issue.articleIds?.forEach(id => issueByArticle.set(id, issue)));
+  const issueByArticle = primaryIssueByArticle(state.issues);
   const top = [...items].sort((a, b) => (issueByArticle.get(a.id)?.autoReviewRank || 999999) - (issueByArticle.get(b.id)?.autoReviewRank || 999999) || prioritySort(a, b))[0];
   const topIssue = issueByArticle.get(top.id);
   const priorityIssueCount = state.issues.filter(issue => (issue.effectiveReviewStars || 0) >= 4).length;

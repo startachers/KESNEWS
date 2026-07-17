@@ -11,12 +11,13 @@ function starsText(value) {
 
 export function renderTopIssues() {
   const articleById = new Map(state.articles.map(article => [article.id, article]));
+  const groupedArticleIds = new Set(state.issues.flatMap(issue => issue.articleIds || []));
   const taggedIssues = state.issues.filter(issue => issue.selected).map(issue => ({
     kind: "issue",
     item: issue,
     date: issue.lastSeenAt || "",
   }));
-  const taggedArticles = state.articles.filter(article => article.topIssue).map(article => ({
+  const taggedArticles = state.articles.filter(article => article.topIssue && !groupedArticleIds.has(article.id)).map(article => ({
     kind: "article",
     item: article,
     date: article.pubDate || "",

@@ -1,5 +1,6 @@
 import { state, setState, settings, els, filters, setFilters, CATEGORY_COLORS, SENTIMENT_LABELS, saveDailyState, loadDailyState } from "../state/store.js";
 import { escapeHtml, escapeAttr, safeUrl, friendlyError } from "../utils/strings.js";
+import { primaryIssueByArticle } from "../utils/issues.js";
 import { dateValue, formatDateTime } from "../utils/dates.js";
 import { getRelevance, isYonhapArticle, relevanceSort, prioritySort } from "./collection.js";
 import * as api from "../api/client.js";
@@ -49,8 +50,9 @@ function relatedArticleCounts() {
 }
 
 function topIssueTagCount() {
+  const groupedArticleIds = new Set(state.issues.flatMap(issue => issue.articleIds || []));
   return state.issues.filter(issue => issue.selected).length
-    + state.articles.filter(article => article.topIssue).length;
+    + state.articles.filter(article => article.topIssue && !groupedArticleIds.has(article.id)).length;
 }
 
 function renderArticleCard(a, issue = null, relatedMembers = []) {
@@ -152,9 +154,11 @@ function renderMediaGroups(items) {
       : general;
   }
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
+  const issueByArticle = primaryIssueByArticle(state.issues);
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
     const members = issue.articleIds
+      .filter(articleId => issueByArticle.get(articleId)?.id === issue.id)
       .map(articleId => itemById.get(articleId))
       .filter(Boolean)
       .sort((left, right) => left.index - right.index);
@@ -162,7 +166,7 @@ function renderMediaGroups(items) {
     return { issue, members, position: members[0]?.index };
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, position }) => {
-    if (issue.articleIds.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
+    if (members.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
     const representative = members[0];
     const related = members.filter(member => member.article.id !== representative.article.id);
     return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
@@ -186,6 +190,7 @@ export function renderArticles() {
   updateManualGroupControls();
   const selectedCount = state.articles.filter(article => article.included).length;
   const selectedOnlyActive = filters.selection === "selected";
+  const issueByArticle = primaryIssueByArticle(state.issues);
   els.selectedOnlyCount.textContent = selectedCount;
   els.selectedOnlyBtn.classList.toggle("active", selectedOnlyActive);
   els.selectedOnlyBtn.setAttribute("aria-pressed", String(selectedOnlyActive));
@@ -193,7 +198,7 @@ export function renderArticles() {
   let items = state.articles.filter(a => {
     const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")}`.toLowerCase();
     const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
-    const issue = state.issues.find(candidate => candidate.articleIds?.includes(a.id));
+    const issue = issueByArticle.get(a.id);
     const reviewMatch = filters.risk === "all" || Number(filters.risk) === Number(issue?.effectiveReviewStars);
     return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && reviewMatch && selectionMatch;
   });
@@ -205,8 +210,6 @@ export function renderArticles() {
   else if (filters.sort === "newest") items.sort((a,b) => dateValue(b.pubDate)-dateValue(a.pubDate));
   else if (filters.sort === "source") items.sort((a,b) => (a.source || "").localeCompare(b.source || "", "ko"));
   else if (filters.sort === "review") {
-    const issueByArticle = new Map();
-    state.issues.forEach(issue => issue.articleIds?.forEach(id => issueByArticle.set(id, issue)));
     items.sort((a, b) => {
       const left = issueByArticle.get(a.id); const right = issueByArticle.get(b.id);
       return (right?.effectiveReviewStars || 0) - (left?.effectiveReviewStars || 0)

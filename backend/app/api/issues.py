@@ -48,6 +48,9 @@ async def list_issues(report_date: str = Query(...)) -> Any:
     try:
         issues = issues_repo.list_for_report_date(connection, report_date)
         briefing_states = briefings_repo.list_issue_states(connection, report_date)
+        legacy_article_top_ids = briefings_repo.list_article_top_issue_ids(
+            connection, report_date
+        )
         for issue in issues:
             issue.update(
                 briefing_states.get(
@@ -55,6 +58,8 @@ async def list_issues(report_date: str = Query(...)) -> Any:
                     {"selected": False, "starred": False, "note": "", "sortOrder": None},
                 )
             )
+            if legacy_article_top_ids.intersection(issue["articleIds"]):
+                issue["selected"] = True
     finally:
         connection.close()
     return ok_envelope({"issues": issues})

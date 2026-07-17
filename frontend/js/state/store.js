@@ -55,7 +55,11 @@ export const CATEGORY_COLORS = {
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
 export const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
 export const LAST_AUTO_KEY = "kesco_media_briefing_last_auto_v2";
-export const AI_API_BASE = location.protocol === "http:" && ["127.0.0.1", "localhost"].includes(location.hostname) ? "/api" : "http://127.0.0.1:8787/api";
+// FastAPI가 화면과 API를 함께 제공하므로 HTTP(S)에서는 항상 같은 출처를 사용한다.
+// file://로 직접 연 레거시 사용 방식만 로컬 운영 서버로 연결한다.
+export const AI_API_BASE = ["http:", "https:"].includes(location.protocol)
+  ? "/api"
+  : "http://127.0.0.1:8787/api";
 export const AI_SESSION_TOKEN = document.querySelector('meta[name="kesco-ai-token"]')?.content || new URLSearchParams(location.hash.slice(1)).get("ai") || "";
 
 export const $ = (id) => document.getElementById(id);

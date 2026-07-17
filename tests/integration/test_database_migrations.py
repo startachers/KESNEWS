@@ -44,6 +44,8 @@ EXPECTED_MIGRATIONS = [
     "0013_briefing_report_draft.sql",
     "0014_ai_article_selection.sql",
     "0015_incident_cause_axes.sql",
+    "0016_promote_grouped_article_top_tags.sql",
+    "0017_repair_post_deploy_grouped_top_tags.sql",
 ]
 
 
@@ -174,6 +176,79 @@ def test_article_top_issue_migration_adds_independent_tag(tmp_path):
         connection.close()
 
 
+def test_post_deploy_grouped_article_top_tag_repair_promotes_tag_to_issue(tmp_path):
+    connection = get_connection(tmp_path / "grouped-top-issue.db")
+    try:
+        apply_migrations(connection)
+        now = "2026-07-17T00:00:00Z"
+        connection.execute(
+            """
+            INSERT INTO articles (
+                id, content_key, title, first_observed_at, last_observed_at,
+                created_at, updated_at
+            ) VALUES ('article-1', 'content-1', '군집 기사', ?, ?, ?, ?)
+            """,
+            (now, now, now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefings (id, report_date, created_at, updated_at)
+            VALUES ('briefing-1', '2026-07-17', ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO cluster_runs (
+                id, report_date, status, input_signature, proposal_json, diff_json,
+                algorithm_version, created_at, applied_at
+            ) VALUES ('run-1', '2026-07-17', 'applied', 'sig', '[]', '{}', 'test', ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO issues (
+                id, representative_article_id, auto_title, spread_score,
+                direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
+            ) VALUES ('issue-1', 'article-1', '군집', 0, 0, 0, 'run-1', ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO issue_auto_articles (
+                issue_id, article_id, cluster_run_id, created_at
+            ) VALUES ('issue-1', 'article-1', 'run-1', ?)
+            """,
+            (now,),
+        )
+        connection.execute(
+            """
+            INSERT INTO briefing_articles (
+                briefing_id, article_id, top_issue, created_at, updated_at
+            ) VALUES ('briefing-1', 'article-1', 1, ?, ?)
+            """,
+            (now, now),
+        )
+
+        migration = Path(
+            "backend/app/db/migrations/0017_repair_post_deploy_grouped_top_tags.sql"
+        ).read_text(encoding="utf-8")
+        connection.executescript(migration)
+
+        article_top = connection.execute(
+            "SELECT top_issue FROM briefing_articles WHERE briefing_id = 'briefing-1'"
+        ).fetchone()[0]
+        issue_top = connection.execute(
+            "SELECT selected FROM briefing_issues WHERE briefing_id = 'briefing-1'"
+        ).fetchone()[0]
+        assert article_top == 0
+        assert issue_top == 1
+    finally:
+        connection.close()
+
+
 def test_manual_issue_group_migration_marks_manual_groups(tmp_path):
     connection = get_connection(tmp_path / "manual-group.db")
     try:
@@ -280,6 +355,8 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0013_briefing_report_draft.sql",
         "0014_ai_article_selection.sql",
         "0015_incident_cause_axes.sql",
+        "0016_promote_grouped_article_top_tags.sql",
+        "0017_repair_post_deploy_grouped_top_tags.sql",
     ]
     upgraded = get_connection(db_path)
     try:

@@ -121,7 +121,7 @@ def test_recommendation_rejects_zero_when_candidates_exist():
     assert client.get(f"/api/briefings/{report_date}").json()["data"]["revision"] == revision
 
 
-def test_apply_preserves_existing_selection_and_editor_state_but_replaces_top_issue():
+def test_apply_preserves_existing_selection_and_editor_state_and_top_issue():
     report_date = "2025-04-02"
     article_ids, revision = setup_candidates(report_date, 2)
     first = client.patch(
@@ -141,13 +141,13 @@ def test_apply_preserves_existing_selection_and_editor_state_but_replaces_top_is
     articles = {item["id"]: item for item in client.get(f"/api/articles?report_date={report_date}").json()["data"]["articles"]}
     assert articles[article_ids[0]]["included"] is True
     assert articles[article_ids[0]]["starred"] is True
-    assert articles[article_ids[0]]["topIssue"] is False
+    assert articles[article_ids[0]]["topIssue"] is True
     assert articles[article_ids[0]]["note"] == "수동 메모"
     assert articles[article_ids[1]]["included"] is True
     assert articles[article_ids[1]]["topIssue"] is True
 
 
-def test_apply_clears_existing_issue_top_tag_before_ranking_recommended_articles():
+def test_apply_preserves_existing_issue_top_tag_and_fills_empty_slots():
     report_date = "2025-04-07"
     article_ids, revision = setup_candidates(report_date, 4)
     grouped = client.post(
@@ -181,18 +181,65 @@ def test_apply_clears_existing_issue_top_tag_before_ranking_recommended_articles
     )
 
     assert applied.status_code == 200
-    top_issue_ids = applied.json()["data"]["topIssueArticleIds"]
-    assert top_issue_ids == applied.json()["data"]["appliedArticleIds"][:6]
+    data = applied.json()["data"]
+    assert data["topIssueIssueIds"] == []
+    assert len(data["topIssueArticleIds"]) == 2
+    assert data["activatedTopIssueCount"] == 2
+    assert data["topIssueCount"] == 3
     issues = client.get(
         "/api/issues", params={"report_date": report_date}
     ).json()["data"]["issues"]
     issue = next(item for item in issues if item["id"] == issue_id)
-    assert issue["selected"] is False
+    assert issue["selected"] is True
     assert issue["note"] == "기존 Top 이슈 메모"
     articles = client.get(
         f"/api/articles?report_date={report_date}"
     ).json()["data"]["articles"]
-    assert {item["id"] for item in articles if item["topIssue"]} == set(top_issue_ids)
+    assert {item["id"] for item in articles if item["topIssue"]} == set(
+        data["topIssueArticleIds"]
+    )
+
+
+def test_apply_activates_top_tag_on_recommended_article_cluster():
+    report_date = "2025-04-08"
+    article_ids, revision = setup_candidates(report_date, 4)
+    grouped = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids[:2],
+            "expectedRevision": revision,
+        },
+    )
+    assert grouped.status_code == 200
+    issue_id = grouped.json()["data"]["issue"]["id"]
+    revision = grouped.json()["data"]["revision"]
+    app.state.ollama_client = FakeSelectionOllama(recommendations(3))
+
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+    assert proposed.status_code == 200
+    applied = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations/apply",
+        json={"expectedRevision": revision, "runId": proposed.json()["data"]["run"]["id"]},
+    )
+
+    assert applied.status_code == 200
+    data = applied.json()["data"]
+    assert data["topIssueIssueIds"] == [issue_id]
+    assert len(data["topIssueArticleIds"]) == 2
+    assert data["activatedTopIssueCount"] == 3
+    assert data["topIssueCount"] == 3
+    issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    assert next(item for item in issues if item["id"] == issue_id)["selected"] is True
+    articles = client.get(
+        f"/api/articles?report_date={report_date}"
+    ).json()["data"]["articles"]
+    assert not any(item["topIssue"] for item in articles if item["id"] in article_ids[:2])
 
 
 def test_recommendation_selects_twelve_and_fills_six_top_issue_cards():
@@ -215,6 +262,9 @@ def test_recommendation_selects_twelve_and_fills_six_top_issue_cards():
     top_issue_ids = applied.json()["data"]["topIssueArticleIds"]
     assert len(applied_ids) == 12
     assert top_issue_ids == applied_ids[:6]
+    assert applied.json()["data"]["topIssueIssueIds"] == []
+    assert applied.json()["data"]["activatedTopIssueCount"] == 6
+    assert applied.json()["data"]["topIssueCount"] == 6
     articles = client.get(
         f"/api/articles?report_date={report_date}"
     ).json()["data"]["articles"]
