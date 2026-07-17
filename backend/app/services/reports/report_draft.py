@@ -108,14 +108,14 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     if not normalized:
         raise ReportDraftInvalid("붙여넣은 분석 텍스트가 없습니다.")
     headings = {
-        "implications": re.compile(
-            r"(?im)^\s*(?:\d+[.)]\s*)?(?:언론\s*동향\s*)?시사점\s*$"
+        "core": re.compile(
+            r"(?im)^\s*(?:(?:①|1[.)]?)\s*)?(?:오늘의\s*핵심|언론\s*동향\s*시사점)\s*$"
         ),
-        "analysis": re.compile(
-            r"(?im)^\s*(?:\d+[.)]\s*)?(?:언론\s*동향\s*)?분석\s*$"
+        "implication": re.compile(
+            r"(?im)^\s*(?:(?:②|2[.)]?)\s*)?(?:경영\s*시사점|언론\s*동향\s*분석)\s*$"
         ),
         "reference": re.compile(
-            r"(?im)^\s*(?:\d+[.)]\s*)?(?:경영\s*)?(?:참고사항|참고\s*사항)\s*$"
+            r"(?im)^\s*(?:(?:③|3[.)]?)\s*)?(?:참고\s*동향|경영\s*참고\s*사항)\s*$"
         ),
     }
     matches = sorted(
@@ -133,19 +133,29 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
         if value:
             sections[section] = value
 
-    implications = sections.get("implications") or normalized
-    analysis = sections.get("analysis") or ""
+    core = sections.get("core") or normalized
+    implication = sections.get("implication") or ""
     references = sections.get("reference") or ""
+    if references.rstrip(" .") == "별도 참고 동향 없음":
+        references = ""
     return {
-        "managementMessage": {"text": implications, "articleIds": evidence_ids},
+        "managementMessage": {"text": core, "articleIds": evidence_ids},
         "situationSummary": {
-            "text": analysis,
-            "articleIds": evidence_ids if analysis else [],
+            "text": implication,
+            "articleIds": evidence_ids if implication else [],
         },
-        "keyIssues": [],
-        "decisionPoints": (
-            [{"text": references, "articleIds": evidence_ids}] if references else []
+        "keyIssues": (
+            [{
+                "title": "참고 동향",
+                "urgency": "reference",
+                "summary": references,
+                "managementImpact": "",
+                "articleIds": evidence_ids,
+            }]
+            if references
+            else []
         ),
+        "decisionPoints": [],
         "actionItems": [],
         "riskOutlook": {"text": "", "articleIds": [], "isInference": True},
         "limitations": [],

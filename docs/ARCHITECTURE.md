@@ -667,8 +667,9 @@ updated_at
 - 자동 AI 실행은 이 row를 생성하거나 덮어쓰지 않는다.
 - 미리보기와 최종 snapshot은 이 값이 있으면 최신 정상 Gemma 결과보다 우선 사용한다.
 - 기사·전문·편집 태그가 바뀌면 삭제하지 않고 stale로 표시한다.
-- 외부 AI 일반 텍스트의 `언론 동향 시사점`, `언론 동향 분석`, `경영 참고사항` 제목은
-  기존 근거 schema의 `managementMessage`, `situationSummary`, `decisionPoints`로 정규화한다.
+- 외부 AI 일반 텍스트의 `오늘의 핵심`, `경영 시사점`, `참고 동향` 제목은 기존 근거 schema의
+  `managementMessage`, `situationSummary`, `urgency=reference`인 `keyIssues`로 정규화한다.
+  과거 세 제목은 입력 호환 용도로만 인식한다.
 - CEO 보고 화면은 이 세 분석 축을 본문으로 우선 표시하고 선정 기사는 제목·핵심 1줄·언론사
   중심의 붙임으로 표시한다.
 
@@ -1167,7 +1168,7 @@ AI는 담당자가 선정한 기사 또는 이슈만 분석한다. 기본 상한
 
 AI 분석은 단일 Mac의 GPU 과점유를 막기 위해 앱 전체에서 한 번에 하나만 실행한다. 프런트의 취소 버튼, 브라우저 연결 종료, 5분 총 제한은 모두 같은 취소 token으로 Ollama 스트리밍 연결을 닫는다. 앱 시작 시 `running`으로 남은 고아 실행은 `AI_INTERRUPTED` 실패로 복구한다.
 
-`gemma4:31b`는 모델 선택지로 유지하되 기본 64K context, 최대 2,048 출력 token, thinking 비활성화, JSON schema structured output을 사용한다. 분석 종료 뒤 모델을 메모리에서 내려 다음 작업의 GPU·열 점유를 남기지 않는다. 환경변수 `KESCO_OLLAMA_NUM_CTX_31B`를 지정하면 메모리 여건에 맞춰 4K 이상 범위에서 context를 낮출 수 있다.
+`gemma4:31b`를 기본 선택 모델로 사용하며 기본 64K context, 최대 2,048 출력 token, thinking 비활성화, JSON schema structured output을 사용한다. 분석 종료 뒤 모델을 메모리에서 내려 다음 작업의 GPU·열 점유를 남기지 않는다. 환경변수 `KESCO_OLLAMA_NUM_CTX_31B`를 지정하면 메모리 여건에 맞춰 4K 이상 범위에서 context를 낮출 수 있다.
 
 ### 13.2 입력과 고정 근거 index
 
@@ -1194,6 +1195,14 @@ A01, A02, A03 ...
 ### 13.3 출력
 
 모든 사실·판단·전망 필드를 근거 객체로 구조화한다.
+
+생성은 두 단계로 수행한다. 첫 호출은 `기사 사실`, `언론·전문가 주장`, `공사 관련 해석`,
+`경영 제언`, `근거 기사 ID`, `확실성 수준`을 `analysisBasis`로 구조화한다. 서버는 각 항목에
+숫자·날짜 근거, 공사 역할 혼동, 조사 중 원인 확정, 주장 귀속 검사를 적용하고 내부 경영관리
+근거가 없는 참고 동향도 제외한다. 통과 항목과 그 기사 ID만 두 번째 최종 작성 호출에 전달한다.
+최종 출력도 같은 검사를 거치며 위반 시 1회 교정한다. 경고와 제외·교정 상태는
+`ai_runs.response_json.validationWarnings`에 보존한다. 통과 항목이 없거나 교정 뒤에도 위반이
+남으면 새 결과를 적용하지 않고 마지막 정상 결과와 담당자 수정본을 유지한다.
 
 편집 화면의 경영 메시지는 구조화 결과를 `① 오늘의 핵심`(`managementMessage`),
 `② 경영 시사점`(`situationSummary`), `③ 참고 동향`(`urgency=reference`인 `keyIssues`의

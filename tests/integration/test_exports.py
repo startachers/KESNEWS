@@ -354,7 +354,27 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     }
 
     class FakeOllama:
+        calls = 0
+
         def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
+            self.calls += 1
+            if self.calls == 1:
+                return json.dumps(
+                    {
+                        "items": [{
+                            "section": "core",
+                            "articleFact": "기사 내용이 확인됐다.",
+                            "attributedClaim": "",
+                            "kescoInterpretation": "공사 관점에서 살펴볼 사안이다.",
+                            "managementRecommendation": "관련 현황을 확인할 필요가 있다.",
+                            "articleIds": ["A01"],
+                            "certainty": "confirmed",
+                        }],
+                        "limitations": [],
+                        "confidence": "medium",
+                    },
+                    ensure_ascii=False,
+                )
             return json.dumps(analysis, ensure_ascii=False)
 
     report_date = "2025-02-11"

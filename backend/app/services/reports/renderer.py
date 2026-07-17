@@ -118,7 +118,7 @@ def _render_claim(title: str, value: Any, evidence: dict[str, Any]) -> str:
 def _render_lead(value: Any, evidence: dict[str, Any]) -> str:
     text, ids = _claim(value)
     if not text:
-        return '<p class="empty">작성된 언론 동향 시사점이 없습니다.</p>'
+        return '<p class="empty">작성된 오늘의 핵심이 없습니다.</p>'
     return (
         f'<div class="analysis-lead"><p>{_text(text)}</p>'
         f'<div class="evidence-list">분석 근거 {_evidence_links(ids, evidence)}</div></div>'
@@ -136,6 +136,8 @@ def _render_trend_analysis(analysis: dict[str, Any], evidence: dict[str, Any]) -
             f'{_evidence_links(situation_ids, evidence)}</div></div>'
         )
     for item in analysis.get("keyIssues") or []:
+        if item.get("urgency") == "reference":
+            continue
         impact = (
             f'<p class="management-impact"><strong>경영 관점</strong> '
             f'{_text(item.get("managementImpact"))}</p>'
@@ -155,27 +157,29 @@ def _render_trend_analysis(analysis: dict[str, Any], evidence: dict[str, Any]) -
             f'<div class="evidence-list">분석 근거 '
             f'{_evidence_links(outlook_ids, evidence)}</div></aside>'
         )
-    return "".join(sections) or '<p class="empty">작성된 언론 동향 분석이 없습니다.</p>'
+    return "".join(sections) or '<p class="empty">작성된 경영 시사점이 없습니다.</p>'
 
 
 def _render_management_reference(analysis: dict[str, Any], evidence: dict[str, Any]) -> str:
     items = []
-    for item in analysis.get("decisionPoints") or []:
-        text, ids = _claim(item)
-        if text:
-            items.append(
-                f'<li><p>{_text(text)}</p><div class="evidence-list">근거 '
-                f'{_evidence_links(ids, evidence)}</div></li>'
+    for item in analysis.get("keyIssues") or []:
+        if item.get("urgency") != "reference":
+            continue
+        text = " ".join(
+            value.strip()
+            for value in (
+                str(item.get("summary") or ""),
+                str(item.get("managementImpact") or ""),
             )
-    for item in analysis.get("actionItems") or []:
-        text = str(item.get("action") or "")
+            if value.strip()
+        )
         if text:
             items.append(
                 f'<li><p>{_text(text)}</p><div class="evidence-list">근거 '
                 f'{_evidence_links(item.get("articleIds") or [], evidence)}</div></li>'
             )
     if not items:
-        return '<p class="empty">별도 경영 참고사항이 없습니다.</p>'
+        return '<p class="empty">별도 참고 동향 없음.</p>'
     return f'<ol class="reference-list">{"".join(items)}</ol>'
 
 
@@ -495,9 +499,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <div class="kpis">{_kpi_strip(snapshot)}</div>
     <div class="body">
     <div class="analysis-source">{stale_notice}{ai_caption}</div>
-    <section class="section"><h2><span class="sec-num">01</span>언론 동향 시사점</h2>{_render_lead(analysis.get('managementMessage'), evidence)}</section>
-    <section class="section"><h2><span class="sec-num">02</span>언론 동향 분석</h2>{_render_trend_analysis(analysis, evidence)}</section>
-    <section class="section"><h2><span class="sec-num">03</span>경영 참고사항</h2>{_render_management_reference(analysis, evidence)}</section>
+    <section class="section"><h2><span class="sec-num">①</span>오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'), evidence)}</section>
+    <section class="section"><h2><span class="sec-num">②</span>경영 시사점</h2>{_render_trend_analysis(analysis, evidence)}</section>
+    <section class="section"><h2><span class="sec-num">③</span>참고 동향</h2>{_render_management_reference(analysis, evidence)}</section>
     <section class="section"><h2><span class="sec-num">04</span>CEO 참고·지시사항</h2><div class="action">{_text(action_note)}</div></section>
     <section class="section appendix" id="appendix-articles"><h2><span class="sec-tag">붙임</span>선정 기사 요약</h2><p class="section-caption">외부 AI 분석에 제공된 선정 기사입니다. 제목·핵심 1줄·언론사 정보로 빠르게 원문 근거를 확인할 수 있습니다.</p><div class="articles">{_article_cards(snapshot, evidence_by_article=evidence_by_article)}</div></section>
     {_unselected_evidence_cards(snapshot)}

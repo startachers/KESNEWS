@@ -32,6 +32,36 @@ class RiskOutlook(Claim):
     isInference: Literal[True]
 
 
+class AnalysisBasisItem(_StrictModel):
+    section: Literal["core", "implication", "reference"]
+    articleFact: str
+    attributedClaim: str
+    kescoInterpretation: str
+    managementRecommendation: str
+    articleIds: list[str] = Field(min_length=1)
+    certainty: Literal["confirmed", "attributed", "under_investigation", "inference"]
+
+    @model_validator(mode="after")
+    def require_content(self) -> "AnalysisBasisItem":
+        if not any(
+            value.strip()
+            for value in (
+                self.articleFact,
+                self.attributedClaim,
+                self.kescoInterpretation,
+                self.managementRecommendation,
+            )
+        ):
+            raise ValueError("분석 근거 항목의 내용이 모두 비어 있습니다.")
+        return self
+
+
+class AnalysisBasis(_StrictModel):
+    items: list[AnalysisBasisItem] = Field(min_length=1)
+    limitations: list[Claim] = Field(default_factory=list)
+    confidence: Literal["low", "medium", "high"]
+
+
 class AnalysisResult(_StrictModel):
     managementMessage: Claim
     situationSummary: Claim
@@ -80,5 +110,13 @@ def validate_evidence(result: AnalysisResult, evidence_ids: set[str]) -> None:
     references.extend((f"actionItems[{i}]", item.articleIds) for i, item in enumerate(result.actionItems))
     references.extend((f"limitations[{i}]", item.articleIds) for i, item in enumerate(result.limitations))
     invalid = sorted({value for _, ids in references for value in ids if value not in evidence_ids})
+    if invalid:
+        raise ValueError(f"입력 evidence index에 없는 ID입니다: {', '.join(invalid)}")
+
+
+def validate_basis_evidence(result: AnalysisBasis, evidence_ids: set[str]) -> None:
+    references = [item.articleIds for item in result.items]
+    references.extend(item.articleIds for item in result.limitations)
+    invalid = sorted({value for ids in references for value in ids if value not in evidence_ids})
     if invalid:
         raise ValueError(f"입력 evidence index에 없는 ID입니다: {', '.join(invalid)}")

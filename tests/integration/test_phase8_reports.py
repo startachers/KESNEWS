@@ -123,7 +123,27 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     }
 
     class FakeOllama:
+        calls = 0
+
         def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
+            self.calls += 1
+            if self.calls == 1:
+                return json.dumps(
+                    {
+                        "items": [{
+                            "section": "core",
+                            "articleFact": "안전점검 보도가 확인됐다.",
+                            "attributedClaim": "",
+                            "kescoInterpretation": "공사 관점에서 살펴볼 사안이다.",
+                            "managementRecommendation": "사실관계를 점검할 필요가 있다.",
+                            "articleIds": ["A01"],
+                            "certainty": "confirmed",
+                        }],
+                        "limitations": [],
+                        "confidence": "medium",
+                    },
+                    ensure_ascii=False,
+                )
             return json.dumps(analysis, ensure_ascii=False)
 
     app.state.ollama_client = FakeOllama()
@@ -144,9 +164,9 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert snapshot["evidence"]["A01"]["article"]["title"]
     report = client.get(f"/report/{report_date}").text
     assert f'href="#article-{article_id}"' in report
-    assert "언론 동향 시사점" in report
-    assert "언론 동향 분석" in report
-    assert "경영 참고사항" in report
+    assert "오늘의 핵심" in report
+    assert "경영 시사점" in report
+    assert "참고 동향" in report
     assert "전망" in report
     assert "선정 기사 요약" in report
 

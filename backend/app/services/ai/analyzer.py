@@ -7,9 +7,19 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
-from backend.app.services.ai.prompt_builder import build_correction_prompt, build_prompt
+from backend.app.services.ai.grounding import validate_basis_items, validate_final_result
+from backend.app.services.ai.prompt_builder import (
+    build_basis_prompt,
+    build_correction_prompt,
+    build_prompt,
+)
 from backend.app.services.ai.runtime import CancellationToken
-from backend.app.services.ai.schemas import AnalysisResult, validate_evidence
+from backend.app.services.ai.schemas import (
+    AnalysisBasis,
+    AnalysisResult,
+    validate_basis_evidence,
+    validate_evidence,
+)
 
 
 class AiClient(Protocol):
@@ -26,21 +36,36 @@ class AiClient(Protocol):
 class AnalysisError(Exception):
     code = "AI_SCHEMA_INVALID"
 
-    def __init__(self, message: str, *, raw_response: str | None = None, attempts: int = 0):
+    def __init__(
+        self,
+        message: str,
+        *,
+        raw_response: str | None = None,
+        attempts: int = 0,
+        validation_warnings: list[dict[str, Any]] | None = None,
+    ):
         super().__init__(message)
         self.raw_response = raw_response
         self.attempts = attempts
+        self.validation_warnings = validation_warnings or []
 
 
 class EvidenceInvalid(AnalysisError):
     code = "AI_EVIDENCE_INVALID"
 
 
+class GroundingInvalid(AnalysisError):
+    code = "AI_GROUNDING_INVALID"
+
+
 @dataclass(frozen=True)
 class AnalysisOutput:
     result: dict[str, Any]
+    basis: dict[str, Any]
+    validation_warnings: list[dict[str, Any]]
     raw_response: str
     attempts: int
+    basis_attempts: int
 
 
 def select_articles(articles: list[dict[str, Any]], limit: int = 20) -> list[dict[str, Any]]:
@@ -121,6 +146,23 @@ def _parse_and_validate(raw: str, evidence_ids: set[str]) -> AnalysisResult:
     return result
 
 
+def _parse_basis(raw: str, evidence_ids: set[str]) -> AnalysisBasis:
+    candidate = raw.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        candidate = "\n".join(lines[1:-1]) if len(lines) >= 3 else candidate
+    try:
+        payload = json.loads(candidate)
+        result = AnalysisBasis.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise AnalysisError(str(exc), raw_response=raw) from exc
+    try:
+        validate_basis_evidence(result, evidence_ids)
+    except ValueError as exc:
+        raise EvidenceInvalid(str(exc), raw_response=raw) from exc
+    return result
+
+
 def analyze(
     client: AiClient,
     *,
@@ -131,9 +173,54 @@ def analyze(
     evidence: dict[str, str],
     cancel_token: CancellationToken | None = None,
 ) -> AnalysisOutput:
-    prompt = build_prompt(report_date, prepared_by, evidence_input)
+    basis_prompt = build_basis_prompt(report_date, prepared_by, evidence_input)
     last_error: AnalysisError | None = None
+    basis_raw = ""
+    for attempt in range(1, 3):
+        current_prompt = (
+            basis_prompt
+            if attempt == 1
+            else build_correction_prompt(
+                basis_prompt, basis_raw, str(last_error or "중간 분석 schema invalid")
+            )
+        )
+        basis_raw = client.generate(
+            model=model,
+            prompt=current_prompt,
+            format_schema=AnalysisBasis.model_json_schema(),
+            cancel_token=cancel_token,
+        )
+        try:
+            basis = _parse_basis(basis_raw, set(evidence))
+            basis_attempts = attempt
+            break
+        except AnalysisError as exc:
+            last_error = exc
+    else:
+        assert last_error is not None
+        last_error.attempts = 2
+        last_error.raw_response = basis_raw
+        raise last_error
+
+    accepted, validation_warnings = validate_basis_items(basis.items, evidence_input)
+    validation_warnings = [
+        {**warning, "stage": "basis", "resolution": "filtered"}
+        for warning in validation_warnings
+    ]
+    if not accepted:
+        error = GroundingInvalid(
+            "자동 사실성 검증을 통과한 중간 분석 항목이 없습니다.",
+            raw_response=basis_raw,
+            attempts=basis_attempts,
+            validation_warnings=validation_warnings,
+        )
+        raise error
+
+    accepted_ids = {article_id for item in accepted for article_id in item.articleIds}
+    accepted_payload = [item.model_dump() for item in accepted]
+    prompt = build_prompt(report_date, prepared_by, evidence_input, accepted_payload)
     raw = ""
+    last_error = None
     for attempt in range(1, 3):
         current_prompt = (
             prompt
@@ -147,8 +234,33 @@ def analyze(
             cancel_token=cancel_token,
         )
         try:
-            result = _parse_and_validate(raw, set(evidence))
-            return AnalysisOutput(result=result.model_dump(), raw_response=raw, attempts=attempt)
+            result = _parse_and_validate(raw, accepted_ids)
+            final_warnings = validate_final_result(result, evidence_input, accepted)
+            if final_warnings:
+                validation_warnings.extend(
+                    {**warning, "stage": "final", "resolution": "correction_requested"}
+                    for warning in final_warnings
+                )
+                raise GroundingInvalid(
+                    json.dumps(final_warnings, ensure_ascii=False),
+                    raw_response=raw,
+                    validation_warnings=validation_warnings,
+                )
+            for warning in validation_warnings:
+                if warning.get("stage") == "final" and warning.get("resolution") == "correction_requested":
+                    warning["resolution"] = "corrected"
+            return AnalysisOutput(
+                result=result.model_dump(),
+                basis={
+                    "items": accepted_payload,
+                    "limitations": [item.model_dump() for item in basis.limitations],
+                    "confidence": basis.confidence,
+                },
+                validation_warnings=validation_warnings,
+                raw_response=raw,
+                attempts=attempt,
+                basis_attempts=basis_attempts,
+            )
         except AnalysisError as exc:
             last_error = exc
     assert last_error is not None

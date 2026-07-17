@@ -32,18 +32,18 @@ function contentFromText(text) {
 
 function setEditorContent(content) {
   const value = content || emptyContent();
-  const lines = [];
-  if (value.managementMessage?.text) lines.push(value.managementMessage.text);
-  if (value.situationSummary?.text) lines.push("■ 언론 상황", value.situationSummary.text);
-  if (value.keyIssues?.length) {
-    lines.push("■ 핵심 이슈");
-    value.keyIssues.forEach((item, index) => lines.push(`${index + 1}. ${item.title}`, item.summary, item.managementImpact ? `경영 영향: ${item.managementImpact}` : ""));
-  }
-  if (value.decisionPoints?.length) lines.push("■ 경영 판단 포인트", ...value.decisionPoints.map(item => `• ${item.text}`));
-  if (value.actionItems?.length) lines.push("■ 확인·지시 제안", ...value.actionItems.map(item => `• ${item.action}`));
-  if (value.riskOutlook?.text) lines.push("■ 위험 전망", value.riskOutlook.text);
-  if (value.limitations?.length) lines.push("※ 분석 한계", ...value.limitations.map(item => item.text));
-  $("reportDraftContent").value = lines.filter(Boolean).join("\n\n");
+  const references = (value.keyIssues || [])
+    .filter(item => item.urgency === "reference")
+    .map(item => [item.summary, item.managementImpact].filter(Boolean).join(" ").trim())
+    .filter(Boolean);
+  $("reportDraftContent").value = [
+    "① 오늘의 핵심",
+    value.managementMessage?.text || "",
+    "② 경영 시사점",
+    value.situationSummary?.text || "",
+    "③ 참고 동향",
+    references.length ? references.join("\n\n") : "별도 참고 동향 없음."
+  ].join("\n\n");
 }
 
 function setDraftStatus(message, tone = "") {

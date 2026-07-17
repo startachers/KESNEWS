@@ -645,6 +645,8 @@ floor·cap은 4.2절을 따른다.
 - `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
 - 브라우저 연결이 끊기거나 총 실행시간 5분을 넘으면 분석을 중단한다.
 - 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
+- 경영메시지와 기사 추천의 기본 선택 모델은 `gemma4:31b`다. 설치 모델 목록에 31B가 있으면
+  `/api/health.defaultModel`도 31B를 우선 반환한다.
 - `gemma4:31b`는 기본 64K context와 2,048 출력 token 상한을 사용한다. 환경변수 `KESCO_OLLAMA_NUM_CTX_31B`로 4K 이상 범위에서 낮춰 조정할 수 있다.
 - 성공·실패·취소 뒤 해당 모델을 Ollama 메모리에서 내린다.
 
@@ -662,6 +664,30 @@ AI 실행마다 고정 index를 만든다.
 이 매핑은 `ai_runs.evidence_json`에 저장한다. 같은 실행 중에는 ID를 재사용하거나 재정렬하지 않는다.
 
 ### 5.2 모든 주장 필드의 schema
+
+최종 문장 생성 전 모델은 다음 중간 분석을 먼저 반환한다.
+
+```json
+{
+  "items": [{
+    "section": "core",
+    "articleFact": "",
+    "attributedClaim": "",
+    "kescoInterpretation": "",
+    "managementRecommendation": "",
+    "articleIds": ["A01"],
+    "certainty": "confirmed"
+  }],
+  "limitations": [],
+  "confidence": "medium"
+}
+```
+
+`certainty`는 `confirmed`, `attributed`, `under_investigation`, `inference` 중 하나다. 서버의
+자동 근거 검증을 통과한 중간 항목의 기사 ID만 최종 문장 생성에 사용할 수 있다. 중간 분석과
+경고는 각각 `ai_runs.response_json.analysisBasis`, `validationWarnings`에 저장한다.
+
+최종 출력 schema는 다음과 같다.
 
 ```json
 {
@@ -719,6 +745,17 @@ AI 실행마다 고정 index를 만든다.
 - 잘못된 ID, 빈 근거, schema 오류가 있으면 결과 전체를 적용하지 않는다.
 - 서버는 형식교정 재시도를 최대 1회 수행한다.
 - 재시도 후에도 실패하면 기존 AI 결과와 담당자 수정본을 유지하고 오류만 기록한다.
+- 중간 분석과 최종 출력에 다음 자동 검사를 적용한다.
+  - 출력의 숫자·날짜·단위가 연결된 근거 기사에 없으면 `UNSUPPORTED_NUMBER`
+  - 공사와 송전망 구축·전력 공급·발전사업·계통 운영이 같은 문장에서 주체 관계로 나타나면
+    `KESCO_ROLE_CONFUSION`
+  - 근거 기사는 원인을 추정·조사 중으로 표현하지만 결과가 확정하면 `INVESTIGATION_OVERSTATED`
+  - 언론·전문가 주장을 출처 없이 사실처럼 표현하면 `UNATTRIBUTED_CLAIM`
+- 내부 경영관리 근거가 없는 `reference` 항목은 `REFERENCE_SCOPE_INVALID`로 제외한다.
+- 경고가 있는 중간 항목은 최종 생성 입력에서 제외한다. 통과 항목이 하나도 없으면
+  `AI_GROUNDING_INVALID`로 결과 전체를 적용하지 않는다.
+- 최종 출력에서 경고가 발생하면 1회 교정한다. 교정 후에도 경고가 남으면 결과 전체를 적용하지
+  않고 마지막 정상 결과와 담당자 수정본을 유지한다.
 
 ### 5.3.1 경영 메시지 표시 구조
 
@@ -757,9 +794,10 @@ GET  /api/briefings/{date}/report-draft
 ```
 
 - validate는 저장하지 않으며 현재 입력 서명을 검증한다. 일반 텍스트 입력은 현재 선정 기사
-  전체를 근거로 연결해 내부 구조로 변환한다. `언론 동향 시사점`, `언론 동향 분석`,
-  `경영 참고사항` 제목이 있으면 각각 `managementMessage`, `situationSummary`,
-  `decisionPoints`로 분리하고, 제목이 없는 텍스트는 기존처럼 `managementMessage`로 보존한다.
+  전체를 근거로 연결해 내부 구조로 변환한다. 새 출력 제목인 `오늘의 핵심`, `경영 시사점`,
+  `참고 동향`은 각각 `managementMessage`, `situationSummary`, `urgency=reference`인
+  `keyIssues`로 분리한다. 과거 `언론 동향 시사점`, `언론 동향 분석`, `경영 참고사항` 제목도
+  입력 호환을 위해 같은 방식으로 읽는다. 제목이 없는 텍스트는 기존처럼 `managementMessage`로 보존한다.
   기존 구조화 JSON 입력도 호환을 위해 허용한다.
 - PUT은 `expectedRevision`을 요구하고 최종 상태에서는 거부한다.
 - 기사·전문·메모·중요 태그·분류·이슈 구성이 바뀌어 입력 서명이 달라지면

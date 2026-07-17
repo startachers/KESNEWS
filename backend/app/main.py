@@ -114,7 +114,11 @@ def _fetch_ollama_tags() -> tuple[list[dict], str, str | None]:
         logger.info("Ollama 조회 실패, models=[]로 응답: %s", exc)
         return [], "", str(exc)
 
-    default_model = models[0].get("name", "") if models else ""
+    names = [str(model.get("name") or "") for model in models]
+    default_model = next(
+        (name for name in names if name.lower() == "gemma4:31b"),
+        names[0] if names else "",
+    )
     return models, default_model, None
 
 

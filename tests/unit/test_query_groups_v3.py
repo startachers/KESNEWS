@@ -52,7 +52,8 @@ def test_automated_and_frontend_defaults_contain_same_21_query_groups():
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
     assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 6" in default_block
+    assert "settingsVersion: 7" in default_block
+    assert 'aiModel: "gemma4:31b"' in default_block
     assert "lookback: 24" in default_block
     assert default_block.count("naverQueries:") == len(QUERY_IDS)
     assert default_block.count("maxRecords: 20") == 2

@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app import main as main_module
 from backend.app.api import operations as operations_api
 
 client = TestClient(app)
@@ -20,6 +21,20 @@ def test_health_returns_flat_ok_shape():
     assert body["dbIntegrity"] is True
 
 
+def test_health_prefers_installed_31b_as_default(monkeypatch):
+    monkeypatch.setattr(
+        main_module.default_client,
+        "list_models",
+        lambda: [{"name": "gemma4:26b"}, {"name": "gemma4:31b"}],
+    )
+
+    models, default_model, error = main_module._fetch_ollama_tags()
+
+    assert [model["name"] for model in models] == ["gemma4:26b", "gemma4:31b"]
+    assert default_model == "gemma4:31b"
+    assert error is None
+
+
 def test_index_html_is_served_at_root():
     response = client.get("/")
     assert response.status_code == 200
@@ -33,6 +48,7 @@ def test_index_html_is_served_at_root():
     assert 'role="progressbar"' in response.text
     assert "css/app.css?v=20260717-16" in response.text
     assert 'id="autoSelectBtn" type="button" aria-busy="false"' in response.text
+    assert response.text.index('value="gemma4:31b"') < response.text.index('value="gemma4:26b"')
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260717-20' in app_script.text

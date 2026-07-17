@@ -46,7 +46,7 @@ export async function openAutoSelectionProposal() {
     const result = await api.recommendBriefingArticles(
       state.date,
       state.revision,
-      settings.aiModel || "gemma4:26b",
+      settings.aiModel || "gemma4:31b",
     );
     recommendationRun = result.data.run;
     renderRecommendations(recommendationRun);

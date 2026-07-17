@@ -61,6 +61,7 @@ export function setRuleSummary(force = false) {
   state.summaryError = "";
   state.aiStale = false;
   state.aiAnalysis = null;
+  state.aiValidationWarnings = [];
 }
 
 export function refreshRuleSummaryIfNeeded() {
@@ -85,7 +86,7 @@ export async function checkAiServer() {
 
 export function populateAiModelOptions() {
   const names = aiServerState.models.map(model => model.name).filter(Boolean);
-  const fallbackNames = ["gemma4:26b", "gemma4:e4b", "gemma4:e2b"];
+  const fallbackNames = ["gemma4:31b", "gemma4:26b", "gemma4:e4b", "gemma4:e2b"];
   const options = names.length ? names : fallbackNames;
   if (!options.includes(settings.aiModel)) settings.aiModel = aiServerState.defaultModel || options[0];
   els.aiModelSelect.innerHTML = options.map(name => `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("");
@@ -135,7 +136,7 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.textContent = `${settings.aiModel} 분석 취소를 요청했습니다. Ollama 작업을 정리하는 중입니다.`;
   } else if (analyzing) {
     els.aiSummaryStatus.classList.add("busy");
-    const safeMode = settings.aiModel.toLowerCase().includes(":31b") ? " · 31B 안전 모드(context 16K·최대 5분)" : " · 최대 5분";
+    const safeMode = settings.aiModel.toLowerCase().includes(":31b") ? " · 31B 심층 분석(context 64K·최대 5분)" : " · 최대 5분";
     els.aiSummaryStatus.textContent = `${settings.aiModel}이 선정 기사 ${Math.min(selected.length, 20)}건의 본문을 수집하고 경영메시지를 분석 중입니다${safeMode}. 이 버튼으로 즉시 취소할 수 있으며 창을 닫으면 실행도 자동 중단됩니다.`;
   } else if (state.summaryError) {
     els.aiSummaryStatus.classList.add("error");
@@ -147,8 +148,17 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.classList.add("ready");
     const edited = state.summaryMode === "ai-edited" ? " · 담당자 수정본" : "";
     const confidence = state.aiAnalysis?.confidence ? ` · 신뢰도 ${state.aiAnalysis.confidence}` : "";
+    const warningLabels = {
+      UNSUPPORTED_NUMBER: "숫자·날짜",
+      KESCO_ROLE_CONFUSION: "역할 혼동",
+      INVESTIGATION_OVERSTATED: "조사 중 표현",
+      UNATTRIBUTED_CLAIM: "주장 귀속",
+      REFERENCE_SCOPE_INVALID: "참고 범위"
+    };
+    const warningKinds = [...new Set((state.aiValidationWarnings || []).map(item => warningLabels[item.code] || item.code))];
+    const warnings = warningKinds.length ? ` · 자동검증 경고 ${state.aiValidationWarnings.length}건(${warningKinds.join(", ")})` : " · 자동검증 통과";
     const contextLength = state.summaryContextLength ? ` · context ${Math.round(state.summaryContextLength / 1024)}K` : "";
-    els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel}${contextLength} · 선정 ${state.summarySelectedCount}건${confidence}${edited}`;
+    els.aiSummaryStatus.textContent = `${formatDateTime(state.summaryGeneratedAt)} 생성 · ${state.summaryModel}${contextLength} · 선정 ${state.summarySelectedCount}건${confidence}${warnings}${edited}`;
   } else if (!selected.length) {
     els.aiSummaryStatus.textContent = "먼저 브리핑에 사용할 기사를 선택해 주세요.";
   } else if (!aiServerState.online) {
@@ -236,6 +246,7 @@ export async function generateAiManagementSummary() {
 
     const run = data.run;
     state.aiAnalysis = run.response?.analysis || null;
+    state.aiValidationWarnings = run.response?.validationWarnings || [];
     state.summaryEvidenceMap = Array.isArray(run.request?.articles) ? run.request.articles.map(article => ({
       id: article.id,
       title: article.title,

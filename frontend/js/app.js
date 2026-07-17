@@ -24,7 +24,7 @@ async function init() {
   populateStaticControls();
   renderAll();
   if (consumeSettingsMigrationNotice()) {
-    showToast("기사 검색식이 21개 검색군으로 확장되었습니다. 검색 설정에서 확인해 주세요.");
+    showToast("기본 설정을 갱신했습니다. Gemma 경영메시지는 31B를 기본으로 사용합니다.");
   }
   autoResize(els.summaryEditor);
   window.setTimeout(checkAiServer, 120);

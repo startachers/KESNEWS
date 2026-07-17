@@ -24,6 +24,28 @@ def valid_analysis() -> dict:
     }
 
 
+def valid_basis() -> dict:
+    return {
+        "items": [
+            {
+                "section": "core",
+                "articleFact": "한국전기안전공사 관련 내용이 기사에서 확인됐다.",
+                "attributedClaim": "",
+                "kescoInterpretation": "공사의 현장 안전관리 관점에서 살펴볼 사안이다.",
+                "managementRecommendation": "관련 현황과 안내 내용을 확인할 필요가 있다.",
+                "articleIds": ["A01"],
+                "certainty": "confirmed",
+            }
+        ],
+        "limitations": [],
+        "confidence": "medium",
+    }
+
+
+def successful_responses(result: dict | None = None) -> list[dict]:
+    return [valid_basis(), result or valid_analysis()]
+
+
 class FakeOllama:
     def __init__(self, responses):
         self.responses = list(responses)
@@ -67,12 +89,14 @@ def run_analysis(report_date: str, fake: FakeOllama, model: str = "gemma-test"):
 def test_valid_result_persists_fixed_evidence_and_structured_response():
     report_date = "2025-03-01"
     _, article_id = setup_selected_article(report_date)
-    response = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    response = run_analysis(report_date, FakeOllama(successful_responses()))
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["run"]["evidence"] == {"A01": article_id}
     assert data["run"]["request"]["contextLength"] == 65_536
     assert data["run"]["response"]["analysis"]["decisionPoints"][0]["articleIds"] == ["A01"]
+    assert data["run"]["response"]["analysisBasis"]["items"][0]["certainty"] == "confirmed"
+    assert data["run"]["response"]["validationWarnings"] == []
     assert data["summaryMode"] == "ai"
     assert data["situationSummary"] == (
         "① 오늘의 핵심\n경영 메시지\n\n"
@@ -81,6 +105,37 @@ def test_valid_result_persists_fixed_evidence_and_structured_response():
     )
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
     assert loaded["aiState"]["lastSuccessfulRun"]["response"]["analysis"]["confidence"] == "medium"
+
+
+def test_grounding_warning_filters_bad_item_and_persists_diagnostic():
+    report_date = "2025-03-11"
+    setup_selected_article(report_date)
+    basis = valid_basis()
+    unsupported = dict(basis["items"][0])
+    unsupported["articleFact"] = "기사에 없는 피해액 300억원이 확인됐다."
+    basis["items"] = [unsupported, basis["items"][0]]
+
+    response = run_analysis(report_date, FakeOllama([basis, valid_analysis()]))
+
+    assert response.status_code == 200
+    stored = response.json()["data"]["run"]["response"]
+    assert len(stored["analysisBasis"]["items"]) == 1
+    assert stored["validationWarnings"][0]["code"] == "UNSUPPORTED_NUMBER"
+    assert stored["validationWarnings"][0]["resolution"] == "filtered"
+
+
+def test_grounding_rejects_result_when_no_basis_item_passes():
+    report_date = "2025-03-12"
+    setup_selected_article(report_date)
+    basis = valid_basis()
+    basis["items"][0]["kescoInterpretation"] = "공사는 송전망 구축을 담당한다."
+
+    response = run_analysis(report_date, FakeOllama([basis]))
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "AI_GROUNDING_INVALID"
+    loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
+    assert loaded["aiState"]["lastSuccessfulRun"] is None
 
 
 def test_selected_article_full_text_is_fetched_and_used(monkeypatch):
@@ -93,7 +148,7 @@ def test_selected_article_full_text_is_fetched_and_used(monkeypatch):
         "backend.app.api.analysis.article_body.fetch_article_body",
         lambda url: BodyFetchResult(full_text, "full_text"),
     )
-    response = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    response = run_analysis(report_date, FakeOllama(successful_responses()))
     assert response.status_code == 200
     evidence_article = response.json()["data"]["run"]["request"]["articles"][0]
     assert evidence_article["content"] == full_text
@@ -110,7 +165,7 @@ def test_body_fetch_failure_keeps_rss_summary_and_records_error(monkeypatch):
         "backend.app.api.analysis.article_body.fetch_article_body",
         lambda url: BodyFetchResult("", "missing", "언론사 응답 HTTP 403"),
     )
-    response = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    response = run_analysis(report_date, FakeOllama(successful_responses()))
     assert response.status_code == 200
     evidence_article = response.json()["data"]["run"]["request"]["articles"][0]
     assert evidence_article["content"] == "한국전기안전공사 관련 확인된 기사 설명"
@@ -123,11 +178,11 @@ def test_unknown_a99_is_corrected_once_then_applied():
     setup_selected_article(report_date)
     invalid = valid_analysis()
     invalid["decisionPoints"][0]["articleIds"] = ["A99"]
-    fake = FakeOllama([invalid, valid_analysis()])
+    fake = FakeOllama([valid_basis(), invalid, valid_analysis()])
     response = run_analysis(report_date, fake)
     assert response.status_code == 200
-    assert len(fake.prompts) == 2
-    assert "형식 교정 요청" in fake.prompts[1][1]
+    assert len(fake.prompts) == 3
+    assert "형식 교정 요청" in fake.prompts[2][1]
     assert response.json()["data"]["run"]["response"]["attempts"] == 2
 
 
@@ -136,7 +191,7 @@ def test_unknown_a99_after_correction_rejects_whole_result():
     setup_selected_article(report_date)
     invalid = valid_analysis()
     invalid["managementMessage"]["articleIds"] = ["A99"]
-    fake = FakeOllama([invalid, invalid])
+    fake = FakeOllama([valid_basis(), invalid, invalid])
     response = run_analysis(report_date, fake)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "AI_EVIDENCE_INVALID"
@@ -161,7 +216,7 @@ def test_schema_failure_after_one_retry_rejects_whole_result():
 def test_selection_or_note_change_marks_success_stale_without_deleting_it():
     report_date = "2025-03-04"
     _, article_id = setup_selected_article(report_date)
-    success = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    success = run_analysis(report_date, FakeOllama(successful_responses()))
     revision = success.json()["data"]["briefingRevision"]
     patched = client.patch(
         f"/api/briefings/{report_date}/articles/{article_id}",
@@ -176,7 +231,7 @@ def test_selection_or_note_change_marks_success_stale_without_deleting_it():
 def test_ai_edited_summary_survives_reanalysis():
     report_date = "2025-03-05"
     setup_selected_article(report_date)
-    first = run_analysis(report_date, FakeOllama([valid_analysis()])).json()["data"]
+    first = run_analysis(report_date, FakeOllama(successful_responses())).json()["data"]
     edited_text = "담당자가 직접 수정한 요약"
     edited = client.put(
         f"/api/briefings/{report_date}",
@@ -185,7 +240,7 @@ def test_ai_edited_summary_survives_reanalysis():
             "patch": {"situationSummary": edited_text, "summaryMode": "ai-edited"},
         },
     ).json()["data"]
-    second = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    second = run_analysis(report_date, FakeOllama(successful_responses()))
     assert second.status_code == 200
     assert second.json()["data"]["appliedToSummary"] is False
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
@@ -197,7 +252,7 @@ def test_ai_edited_summary_survives_reanalysis():
 def test_ollama_offline_returns_last_success_and_current_error_together():
     report_date = "2025-03-06"
     setup_selected_article(report_date)
-    first = run_analysis(report_date, FakeOllama([valid_analysis()]))
+    first = run_analysis(report_date, FakeOllama(successful_responses()))
     assert first.status_code == 200
     failed = run_analysis(report_date, FakeOllama([OllamaError("offline")]))
     assert failed.status_code == 503

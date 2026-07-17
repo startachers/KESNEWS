@@ -1,5 +1,5 @@
 from backend.app.services.ai.analyzer import format_analysis
-from backend.app.services.ai.prompt_builder import PROMPT_VERSION, build_prompt
+from backend.app.services.ai.prompt_builder import PROMPT_VERSION, build_basis_prompt, build_prompt
 
 
 def test_format_analysis_uses_three_management_message_sections():
@@ -45,13 +45,19 @@ def test_format_analysis_does_not_invent_reference_trend():
 def test_prompt_requests_the_management_message_direction_and_no_duplicate_headings():
     prompt = build_prompt("2026-07-17", "홍보실", [])
 
-    assert PROMPT_VERSION == "phase7-management-message-v3"
+    assert PROMPT_VERSION == "phase7-management-message-v4"
     assert "① 오늘의 핵심 — managementMessage.text" in prompt
     assert "② 경영 시사점 — situationSummary.text" in prompt
     assert "③ 참고 동향 — keyIssues 중 urgency가 reference인 항목" in prompt
     assert "각 필드의 `text`에는 제목이나 번호를 넣지 말고" in prompt
     assert "현장 실행력, 국민 체감형 안전안내" in prompt
-    assert "당장 우선 살펴볼 사항 → 이어서 검토할 사항" in prompt
-    assert "보도 흐름 → 공사 관점의 의미 → 살펴볼 사항" in prompt
+    assert "단기 현안 → 중장기 과제" in prompt
+    assert "기사에서 확인된 사실 → 공사 관점 해석 → 확인 또는 검토사항" in prompt
     assert "기사 1은 …, 기사 2는 …" in prompt
     assert "위 소재를 매일 의무적으로 채우지 않는다" in prompt
+    assert "한국전기안전공사를 송전망 건설, 전력 공급" in prompt
+
+    basis_prompt = build_basis_prompt("2026-07-17", "홍보실", [])
+    assert "articleFact: 기사에서 확인된 사실만" in basis_prompt
+    assert "attributedClaim: 언론·전문가의 주장만 출처를 표시" in basis_prompt
+    assert "certainty: confirmed, attributed, under_investigation, inference" in basis_prompt

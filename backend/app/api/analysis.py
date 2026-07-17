@@ -230,7 +230,8 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             "reportDate": report_date,
             "preparedBy": briefing["prepared_by"] or "",
             "articles": evidence_input,
-            "attemptLimit": 2,
+            "attemptLimitPerStage": 2,
+            "pipeline": ["basis", "automatic_grounding", "final"],
             "contextLength": context_length,
         }
         run = ai_runs_repo.create(
@@ -308,7 +309,11 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
                     connection,
                     run_id,
                     f"{exc.code}: {exc}",
-                    {"raw": exc.raw_response, "attempts": exc.attempts},
+                    {
+                        "raw": exc.raw_response,
+                        "attempts": exc.attempts,
+                        "validationWarnings": exc.validation_warnings,
+                    },
                 )
         finally:
             connection.close()
@@ -367,7 +372,13 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
             ai_runs_repo.finish_success(
                 connection,
                 run_id,
-                {"analysis": output.result, "attempts": output.attempts},
+                {
+                    "analysis": output.result,
+                    "analysisBasis": output.basis,
+                    "validationWarnings": output.validation_warnings,
+                    "attempts": output.attempts,
+                    "basisAttempts": output.basis_attempts,
+                },
             )
             updated = briefings_repo.create_or_update(
                 connection, report_date, body.expectedRevision, patch

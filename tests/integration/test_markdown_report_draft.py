@@ -70,8 +70,21 @@ def test_legacy_single_field_external_analysis_is_split_for_display_only():
 
     assert displayed["managementMessage"]["text"] == "우선 점검합니다."
     assert displayed["situationSummary"]["text"] == "현장 흐름을 분석합니다."
-    assert displayed["decisionPoints"][0]["text"] == "내부 체계를 살펴봅니다."
+    assert displayed["keyIssues"][0]["summary"] == "내부 체계를 살펴봅니다."
     assert legacy["managementMessage"]["text"].startswith("1. 언론 동향 시사점")
+
+
+def test_new_plain_text_no_reference_phrase_does_not_create_reference_issue():
+    from backend.app.services.reports.report_draft import content_from_plain_text
+
+    content = content_from_plain_text(
+        "① 오늘의 핵심\n현안을 확인합니다.\n\n"
+        "② 경영 시사점\n업무 범위를 검토합니다.\n\n"
+        "③ 참고 동향\n별도 참고 동향 없음.",
+        ["A01"],
+    )
+
+    assert content["keyIssues"] == []
 
 
 def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypatch):
@@ -94,6 +107,10 @@ def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypat
     assert "담당자 메모: CEO 확인 필요" in response.text
     assert "JSON이나 코드 블록으로 출력하지 마십시오." in response.text
     assert "입력 서명:" in response.text
+    assert "① 오늘의 핵심" in response.text
+    assert "② 경영 시사점" in response.text
+    assert "③ 참고 동향" in response.text
+    assert "한국전기안전공사를 송전망 건설" in response.text
 
 
 def test_external_analysis_is_validated_saved_and_used_by_preview():
@@ -105,9 +122,9 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
         "inputSignature": exchange["inputSignature"],
         "sourceLabel": "고성능 AI",
         "text": (
-            "1. 언론 동향 시사점\n외부 AI 경영메시지\n\n"
-            "2. 언론 동향 분석\n외부 AI 언론상황\n\n"
-            "3. 경영 참고사항\n현장 대응 확인"
+            "① 오늘의 핵심\n외부 AI 경영메시지\n\n"
+            "② 경영 시사점\n외부 AI 언론상황\n\n"
+            "③ 참고 동향\n현장 대응 확인"
         ),
     }
 
@@ -133,8 +150,9 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert preview.status_code == 200
     assert "외부 AI 경영메시지" in preview.text
     assert "외부 AI 언론상황" in preview.text
-    assert "언론 동향 시사점" in preview.text
-    assert "경영 참고사항" in preview.text
+    assert "오늘의 핵심" in preview.text
+    assert "경영 시사점" in preview.text
+    assert "참고 동향" in preview.text
     assert "선정 기사 요약" in preview.text
     assert "핵심 1줄" in preview.text
     assert "고성능 AI" in preview.text
@@ -142,7 +160,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     exported = client.get(f"/api/exports/{report_date}.json").json()["data"]
     assert exported["reportDraft"]["content"]["managementMessage"]["text"] == "외부 AI 경영메시지"
     assert exported["reportDraft"]["content"]["situationSummary"]["text"] == "외부 AI 언론상황"
-    assert exported["reportDraft"]["content"]["decisionPoints"][0]["text"] == "현장 대응 확인"
+    assert exported["reportDraft"]["content"]["keyIssues"][0]["summary"] == "현장 대응 확인"
 
     current = client.get(f"/api/briefings/{report_date}").json()["data"]
     finalized = client.post(

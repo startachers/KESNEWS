@@ -4,7 +4,7 @@ import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
-  settingsVersion: 6,
+  settingsVersion: 7,
   autoRun: true,
   enableYonhap: true,
   enableOpmPress: true,
@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS = {
   lookback: 24,
   maxRecords: 50,
   collectionLimit: 400,
-  aiModel: "gemma4:26b",
+  aiModel: "gemma4:31b",
   endpoint: "",
   coreKeywords: ["한국전기안전공사", "전기안전공사", "KESCO"],
   riskKeywords: ["사망", "중대재해", "압수수색", "감사", "국정감사", "화재", "감전", "사고", "논란", "위반", "고발", "부실", "해킹", "정전", "피해", "징계"],
@@ -66,7 +66,7 @@ export const $ = (id) => document.getElementById(id);
 export const els = {};
 
 export function makeEmptyState(date) {
-  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", naverStatus: "네이버 뉴스 API 미설정", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0, sourceFilterStats: null };
+  return { date, revision: 0, status: "draft", latestFinalVersion: null, finalizedAt: null, articles: [], issues: [], fetchedAt: "", lastAttemptAt: "", lastRunStatus: "idle", provider: "", naverStatus: "네이버 뉴스 API 미설정", preparedBy: "", summary: "", summaryEdited: false, summaryMode: "rule", summaryModel: "", summaryGeneratedAt: "", summaryInputSignature: "", summaryContextLength: 0, summarySelectedCount: 0, summaryEvidenceIds: [], summaryEvidenceMap: [], summaryCoverage: null, summaryError: "", aiStale: false, aiAnalysis: null, aiValidationWarnings: [], aiRunId: "", aiRunStatus: "idle", actionNote: "", demo: false, errors: [], warnings: [], duplicatesRemoved: 0, rawCollectedCount: 0, sourceFilterStats: null };
 }
 
 export function loadSettings() {
@@ -82,6 +82,7 @@ export function loadSettings() {
       }));
       merged.settingsVersion = DEFAULT_SETTINGS.settingsVersion;
       merged.lookback = 24;
+      merged.aiModel = "gemma4:31b";
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
       settingsMigrationNotice = true;
     }
@@ -156,6 +157,7 @@ export async function loadDailyState(date) {
       summaryError: briefing.aiState?.currentError ? `최근 AI 실행 실패: ${briefing.aiState.currentError} · 마지막 정상 결과는 유지됩니다.` : "",
       aiStale: !!successfulRun?.stale,
       aiAnalysis: analysis,
+      aiValidationWarnings: successfulRun?.response?.validationWarnings || [],
       aiRunId: latestRun?.id || "",
       aiRunStatus: latestRun?.status || "idle",
       actionNote: briefing.actionNote || "",
