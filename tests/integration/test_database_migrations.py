@@ -43,6 +43,7 @@ EXPECTED_MIGRATIONS = [
     "0012_issue_review_priority.sql",
     "0013_briefing_report_draft.sql",
     "0014_ai_article_selection.sql",
+    "0015_incident_cause_axes.sql",
 ]
 
 
@@ -278,6 +279,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0012_issue_review_priority.sql",
         "0013_briefing_report_draft.sql",
         "0014_ai_article_selection.sql",
+        "0015_incident_cause_axes.sql",
     ]
     upgraded = get_connection(db_path)
     try:
@@ -286,7 +288,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         ).fetchone()
         assert row["auto_priority"] == "review"
         assert row["auto_relevance_score"] == 100
-        assert row["classifier_version"] == "rules-v10"
+        assert row["classifier_version"] == "rules-v11"
         assert row["manual_override"] == 0
     finally:
         upgraded.close()

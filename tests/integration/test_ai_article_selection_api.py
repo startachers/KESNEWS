@@ -88,6 +88,39 @@ def test_recommendation_does_not_mutate_until_explicit_apply():
     assert all(item["topIssue"] for item in after)
 
 
+def test_recommendation_rejects_fewer_than_available_candidates():
+    report_date = "2025-04-05"
+    article_ids, revision = setup_candidates(report_date, 3)
+    app.state.ollama_client = FakeSelectionOllama(recommendations(1))
+
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+
+    assert proposed.status_code == 422
+    assert proposed.json()["error"]["code"] == "AI_SELECTION_SCHEMA_INVALID"
+    assert "정확히 3건" in proposed.json()["error"]["message"]
+    assert client.get(f"/api/briefings/{report_date}").json()["data"]["revision"] == revision
+    assert article_ids
+
+
+def test_recommendation_rejects_zero_when_candidates_exist():
+    report_date = "2025-04-06"
+    _, revision = setup_candidates(report_date, 2)
+    app.state.ollama_client = FakeSelectionOllama(recommendations(0))
+
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+
+    assert proposed.status_code == 422
+    assert proposed.json()["error"]["code"] == "AI_SELECTION_SCHEMA_INVALID"
+    assert "정확히 2건" in proposed.json()["error"]["message"]
+    assert client.get(f"/api/briefings/{report_date}").json()["data"]["revision"] == revision
+
+
 def test_apply_preserves_existing_selection_and_article_editor_state():
     report_date = "2025-04-02"
     article_ids, revision = setup_candidates(report_date, 2)

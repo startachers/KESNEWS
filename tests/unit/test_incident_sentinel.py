@@ -12,13 +12,15 @@ def test_major_fire_without_numbers_is_preserved_with_null_values():
     assert result["incident"] == {
         "incident_type": "fire",
         "cause_status": "unknown",
+        "cause_certainty": "unknown",
+        "cause_domain": "undetermined",
         "incident_status": "breaking",
         "deaths": None,
         "injuries": None,
         "property_damage_krw": None,
         "critical_facility": None,
     }
-    assert get_relevance(article)["rank"] == 3
+    assert get_relevance(article)["rank"] == 99
 
 
 def test_outage_extracts_households_and_duration_but_keeps_unknowns_nullable():
@@ -64,8 +66,34 @@ def test_industrial_accident_statistics_are_not_breaking_fire_incident():
 def test_fire_sentinel_relevance_reason_is_not_power_outage():
     article = {"title": "공장 화재로 1명 사망", "description": ""}
     relevance = get_relevance(article)
-    assert relevance["rank"] == 3
-    assert relevance["reasons"] == ["③ 중대화재 Sentinel"]
+    assert relevance["rank"] == 99
+    assert relevance["score"] == 15
+    assert relevance["reasons"] == ["지정 관련도 기준 미일치"]
+
+
+def test_fire_cause_uses_specific_clue_before_generic_investigation_wording():
+    negligence = detect_incident_sentinel({
+        "title": "창녕 대나무밭 화재로 60대 숨져",
+        "description": "쓰레기를 소각하던 중 부주의로 불이 번진 것으로 추정하며 정확한 원인을 조사 중이다.",
+    })["incident"]
+    electrical = detect_incident_sentinel({
+        "title": "옷수선 가게 화재로 재산피해",
+        "description": "전기적 요인인 절연열화로 불이 시작된 것으로 보고 정확한 원인을 조사 중이다.",
+    })["incident"]
+    battery = detect_incident_sentinel({
+        "title": "전동카트 배터리 화재로 대피",
+        "description": "리튬 배터리 충전 중 전기적 요인으로 불이 난 것으로 추정해 조사 중이다.",
+    })["incident"]
+
+    assert (negligence["cause_certainty"], negligence["cause_domain"]) == (
+        "suspected", "negligence"
+    )
+    assert (electrical["cause_certainty"], electrical["cause_domain"]) == (
+        "suspected", "electrical"
+    )
+    assert (battery["cause_certainty"], battery["cause_domain"]) == (
+        "suspected", "battery"
+    )
 
 
 def test_collection_limit_keeps_sentinel_and_rank_one_before_other_articles():

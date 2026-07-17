@@ -46,7 +46,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 9
+    assert payload["schemaVersion"] == 10
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -96,7 +96,7 @@ def test_json_schema_v7_round_trip_preserves_kesco_press_origin():
         connection.close()
 
     payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 9
+    assert payload["schemaVersion"] == 10
     assert payload["articles"][0]["origin"]["pressRelease"]["bodyText"].startswith(
         "정식 백업"
     )
@@ -176,9 +176,11 @@ def test_json_schema_v6_round_trip_preserves_incident_and_accepts_v5():
     )
 
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 9
+    assert payload["schemaVersion"] == 10
     assert payload["articles"][0]["incident"]["incident_type"] == "fire"
     assert payload["articles"][0]["incident"]["cause_status"] == "unknown"
+    assert payload["articles"][0]["incident"]["cause_certainty"] == "under_investigation"
+    assert payload["articles"][0]["incident"]["cause_domain"] == "undetermined"
     assert payload["articles"][0]["incident"]["property_damage_krw"] is None
     payload["articles"][0]["matchedQueryIds"] = ["major_fire_breaking", "strategy_trends"]
 
@@ -226,7 +228,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 9
+    assert payload["schemaVersion"] == 10
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -274,7 +276,7 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 9
+    assert payload["schemaVersion"] == 10
     assert payload["aiRuns"][0]["evidence"]
     assert payload["articles"][0]["bodyText"] == full_text
 
@@ -355,6 +357,8 @@ def test_csv_round_trip_preserves_incident_and_exports_unknowns_as_blanks():
     rows = list(csv.DictReader(io.StringIO(csv_text.lstrip("﻿"))))
     assert rows[0]["사고유형"] == "fire"
     assert rows[0]["원인상태"] == "unknown"
+    assert rows[0]["원인확정수준"] == "unknown"
+    assert rows[0]["원인분야"] == "undetermined"
     assert rows[0]["사망"] == ""
     assert rows[0]["재산피해"] == ""
     rows[0]["검색일치항목"] = "major_fire_breaking|strategy_trends"

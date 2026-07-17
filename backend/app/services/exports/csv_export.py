@@ -35,6 +35,8 @@ HEADERS = [
     "사고유형",
     "사고상태",
     "원인상태",
+    "원인확정수준",
+    "원인분야",
     "사망",
     "부상",
     "재산피해",
@@ -93,6 +95,8 @@ def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
                 _escape_cell(incident.get("incident_type")),
                 _escape_cell(incident.get("incident_status")),
                 _escape_cell(incident.get("cause_status")),
+                _escape_cell(incident.get("cause_certainty")),
+                _escape_cell(incident.get("cause_domain")),
                 _escape_cell(incident.get("deaths")),
                 _escape_cell(incident.get("injuries")),
                 _escape_cell(incident.get("property_damage_krw")),
@@ -154,6 +158,8 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
                 incident.update(
                     {
                         "cause_status": row.get("원인상태") or None,
+                        "cause_certainty": row.get("원인확정수준") or None,
+                        "cause_domain": row.get("원인분야") or None,
                         "deaths": optional_int("사망"),
                         "injuries": optional_int("부상"),
                         "property_damage_krw": optional_int("재산피해"),

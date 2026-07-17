@@ -19,8 +19,8 @@ from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.report_draft import build_exchange_context, validate_content
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 9
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9}
+SCHEMA_VERSION = 10
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",

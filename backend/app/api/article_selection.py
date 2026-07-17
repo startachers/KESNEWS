@@ -23,7 +23,7 @@ from backend.app.services.ai.article_selection import (
     build_candidate_input,
     input_signature,
     recommend,
-    required_topic_groups,
+    preferred_topic_groups,
 )
 from backend.app.services.ai.ollama_client import OllamaError, default_client
 from backend.app.services.ai.runtime import AnalysisCancelled, CancellationToken, analysis_registry
@@ -58,11 +58,11 @@ def _selection_input(connection, report_date: str, model: str):
         max(0, MAX_SELECTED_ARTICLES - len(selected_ids)),
         len(candidates),
     )
-    required_groups = required_topic_groups(articles, candidates, target_count)
+    preferred_groups = preferred_topic_groups(articles, candidates, target_count)
     signature = input_signature(
-        model, target_count, selected_ids, candidates, required_groups
+        model, target_count, selected_ids, candidates, preferred_groups
     )
-    return selected_ids, candidates, evidence, target_count, required_groups, signature
+    return selected_ids, candidates, evidence, target_count, preferred_groups, signature
 
 
 def _with_inferred_origin(
@@ -110,7 +110,7 @@ async def create_selection_recommendations(
             return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 변경할 수 없습니다.")
         if briefing["revision"] != body.expectedRevision:
             return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
-        selected_ids, candidates, evidence, target_count, required_groups, signature = _selection_input(
+        selected_ids, candidates, evidence, target_count, preferred_groups, signature = _selection_input(
             connection, report_date, body.model
         )
         if target_count == 0:
@@ -122,9 +122,9 @@ async def create_selection_recommendations(
             "targetCount": target_count,
             "candidateCount": len(candidates),
             "candidates": candidates,
-            "requiredTopicGroups": required_groups,
-            "requiredTopicLabels": [
-                TOPIC_GROUP_LABELS[group] for group in required_groups
+            "preferredTopicGroups": preferred_groups,
+            "preferredTopicLabels": [
+                TOPIC_GROUP_LABELS[group] for group in preferred_groups
             ],
             "contextLength": context_length,
         }
@@ -163,7 +163,7 @@ async def create_selection_recommendations(
             target_count=target_count,
             candidates=candidates,
             evidence=evidence,
-            required_groups=required_groups,
+            preferred_groups=preferred_groups,
             cancel_token=cancel_token,
         ))
         deadline = time.monotonic() + ANALYSIS_TIMEOUT_SECONDS
@@ -218,14 +218,14 @@ async def create_selection_recommendations(
     connection = get_connection()
     try:
         current = briefings_repo.get_by_date(connection, report_date)
-        _, _, _, current_target, current_required_groups, current_signature = _selection_input(
+        _, _, _, current_target, current_preferred_groups, current_signature = _selection_input(
             connection, report_date, body.model
         )
         if (
             current is None
             or current["revision"] != body.expectedRevision
             or current_target != target_count
-            or current_required_groups != required_groups
+            or current_preferred_groups != preferred_groups
             or current_signature != signature
         ):
             with connection:

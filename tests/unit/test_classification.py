@@ -32,8 +32,8 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v10():
-    assert CLASSIFIER_VERSION == "rules-v10"
+def test_classifier_version_is_rules_v11():
+    assert CLASSIFIER_VERSION == "rules-v11"
 
 
 @pytest.mark.parametrize(
@@ -109,12 +109,13 @@ def test_ambiguous_or_foreign_ai_mentions_are_isolated_as_other(article):
 def test_classify_article_critical_risk_from_heavy_keyword():
     raw = {"title": "공장 화재로 1명 사망", "description": "야간 화재로 근로자 1명이 사망했다."}
     result = classify_article(raw, RISK_KEYWORDS, POSITIVE_KEYWORDS)
-    # 중대화재 Sentinel은 전기 원인 확인 전에도 rank 3으로 보존한다.
-    assert result["risk"] == "critical"
-    assert result["assessment"]["autoReasons"]["relevanceRank"] == 3
+    # Sentinel은 사회적 심각성을 보존하지만 공사 관련도와 CEO 우선도는 올리지 않는다.
+    assert result["risk"] == "routine"
+    assert result["assessment"]["autoReasons"]["relevanceRank"] == 99
     assert result["assessment"]["incident"]["cause_status"] == "unknown"
     assert result["assessment"]["autoSeverityScore"] == 100
-    assert "low_relevance_cap" not in result["assessment"]["autoReasons"]["appliedCaps"]
+    assert result["assessment"]["autoPriority"] == "reference"
+    assert "low_relevance_cap" in result["assessment"]["autoReasons"]["appliedCaps"]
     assert result["sentiment"] == "negative"
     assert "사망" in result["matchedKeywords"]
 

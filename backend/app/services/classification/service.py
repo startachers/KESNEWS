@@ -26,7 +26,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v10"
+CLASSIFIER_VERSION = "rules-v11"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -146,11 +146,9 @@ def get_relevance(article: Article) -> dict[str, Any]:
         ),
         (
             3,
-            "major_fire_sentinel" if sentinel_incident_type == "fire" else "power_outage",
-            "③ 중대화재 Sentinel"
-            if sentinel_incident_type == "fire"
-            else "③ 정전·전력공급 장애",
-            lambda text: (["사고 Sentinel"] if sentinel["matched"] else []) + re.findall(
+            "power_outage",
+            "③ 정전·전력공급 장애",
+            lambda text: (["정전 Sentinel"] if sentinel_incident_type == "outage" else []) + re.findall(
                 r"대규모[\s·ㆍ-]*정전|광역[\s·ㆍ-]*정전|일대[\s·ㆍ-]*정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
                 text,
             ),

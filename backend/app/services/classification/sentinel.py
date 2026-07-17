@@ -139,13 +139,45 @@ def _duration_minutes(text: str) -> int | None:
     return (hours or 0) * 60 + (minutes or 0)
 
 
-def _fire_cause_status(text: str) -> str:
-    electrical = r"전기(?:적)?\s*(?:요인|원인)|누전|합선|전기설비"
-    if re.search(rf"{electrical}.{{0,20}}(?:확인|밝혀|판명)", text):
-        return "electrical_confirmed"
-    if re.search(rf"{electrical}.{{0,20}}(?:의심|추정|가능성|조사)", text):
-        return "electrical_suspected"
-    return "unknown"
+def _fire_cause(text: str) -> dict[str, str]:
+    domain_patterns = (
+        ("battery", r"(?:리튬\s*)?배터리|축전지|충전\s*중"),
+        ("electrical", r"전기(?:적)?\s*(?:요인|원인)|절연열화|누전|합선|단락|아크|전기설비"),
+        ("negligence", r"부주의|쓰레기(?:를|를\s*)?\s*(?:소각|태우)|소각\s*중|담뱃불"),
+        ("intentional", r"방화|고의로\s*불"),
+        ("natural", r"낙뢰|벼락|자연발화"),
+        ("mechanical", r"기계(?:적)?\s*(?:요인|결함)|과열|마찰열"),
+    )
+    domain = next(
+        (name for name, pattern in domain_patterns if re.search(pattern, text)),
+        "undetermined",
+    )
+    confirmed = bool(re.search(r"(?:원인|요인)(?:으로|은|이)?\s*(?:확인|밝혀|판명|결론)", text))
+    suspected = bool(
+        re.search(r"(?:추정|의심|가능성|것으로\s*(?:보고|보며)|불낸\s*듯|번진\s*듯)", text)
+    )
+    investigating = bool(re.search(r"(?:원인|경위).{0,16}(?:조사|감식)\s*중|조사하고\s*있", text))
+    certainty = (
+        "confirmed"
+        if domain != "undetermined" and confirmed
+        else "suspected"
+        if domain != "undetermined" and suspected
+        else "under_investigation"
+        if investigating
+        else "unknown"
+    )
+    legacy_status = (
+        "electrical_confirmed"
+        if domain in {"electrical", "battery"} and certainty == "confirmed"
+        else "electrical_suspected"
+        if domain in {"electrical", "battery"} and certainty == "suspected"
+        else "unknown"
+    )
+    return {
+        "cause_status": legacy_status,
+        "cause_certainty": certainty,
+        "cause_domain": domain,
+    }
 
 
 def detect_incident_sentinel(article: Article) -> dict[str, Any]:
@@ -168,7 +200,7 @@ def detect_incident_sentinel(article: Article) -> dict[str, Any]:
             "matched": True,
             "incident": {
                 "incident_type": "fire",
-                "cause_status": _fire_cause_status(text),
+                **_fire_cause(text),
                 "incident_status": "breaking",
                 "deaths": _first_int(
                     text,

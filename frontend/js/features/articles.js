@@ -60,11 +60,28 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const titleEl = href ? `<a class="article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>` : `<span class="article-title">${escapeHtml(a.title)}</span>`;
   const relevanceBadge = relevance.rank < 99 ? `관련 ${relevance.rank}순위` : "관련 기준 외";
   const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
-  const causeBadge = {
-    unknown: "원인 미상 화재",
-    electrical_suspected: "전기 원인 의심",
-    electrical_confirmed: "전기 원인 확인"
-  }[a.incident?.cause_status];
+  const domainLabel = {
+    electrical: "전기적 요인",
+    battery: "배터리 요인",
+    mechanical: "기계적 요인",
+    negligence: "부주의",
+    intentional: "방화·고의",
+    natural: "자연적 요인",
+    undetermined: "원인"
+  }[a.incident?.cause_domain];
+  const certaintyLabel = {
+    confirmed: "확정",
+    suspected: "추정",
+    under_investigation: "조사 중",
+    unknown: "미상"
+  }[a.incident?.cause_certainty];
+  const causeBadge = domainLabel && certaintyLabel
+    ? `${domainLabel} ${certaintyLabel}`
+    : {
+      unknown: "원인 미상 화재",
+      electrical_suspected: "전기 원인 의심",
+      electrical_confirmed: "전기 원인 확인"
+    }[a.incident?.cause_status];
   if (a.incident?.incident_type === "fire" && causeBadge) badges.unshift(`<span class="badge badge-incident">${causeBadge}</span>`);
   if (isYonhapArticle(a)) badges.unshift('<span class="badge badge-yonhap">연합뉴스 우선</span>');
   if (isKescoPressArticle(a)) {

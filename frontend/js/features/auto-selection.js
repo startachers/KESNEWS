@@ -16,8 +16,8 @@ function setBusy(value) {
 
 function renderRecommendations(run) {
   const recommendations = run?.response?.recommendations || [];
-  const requiredLabels = run?.request?.requiredTopicLabels || [];
-  const quotaText = requiredLabels.length ? ` · 필수 분야 ${requiredLabels.join("·")}` : "";
+  const preferredLabels = run?.request?.preferredTopicLabels || run?.request?.requiredTopicLabels || [];
+  const quotaText = preferredLabels.length ? ` · 우선 고려 ${preferredLabels.join("·")}` : "";
   els.autoSelectionMeta.textContent = `현재 선정 ${state.articles.filter(article => article.included).length}건 · Gemma 추천 ${recommendations.length}건 · ${run.model}${quotaText}`;
   els.autoSelectionList.innerHTML = recommendations.map(item => `
     <article class="auto-selection-item">
