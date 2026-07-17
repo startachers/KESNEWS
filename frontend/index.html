@@ -144,7 +144,7 @@
         </section>
 
         <section class="section" id="articlesSection">
-          <div class="section-heading"><div><h2>Media Coverage</h2><p>필요한 기사에 체크하면 ‘브리핑 선정’ 태그로 저장되고 종합 요약·인쇄에 반영됩니다.</p></div><div class="section-rule"></div></div>
+          <div class="section-heading"><div><h2>Media Coverage</h2><p>필요한 기사에 체크하면 ‘브리핑 선정’ 태그로 저장되고 종합 요약·인쇄에 반영됩니다.</p></div><div class="section-rule"></div><button class="btn btn-primary no-print" id="autoSelectBtn" type="button">Gemma 추천 20건</button></div>
           <div class="article-toolbar no-print">
             <div class="search-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
@@ -335,6 +335,18 @@
     </div>
   </div>
 
+  <div class="overlay" id="autoSelectionOverlay" role="dialog" aria-modal="true" aria-labelledby="autoSelectionTitle">
+    <div class="modal auto-selection-modal">
+      <div class="modal-header"><div><h2 id="autoSelectionTitle">Gemma 브리핑 기사 추천</h2><p>추천 생성만으로 선정 상태는 바뀌지 않습니다. 기존 수동 선정은 해제하지 않습니다.</p></div><button class="close-btn" id="autoSelectionCloseBtn" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <div class="auto-selection-meta" id="autoSelectionMeta"></div>
+        <div class="auto-selection-list" id="autoSelectionList"></div>
+        <p class="auto-selection-limitations" id="autoSelectionLimitations" hidden></p>
+      </div>
+      <div class="modal-footer"><button class="btn" type="button" id="autoSelectionCloseBtnFooter" data-close="autoSelectionOverlay">취소</button><button class="btn btn-primary" id="autoSelectionApplyBtn" type="button">추천 적용</button></div>
+    </div>
+  </div>
+
   <div class="overlay" id="manualGroupOverlay" role="dialog" aria-modal="true" aria-labelledby="manualGroupTitle">
     <div class="modal manual-group-modal">
       <div class="modal-header"><div><h2 id="manualGroupTitle">관련기사 수동 묶기</h2><p>기존 묶음을 선택하면 그 안의 기사 전체가 함께 합쳐집니다. 브리핑 선정 상태에는 영향을 주지 않습니다.</p></div><button class="close-btn" id="manualGroupCloseBtn" aria-label="닫기">×</button></div>
@@ -368,6 +380,6 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
   <script src="js/restart-guard.js?v=20260716-1"></script>
-  <script type="module" src="js/app.js?v=20260716-22"></script>
+  <script type="module" src="js/app.js?v=20260717-1"></script>
 </body>
 </html>

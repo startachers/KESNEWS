@@ -1,0 +1,125 @@
+import json
+
+from fastapi.testclient import TestClient
+
+from backend.app.main import app
+
+client = TestClient(app)
+
+
+class FakeSelectionOllama:
+    context_length = 65_536
+
+    def __init__(self, response):
+        self.response = response
+        self.prompts = []
+
+    def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
+        self.prompts.append(prompt)
+        return json.dumps(self.response, ensure_ascii=False)
+
+
+def setup_candidates(report_date: str, count: int = 3):
+    briefing = client.put(
+        f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}}
+    ).json()["data"]
+    article_ids = []
+    revision = briefing["revision"]
+    for index in range(count):
+        created = client.post("/api/articles", json={
+            "reportDate": report_date,
+            "title": f"전기안전 경영 현안 후보 {index}",
+            "source": f"테스트일보 {index}",
+            "url": f"https://example.com/selection/{report_date}/{index}",
+            "description": f"한국전기안전공사 관련 후보 내용 {index}",
+            "category": "kesco_direct",
+        }).json()["data"]
+        article_ids.append(created["id"])
+        revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+        patched = client.patch(
+            f"/api/briefings/{report_date}/articles/{created['id']}",
+            json={"expectedRevision": revision, "selected": False},
+        )
+        revision = patched.json()["data"]["revision"]
+    return article_ids, revision
+
+
+def recommendations(count: int):
+    return {
+        "recommendations": [
+            {"evidenceId": f"C{index:02d}", "rank": index, "reason": f"경영 영향 {index}"}
+            for index in range(1, count + 1)
+        ],
+        "limitations": [],
+    }
+
+
+def test_recommendation_does_not_mutate_until_explicit_apply():
+    report_date = "2025-04-01"
+    article_ids, revision = setup_candidates(report_date)
+    app.state.ollama_client = FakeSelectionOllama(recommendations(3))
+
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+    assert proposed.status_code == 200
+    run = proposed.json()["data"]["run"]
+    assert run["status"] == "success"
+    assert client.get(f"/api/briefings/{report_date}").json()["data"]["revision"] == revision
+    before = client.get(f"/api/articles?report_date={report_date}").json()["data"]["articles"]
+    assert not any(item["included"] for item in before)
+
+    applied = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations/apply",
+        json={"expectedRevision": revision, "runId": run["id"]},
+    )
+    assert applied.status_code == 200
+    assert set(applied.json()["data"]["appliedArticleIds"]) == set(article_ids)
+    after = client.get(f"/api/articles?report_date={report_date}").json()["data"]["articles"]
+    assert all(item["included"] for item in after)
+
+
+def test_apply_preserves_existing_selection_and_article_editor_state():
+    report_date = "2025-04-02"
+    article_ids, revision = setup_candidates(report_date, 2)
+    first = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[0]}",
+        json={"expectedRevision": revision, "selected": True, "starred": True, "note": "수동 메모"},
+    ).json()["data"]
+    app.state.ollama_client = FakeSelectionOllama(recommendations(1))
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": first["revision"], "model": "gemma-test"},
+    ).json()["data"]["run"]
+    applied = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations/apply",
+        json={"expectedRevision": first["revision"], "runId": proposed["id"]},
+    )
+    assert applied.status_code == 200
+    articles = {item["id"]: item for item in client.get(f"/api/articles?report_date={report_date}").json()["data"]["articles"]}
+    assert articles[article_ids[0]]["included"] is True
+    assert articles[article_ids[0]]["starred"] is True
+    assert articles[article_ids[0]]["note"] == "수동 메모"
+    assert articles[article_ids[1]]["included"] is True
+
+
+def test_unknown_or_duplicate_candidate_ids_are_rejected_after_retry():
+    report_date = "2025-04-03"
+    _, revision = setup_candidates(report_date, 2)
+    invalid = {
+        "recommendations": [
+            {"evidenceId": "C99", "rank": 1, "reason": "잘못된 ID"},
+            {"evidenceId": "C99", "rank": 2, "reason": "중복 ID"},
+        ],
+        "limitations": [],
+    }
+    fake = FakeSelectionOllama(invalid)
+    app.state.ollama_client = fake
+    response = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "AI_SELECTION_SCHEMA_INVALID"
+    assert len(fake.prompts) == 2

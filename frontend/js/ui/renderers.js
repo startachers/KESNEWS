@@ -30,6 +30,9 @@ export function renderHeader() {
   els.actionNote.disabled = finalized;
   els.refreshBtn.disabled = finalized;
   els.reclusterBtn.disabled = finalized || isSearching || state.demo || !state.articles.length;
+  const selectionFull = state.articles.filter(article => article.included).length >= 20;
+  els.autoSelectBtn.disabled = finalized || isSearching || state.demo || !state.articles.length || selectionFull;
+  els.autoSelectBtn.title = selectionFull ? "이미 브리핑 기사가 20건 이상 선정되어 있습니다." : "기사 내용과 태그를 분석해 최대 20건을 추천합니다.";
   $("addArticleBtn").disabled = finalized;
   $("importBtn").disabled = finalized;
   els.finalizeBtn.hidden = finalized;

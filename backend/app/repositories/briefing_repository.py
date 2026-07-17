@@ -281,6 +281,59 @@ def mark_selected(connection: sqlite3.Connection, briefing_id: str, article_id: 
     )
 
 
+def apply_ai_recommendations(
+    connection: sqlite3.Connection,
+    report_date: str,
+    expected_revision: int,
+    article_ids: list[str],
+    *,
+    selection_limit: int = 20,
+) -> tuple[sqlite3.Row, list[str]]:
+    """기존 수동 선정을 해제하지 않고 추천 기사만 상한까지 추가한다."""
+    briefing = get_by_date(connection, report_date)
+    if briefing is None:
+        raise BriefingNotFound()
+    if briefing["status"] == "final":
+        raise BriefingFinalized()
+    if briefing["revision"] != expected_revision:
+        raise RevisionConflict()
+
+    selected_count = connection.execute(
+        "SELECT COUNT(*) FROM briefing_articles WHERE briefing_id = ? AND selected = 1",
+        (briefing["id"],),
+    ).fetchone()[0]
+    applied: list[str] = []
+    for article_id in dict.fromkeys(article_ids):
+        if selected_count >= selection_limit:
+            break
+        candidate = connection.execute(
+            """
+            SELECT a.id, COALESCE(ba.selected, 0) AS selected,
+                   COALESCE(ba.dismissed, 0) AS dismissed
+            FROM articles a
+            LEFT JOIN briefing_articles ba
+              ON ba.briefing_id = ? AND ba.article_id = a.id
+            WHERE a.id = ?
+            """,
+            (briefing["id"], article_id),
+        ).fetchone()
+        if candidate is None or bool(candidate["dismissed"]) or bool(candidate["selected"]):
+            continue
+        _ensure_briefing_article_row(connection, briefing["id"], article_id)
+        connection.execute(
+            """
+            UPDATE briefing_articles
+            SET selected = 1, updated_at = ?
+            WHERE briefing_id = ? AND article_id = ? AND dismissed = 0
+            """,
+            (now_iso(), briefing["id"], article_id),
+        )
+        applied.append(article_id)
+        selected_count += 1
+
+    return bump_revision(connection, briefing["id"], expected_revision), applied
+
+
 def set_article_state(
     connection: sqlite3.Connection,
     briefing_id: str,

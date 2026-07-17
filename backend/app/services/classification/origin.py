@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.app.services.deduplication.fuzzy import bigram_similarity
 
-CLASSIFIER_VERSION = "kesco-press-origin-v1"
+CLASSIFIER_VERSION = "kesco-press-origin-v2"
 _GENERIC = {
     "한국전기안전공사", "전기안전공사", "kesco", "공사", "기자", "보도자료",
     "밝혔다", "위한", "대해", "통해", "이번", "관련", "진행", "실시",
@@ -50,6 +50,7 @@ def assess_kesco_origin(
     best: dict[str, Any] | None = None
     for release in releases:
         release_time = _timestamp(release.get("publishedAt"))
+        delta_hours = None
         if article_time and release_time:
             delta_hours = (article_time - release_time) / 3600
             if delta_hours < -12 or delta_hours > 24 * 30:
@@ -66,7 +67,13 @@ def assess_kesco_origin(
             origin_type = "kesco_republication"
         elif (
             title_similarity >= 0.48 and token_coverage >= 0.38 and len(shared) >= 3
-        ) or (token_coverage >= 0.62 and len(shared) >= 5):
+        ) or (token_coverage >= 0.62 and len(shared) >= 5) or (
+            delta_hours is not None
+            and -12 <= delta_hours <= 72
+            and title_similarity >= 0.3
+            and token_coverage >= 0.28
+            and len(shared) >= 7
+        ):
             origin_type = "kesco_based"
         if not origin_type:
             continue

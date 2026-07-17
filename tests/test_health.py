@@ -27,7 +27,7 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260716-22" in response.text
+    assert "js/app.js?v=20260717-1" in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
     assert "css/app.css?v=20260716-13" in response.text

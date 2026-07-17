@@ -62,6 +62,21 @@ export function cancelBriefingAnalysis(date) {
   return request(`/briefings/${date}/analysis/cancel`, { method: "POST" });
 }
 
+export function recommendBriefingArticles(date, expectedRevision, model, signal) {
+  return request(`/briefings/${encodeURIComponent(date)}/selection-recommendations`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision, model }),
+    signal,
+  }, 330000);
+}
+
+export function applyBriefingArticleRecommendations(date, expectedRevision, runId) {
+  return request(`/briefings/${encodeURIComponent(date)}/selection-recommendations/apply`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision, runId }),
+  });
+}
+
 export function getReportDraft(date) {
   return request(`/briefings/${encodeURIComponent(date)}/report-draft`);
 }

@@ -25,6 +25,7 @@ EXPECTED_TABLES = {
     "article_origin_assessments",
     "issue_review_assessments",
     "briefing_report_drafts",
+    "ai_selection_runs",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -41,7 +42,21 @@ EXPECTED_MIGRATIONS = [
     "0011_kesco_press_origin.sql",
     "0012_issue_review_priority.sql",
     "0013_briefing_report_draft.sql",
+    "0014_ai_article_selection.sql",
 ]
+
+
+def test_ai_article_selection_migration_separates_proposal_from_selection(tmp_path):
+    connection = get_connection(tmp_path / "ai-selection.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(ai_selection_runs)")}
+        assert {
+            "briefing_id", "model", "input_signature", "status", "request_json",
+            "response_json", "evidence_json", "error_message", "applied_at",
+        }.issubset(columns)
+    finally:
+        connection.close()
 
 
 def test_review_priority_migration_adds_report_date_relative_issue_assessment(tmp_path):
@@ -259,10 +274,11 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0008_query_groups_17.sql",
         "0009_trusted_media.sql",
         "0010_provider_item_key_index.sql",
-            "0011_kesco_press_origin.sql",
-            "0012_issue_review_priority.sql",
-            "0013_briefing_report_draft.sql",
-        ]
+        "0011_kesco_press_origin.sql",
+        "0012_issue_review_priority.sql",
+        "0013_briefing_report_draft.sql",
+        "0014_ai_article_selection.sql",
+    ]
     upgraded = get_connection(db_path)
     try:
         row = upgraded.execute(
