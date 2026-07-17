@@ -91,6 +91,10 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert preview.status_code == 200
     assert "작업본 미리보기" in preview.text
     assert "textarea" not in preview.text
+    assert preview.text.count('<section class="report-page') == 2
+    assert preview.text.count(" data-fit-page>") == 2
+    assert '<div class="kpis">' not in preview.text
+    assert '<span class="number">' not in preview.text
 
     assert client.get(f"/report/{report_date}").status_code == 404
     briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
@@ -168,7 +172,12 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert "경영 시사점" in report
     assert "참고 동향" in report
     assert "전망" in report
-    assert "선정 기사 요약" in report
+    assert "의사결정 포인트" in report
+    assert "확산 추이를 확인한다." in report
+    assert "실행 항목" in report
+    assert "사실관계를 점검한다." in report
+    assert "근거 기사 링크" in report
+    assert ">A01</" not in report
 
 
 def test_schema_v4_backup_round_trip_preserves_final_version():

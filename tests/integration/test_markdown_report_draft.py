@@ -153,8 +153,8 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert "오늘의 핵심" in preview.text
     assert "경영 시사점" in preview.text
     assert "참고 동향" in preview.text
-    assert "선정 기사 요약" in preview.text
-    assert "핵심 1줄" in preview.text
+    assert "근거 기사 링크" in preview.text
+    assert "RSS 요약입니다." in preview.text
     assert "고성능 AI" in preview.text
 
     exported = client.get(f"/api/exports/{report_date}.json").json()["data"]
