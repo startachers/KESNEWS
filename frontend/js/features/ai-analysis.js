@@ -280,31 +280,19 @@ export async function generateAiManagementSummary() {
 }
 
 export function formatAiAnalysis(analysis, evidenceMap = []) {
-  const lines = [analysis.managementMessage?.text || "핵심 경영메시지를 생성하지 못했습니다."];
-  if (analysis.situationSummary?.text) lines.push("", "■ 핵심 상황", analysis.situationSummary.text);
-  if (analysis.keyIssues?.length) {
-    lines.push("", "■ 핵심 이슈");
-    analysis.keyIssues.forEach((issue, index) => {
-      const evidence = issue.articleIds?.length ? ` [근거 ${issue.articleIds.join(", ")}]` : "";
-      lines.push(`${index + 1}. ${issue.title} (${issue.urgency})${evidence}`, `   ${issue.summary}`, `   경영 영향: ${issue.managementImpact}`);
-    });
-  }
-  if (analysis.decisionPoints?.length) {
-    lines.push("", "■ 경영 판단 포인트");
-    analysis.decisionPoints.forEach(point => lines.push(`• ${point.text} [근거 ${(point.articleIds || []).join(", ")}]`));
-  }
-  if (analysis.actionItems?.length) {
-    lines.push("", "■ 확인·지시 필요사항");
-    analysis.actionItems.forEach(item => {
-      const evidence = item.articleIds?.length ? ` [근거 ${item.articleIds.join(", ")}]` : "";
-      lines.push(`• [${item.priority}] ${item.action}${evidence}`);
-    });
-  }
-  if (analysis.riskOutlook?.text) lines.push("", "■ 위험 전망", `${analysis.riskOutlook.text} [근거 ${(analysis.riskOutlook.articleIds || []).join(", ")}]`);
-  if (analysis.limitations?.length) lines.push("", `※ 분석 한계: ${analysis.limitations.map(item => item.text).join(" · ")}`);
-  if (evidenceMap.length) {
-    lines.push("", "■ 근거 기사");
-    evidenceMap.forEach(article => lines.push(`${article.id}. ${article.title} (${article.source || "출처 미상"} · ${article.basis || "근거 미상"})`));
-  }
+  const references = (analysis.keyIssues || [])
+    .filter(issue => issue.urgency === "reference")
+    .map(issue => [issue.summary, issue.managementImpact].filter(Boolean).join(" ").trim())
+    .filter(Boolean);
+  const lines = [
+    "① 오늘의 핵심",
+    analysis.managementMessage?.text?.trim() || "핵심 경영메시지를 생성하지 못했습니다.",
+    "",
+    "② 경영 시사점",
+    analysis.situationSummary?.text?.trim() || "경영 시사점을 생성하지 못했습니다.",
+    "",
+    "③ 참고 동향",
+    references.length ? references.join("\n\n") : "별도 참고 동향 없음."
+  ];
   return lines.join("\n");
 }

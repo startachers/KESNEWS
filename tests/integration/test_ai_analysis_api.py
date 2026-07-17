@@ -74,6 +74,11 @@ def test_valid_result_persists_fixed_evidence_and_structured_response():
     assert data["run"]["request"]["contextLength"] == 65_536
     assert data["run"]["response"]["analysis"]["decisionPoints"][0]["articleIds"] == ["A01"]
     assert data["summaryMode"] == "ai"
+    assert data["situationSummary"] == (
+        "① 오늘의 핵심\n경영 메시지\n\n"
+        "② 경영 시사점\n상황 요약\n\n"
+        "③ 참고 동향\n별도 참고 동향 없음."
+    )
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
     assert loaded["aiState"]["lastSuccessfulRun"]["response"]["analysis"]["confidence"] == "medium"
 

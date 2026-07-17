@@ -697,6 +697,20 @@ AI 실행마다 고정 index를 만든다.
 - 서버는 형식교정 재시도를 최대 1회 수행한다.
 - 재시도 후에도 실패하면 기존 AI 결과와 담당자 수정본을 유지하고 오류만 기록한다.
 
+### 5.3.1 경영 메시지 표시 구조
+
+AI 결과의 근거 schema는 유지하되, 보고일 작업본의 `situationSummary` 표시 문자열은 다음 세
+항목으로 조립한다.
+
+1. `① 오늘의 핵심`: `managementMessage.text`
+2. `② 경영 시사점`: `situationSummary.text`
+3. `③ 참고 동향`: `keyIssues` 중 `urgency=reference`인 항목의 `summary`와
+   `managementImpact`
+
+참고 동향 근거가 없으면 `별도 참고 동향 없음.`으로 표시한다. 모델은 각 필드 본문에 번호나
+제목을 중복 생성하지 않는다. 구조화된 판단·조치·전망과 근거 ID는 `ai_runs.response_json`에
+그대로 보존하며, 담당자가 직접 수정한 `ai-edited` 작업본은 재분석으로 덮어쓰지 않는다.
+
 ### 5.4 외부 AI 분석 교환과 CEO 보고 편집본
 
 선정 기사 전문·태그를 외부 고성능 AI에 전달하는 Markdown은 다음 요청으로 생성한다.

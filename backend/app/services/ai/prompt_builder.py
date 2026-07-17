@@ -8,7 +8,7 @@ from backend.app.services.ai.schemas import AnalysisResult
 
 BASE_DIR = Path(__file__).resolve().parents[4]
 STYLE_GUIDE = BASE_DIR / "config" / "briefing_style_guide.md"
-PROMPT_VERSION = "phase7-v1"
+PROMPT_VERSION = "phase7-management-message-v2"
 
 
 def build_prompt(report_date: str, prepared_by: str, articles: list[dict[str, Any]]) -> str:

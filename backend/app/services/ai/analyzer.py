@@ -159,40 +159,28 @@ def analyze(
 
 def format_analysis(result: dict[str, Any]) -> str:
     def claim_text(value: Any) -> str:
-        return value.get("text", "") if isinstance(value, dict) else ""
+        return str(value.get("text", "")).strip() if isinstance(value, dict) else ""
 
     management = result.get("managementMessage") or {}
-    lines = [claim_text(management) or "핵심 경영메시지를 생성하지 못했습니다."]
     situation = result.get("situationSummary") or {}
-    if claim_text(situation):
-        lines.extend(("", "■ 핵심 상황", claim_text(situation)))
-    if result.get("keyIssues"):
-        lines.extend(("", "■ 핵심 이슈"))
-        for index, item in enumerate(result["keyIssues"], start=1):
-            ids = ", ".join(item.get("articleIds") or [])
-            lines.extend(
-                (
-                    f"{index}. {item['title']} ({item['urgency']}) [근거 {ids}]",
-                    f"   {item['summary']}",
-                    f"   경영 영향: {item['managementImpact']}",
-                )
-            )
-    if result.get("decisionPoints"):
-        lines.extend(("", "■ 경영 판단 포인트"))
-        for item in result["decisionPoints"]:
-            lines.append(f"• {item['text']} [근거 {', '.join(item['articleIds'])}]")
-    if result.get("actionItems"):
-        lines.extend(("", "■ 확인·지시 필요사항"))
-        for item in result["actionItems"]:
-            lines.append(
-                f"• [{item['priority']}] {item['action']} [근거 {', '.join(item['articleIds'])}]"
-            )
-    outlook = result.get("riskOutlook") or {}
-    if claim_text(outlook):
-        lines.extend(
-            ("", "■ 위험 전망", f"{claim_text(outlook)} [근거 {', '.join(outlook['articleIds'])}]")
-        )
-    limitations = [item.get("text", "") for item in result.get("limitations") or [] if item.get("text")]
-    if limitations:
-        lines.extend(("", f"※ 분석 한계: {' · '.join(limitations)}"))
+    references: list[str] = []
+    for item in result.get("keyIssues") or []:
+        if item.get("urgency") != "reference":
+            continue
+        summary = str(item.get("summary") or "").strip()
+        impact = str(item.get("managementImpact") or "").strip()
+        text = " ".join(part for part in (summary, impact) if part)
+        if text:
+            references.append(text)
+
+    lines = [
+        "① 오늘의 핵심",
+        claim_text(management) or "핵심 경영메시지를 생성하지 못했습니다.",
+        "",
+        "② 경영 시사점",
+        claim_text(situation) or "경영 시사점을 생성하지 못했습니다.",
+        "",
+        "③ 참고 동향",
+        "\n\n".join(references) if references else "별도 참고 동향 없음.",
+    ]
     return "\n".join(lines)
