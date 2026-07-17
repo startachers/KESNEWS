@@ -43,6 +43,8 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert issues_feature.status_code == 200
     assert "issue.selected" in issues_feature.text
     assert "article.topIssue" in issues_feature.text
+    assert "visibleRepresentative" in issues_feature.text
+    assert "issue.editorTitle || visibleRepresentative?.title" in issues_feature.text
     assert "MAX_TOP_ISSUES = 6" in issues_feature.text
     assert "같은 사건 기사" in issues_feature.text
 
@@ -62,6 +64,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert 'data-action="direct-coverage"' in articles_feature.text
     assert "공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다" in articles_feature.text
     assert "topIssueTagCount() >= MAX_TOP_ISSUES" in articles_feature.text
+    assert 'issue?.effectiveTitle || ""' in articles_feature.text
     assert 'data-action="group-picker-select"' in articles_feature.text
     assert "openManualGroupPicker" in articles_feature.text
     assert "createManualIssueGroup" in articles_feature.text
@@ -539,6 +542,90 @@ def test_issue_top_tag_selects_clicked_article_and_untag_keeps_selection():
         "/api/articles", params={"report_date": report_date}
     ).json()["data"]["articles"][0]
     assert article["included"] is True
+
+
+def test_article_top_tag_maps_to_only_one_overlapping_issue_and_can_be_cleared():
+    report_date = "2026-08-21"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "overlapping-top-issue",
+        "ESS 배터리 화재 안전대책 점검",
+        "안전일보",
+        "2026-08-21T05:00:00Z",
+    )
+    now = "2026-08-21T06:00:00Z"
+    older_issue_id = "overlapping-issue-selected"
+    newer_issue_id = "overlapping-issue-newer"
+    connection = get_connection()
+    try:
+        briefing_id = connection.execute(
+            "SELECT id FROM briefings WHERE report_date = ?", (report_date,)
+        ).fetchone()["id"]
+        for index, issue_id in enumerate((older_issue_id, newer_issue_id), start=1):
+            run_id = f"overlapping-run-{index}"
+            connection.execute(
+                """
+                INSERT INTO cluster_runs (
+                    id, report_date, status, input_signature, proposal_json, diff_json,
+                    algorithm_version, created_at, applied_at
+                ) VALUES (?, ?, 'applied', ?, '[]', '{}', 'test', ?, ?)
+                """,
+                (run_id, report_date, f"signature-{index}", now, now),
+            )
+            connection.execute(
+                """
+                INSERT INTO issues (
+                    id, representative_article_id, auto_title, spread_score,
+                    direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
+                ) VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?)
+                """,
+                (issue_id, article_id, f"겹친 군집 {index}", run_id, now, now),
+            )
+            connection.execute(
+                """
+                INSERT INTO issue_auto_articles (
+                    issue_id, article_id, cluster_run_id, created_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (issue_id, article_id, run_id, now),
+            )
+        connection.execute(
+            """
+            INSERT INTO briefing_issues (
+                briefing_id, issue_id, selected, starred, note, sort_order,
+                created_at, updated_at
+            ) VALUES (?, ?, 1, 0, NULL, 0, ?, ?)
+            """,
+            (briefing_id, older_issue_id, now, now),
+        )
+        connection.execute(
+            """
+            UPDATE briefing_articles
+            SET selected = 1, top_issue = 1, updated_at = ?
+            WHERE briefing_id = ? AND article_id = ?
+            """,
+            (now, briefing_id, article_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    assert {issue["id"] for issue in issues if issue["selected"]} == {older_issue_id}
+
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    cleared = client.patch(
+        f"/api/briefings/{report_date}/issues/{older_issue_id}",
+        json={"expectedRevision": revision, "selected": False},
+    )
+    assert cleared.status_code == 200
+    after = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    assert not any(issue["selected"] for issue in after)
 
 
 def test_top_issues_allow_six_and_promote_article_tags_after_clustering():

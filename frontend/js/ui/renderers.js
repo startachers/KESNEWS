@@ -2,8 +2,8 @@ import { $, state, settings, els, isSearching } from "../state/store.js";
 import { escapeHtml, shortText } from "../utils/strings.js";
 import { formatDateTime, formatTime, localDateKey } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
-import { renderTopIssues } from "../features/issues.js";
-import { renderArticles } from "../features/articles.js?v=20260717-16";
+import { renderTopIssues } from "../features/issues.js?v=20260717-1";
+import { renderArticles } from "../features/articles.js?v=20260717-18";
 import { renderWeather } from "../features/weather.js";
 
 export function renderAll() {

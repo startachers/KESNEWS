@@ -40,6 +40,11 @@ export function renderTopIssues() {
     }
     const issue = tagged.item;
     const articles = issue.articleIds.map(articleId => articleById.get(articleId)).filter(Boolean);
+    const visibleRepresentative = articles.find(article => article.topIssue)
+      || articleById.get(issue.representativeArticleId)
+      || articles.find(article => article.included)
+      || articles[0];
+    const displayTitle = issue.editorTitle || visibleRepresentative?.title || issue.effectiveTitle;
     const sourceCount = new Set(articles.map(article => article.source).filter(Boolean)).size;
     const status = ISSUE_STATUS_LABELS[issue.effectiveStatus] || issue.effectiveStatus || "상태 없음";
     const pressCoverage = issue.autoReasons?.origin?.type === "kesco_press_release";
@@ -50,7 +55,7 @@ export function renderTopIssues() {
         : "단일 기사 이슈입니다.";
     return `<article class="issue-card">
       <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="review-stars">${starsText(issue.effectiveReviewStars)}</span></div>
-      <h3>${escapeHtml(issue.effectiveTitle)}</h3>
+      <h3>${escapeHtml(displayTitle)}</h3>
       <div class="issue-meta">자동 ${issue.autoReviewRank || "-"}위 · 점수 ${issue.autoReviewScore ?? "-"} · ${escapeHtml(status)} · 기사 ${issue.articleIds.length}건 · 매체 ${sourceCount}개 · ${formatRelative(issue.lastSeenAt)}</div>
       <div class="issue-reason">${escapeHtml(reason)}</div>
     </article>`;

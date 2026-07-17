@@ -42,7 +42,7 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260717-9" in response.text
+    assert "js/app.js?v=20260717-10" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
@@ -52,7 +52,7 @@ def test_index_html_is_served_at_root():
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260717-20' in app_script.text
-    assert 'articles.js?v=20260717-17' in app_script.text
+    assert 'articles.js?v=20260717-18' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
@@ -72,10 +72,10 @@ def test_index_html_is_served_at_root():
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
-    assert 'articles.js?v=20260717-16' in dialogs_script.text
+    assert 'articles.js?v=20260717-18' in dialogs_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
-    assert 'articles.js?v=20260717-16' in renderers_script.text
+    assert 'articles.js?v=20260717-18' in renderers_script.text
 
     auto_selection_script = client.get("/js/features/auto-selection.js")
     assert 'setAttribute("aria-busy", String(value))' in auto_selection_script.text

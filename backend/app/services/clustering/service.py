@@ -12,7 +12,7 @@ from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.normalization.dates import date_value
 from backend.app.services.review_priority import rank_issues
 
-ALGORITHM_VERSION = "event-aware-title-tfidf-v2"
+ALGORITHM_VERSION = "event-aware-title-tfidf-v3"
 PAIR_THRESHOLD = 0.40
 MAJOR_OUTLETS = {
     "연합뉴스", "KBS", "MBC", "SBS", "조선일보", "중앙일보", "동아일보", "한겨레", "경향신문"
@@ -146,8 +146,16 @@ def pair_score(
     bonus = min(0.18, len(overlap) * 0.045) + number_bonus + title_bonus + event_bonus
     time_weight = 1.0 if hours <= 24 else 0.92 if hours <= 48 else 0.84
     score = min(1.0, cosine * time_weight + bonus)
-    if not title_tokens and title_similarity < 0.25 and not (left_events & right_events and shared_numbers):
-        return min(score, 0.39)
+    if (
+        not title_tokens
+        and not overlap
+        and title_similarity < 0.25
+        and not (left_events & right_events and shared_numbers)
+    ):
+        # 유사도 기준을 넓혀도 '화재·정전' 같은 사건 종류만 같은 서로 다른
+        # 지역 사건은 하나의 이슈가 아니다. 장소·수치·고유 단서가 없으면
+        # threshold와 무관하게 병합 후보에서 제외한다.
+        return 0.0
     return score
 
 

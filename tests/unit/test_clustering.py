@@ -123,7 +123,31 @@ def test_same_event_clusters_when_headlines_use_different_wording_and_number_uni
 
     assert len(clusters) == 1
     assert set(clusters[0]["articleIds"]) == {"a1", "a2"}
-    assert clusters[0]["autoReasons"]["algorithmVersion"] == "event-aware-title-tfidf-v2"
+    assert clusters[0]["autoReasons"]["algorithmVersion"] == "event-aware-title-tfidf-v3"
+
+
+def test_broad_threshold_does_not_merge_unrelated_fires_without_shared_event_details():
+    clusters = build_clusters(
+        [
+            _article(
+                "bifc",
+                title="부산 BIFC 건물서 충전 중이던 청소용 전동카트 배터리 화재",
+                description="부산 남구 문현동 BIFC 지하 주차장에서 전동카트 배터리 화재가 발생했다",
+            ),
+            _article(
+                "asan",
+                title="아산 배방 옷수선 가게 화재…1천100만원 재산피해",
+                description="충남 아산시 배방읍 옷수선 가게에서 불이 나 재산 피해가 발생했다",
+            ),
+        ],
+        AS_OF,
+        pair_threshold=0.15,
+    )
+
+    assert {frozenset(cluster["articleIds"]) for cluster in clusters} == {
+        frozenset({"bifc"}),
+        frozenset({"asan"}),
+    }
 
 
 def test_same_event_type_in_different_places_does_not_cluster_without_shared_details():

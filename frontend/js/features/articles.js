@@ -10,7 +10,7 @@ import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis
 import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
-import { MAX_TOP_ISSUES } from "./issues.js";
+import { MAX_TOP_ISSUES } from "./issues.js?v=20260717-1";
 
 const expandedIssueIds = new Set();
 const manualGroupSelection = new Set();
@@ -203,9 +203,9 @@ export function renderArticles() {
   els.selectedOnlyBtn.setAttribute("aria-pressed", String(selectedOnlyActive));
   els.selectedOnlyBtn.title = selectedOnlyActive ? "전체 기사 보기" : `선택한 기사 ${selectedCount}건만 보기`;
   let items = state.articles.filter(a => {
-    const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")}`.toLowerCase();
-    const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
     const issue = issueByArticle.get(a.id);
+    const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")} ${issue?.effectiveTitle || ""}`.toLowerCase();
+    const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
     const reviewMatch = filters.risk === "all" || Number(filters.risk) === Number(issue?.effectiveReviewStars);
     return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && reviewMatch && selectionMatch;
   });

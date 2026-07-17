@@ -48,8 +48,10 @@ async def list_issues(report_date: str = Query(...)) -> Any:
     try:
         issues = issues_repo.list_for_report_date(connection, report_date)
         briefing_states = briefings_repo.list_issue_states(connection, report_date)
-        legacy_article_top_ids = briefings_repo.list_article_top_issue_ids(
-            connection, report_date
+        canonical_article_top_issue_ids = (
+            briefings_repo.list_canonical_issue_ids_for_article_top_tags(
+                connection, report_date
+            )
         )
         briefing = briefings_repo.get_by_date(connection, report_date)
         for issue in issues:
@@ -76,7 +78,7 @@ async def list_issues(report_date: str = Query(...)) -> Any:
             )
             if (
                 not issue["directCoverage"]
-                and legacy_article_top_ids.intersection(issue["articleIds"])
+                and issue["id"] in canonical_article_top_issue_ids
             ):
                 issue["selected"] = True
     finally:

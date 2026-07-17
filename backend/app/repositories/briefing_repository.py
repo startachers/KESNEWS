@@ -403,10 +403,22 @@ def _effective_issue_id_for_article(
                 AND removed.article_id = ?
                 AND removed.action = 'remove'
           )
-        ORDER BY i.manual_group DESC, i.updated_at DESC, i.id
+        ORDER BY
+          EXISTS (
+              SELECT 1
+              FROM briefing_issues selected_issue
+              JOIN briefings selected_briefing
+                ON selected_briefing.id = selected_issue.briefing_id
+              WHERE selected_briefing.report_date = ?
+                AND selected_issue.issue_id = i.id
+                AND selected_issue.selected = 1
+          ) DESC,
+          i.manual_group DESC,
+          i.updated_at DESC,
+          i.id
         LIMIT 1
         """,
-        (report_date, article_id, article_id, article_id),
+        (report_date, article_id, article_id, article_id, report_date),
     ).fetchone()
     return row["id"] if row else None
 
@@ -1031,3 +1043,19 @@ def list_article_top_issue_ids(
         (report_date,),
     ).fetchall()
     return {row["article_id"] for row in rows}
+
+
+def list_canonical_issue_ids_for_article_top_tags(
+    connection: sqlite3.Connection, report_date: str
+) -> set[str]:
+    """기사 Top 태그를 화면에 표시할 단 하나의 유효 군집으로 매핑한다.
+
+    재군집화 뒤 한 기사가 여러 군집 기록과 겹칠 수 있다. 기사 태그 하나를 모든
+    겹친 군집으로 확장하면 Top Issues 상한을 우회하고 화면 변경이 가려지므로,
+    patch 경로와 같은 canonical issue 선택 규칙을 사용한다.
+    """
+    issue_ids = {
+        _effective_issue_id_for_article(connection, report_date, article_id)
+        for article_id in list_article_top_issue_ids(connection, report_date)
+    }
+    return {issue_id for issue_id in issue_ids if issue_id is not None}
