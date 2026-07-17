@@ -114,7 +114,7 @@ async def create_selection_recommendations(
             connection, report_date, body.model
         )
         if target_count == 0:
-            message = "이미 20건 이상 선정되어 있습니다." if len(selected_ids) >= MAX_SELECTED_ARTICLES else "추천할 미선정 후보가 없습니다."
+            message = "이미 12건 이상 선정되어 있습니다." if len(selected_ids) >= MAX_SELECTED_ARTICLES else "추천할 미선정 후보가 없습니다."
             return error_response("AI_SELECTION_NOT_NEEDED", message)
         request_snapshot = {
             "reportDate": report_date,
@@ -273,7 +273,7 @@ async def apply_selection_recommendations(report_date: str, body: ApplyRequest) 
         serialized = selection_repo.serialize(run)
         article_ids = [item["articleId"] for item in serialized["response"]["recommendations"]]
         with connection:
-            updated, applied_ids = briefings_repo.apply_ai_recommendations(
+            updated, applied_ids, top_issue_article_ids = briefings_repo.apply_ai_recommendations(
                 connection, report_date, body.expectedRevision, article_ids
             )
             selection_repo.mark_applied(connection, body.runId)
@@ -284,6 +284,15 @@ async def apply_selection_recommendations(report_date: str, body: ApplyRequest) 
     finally:
         connection.close()
     return ok_envelope(
-        {"runId": body.runId, "appliedArticleIds": applied_ids, "selectedCount": min(MAX_SELECTED_ARTICLES, len(applied_ids) + len(serialized["request"]["selectedArticleIds"])), "revision": updated["revision"]},
+        {
+            "runId": body.runId,
+            "appliedArticleIds": applied_ids,
+            "topIssueArticleIds": top_issue_article_ids,
+            "selectedCount": min(
+                MAX_SELECTED_ARTICLES,
+                len(applied_ids) + len(serialized["request"]["selectedArticleIds"]),
+            ),
+            "revision": updated["revision"],
+        },
         meta={"revision": updated["revision"]},
     )

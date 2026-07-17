@@ -3,7 +3,7 @@ import { escapeHtml } from "../utils/strings.js";
 import { formatRelative } from "../utils/dates.js";
 
 const ISSUE_STATUS_LABELS = { new: "신규", expanding: "확산", ongoing: "지속", cooling: "진정", closed: "종료" };
-export const MAX_TOP_ISSUES = 5;
+export const MAX_TOP_ISSUES = 6;
 function starsText(value) {
   const stars = Math.max(1, Math.min(5, Number(value) || 1));
   return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
@@ -34,7 +34,7 @@ export function renderTopIssues() {
         <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-neutral">기사</span></div>
         <h3>${escapeHtml(article.title)}</h3>
         <div class="issue-meta">${escapeHtml(article.source || "출처 미상")} · ${formatRelative(article.pubDate)}</div>
-        <div class="issue-reason">담당자가 개별 기사를 Top 이슈로 태그했습니다.</div>
+        <div class="issue-reason">담당자 태그 또는 확인·적용한 Gemma 핵심 추천 기사입니다.</div>
       </article>`;
     }
     const issue = tagged.item;

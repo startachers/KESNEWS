@@ -2,7 +2,7 @@ import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDail
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
-import { renderAll } from "./ui/renderers.js";
+import { renderAll } from "./ui/renderers.js?v=20260717-2";
 import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-19";
 import { runSearch } from "./features/collection.js?v=20260716-19";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
@@ -12,7 +12,7 @@ import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
 import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260716-1";
-import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260717-1";
+import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260717-3";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 

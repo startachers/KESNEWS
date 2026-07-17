@@ -147,7 +147,7 @@ async def patch_briefing_article(
         )
     except repo.TopIssueLimitExceeded:
         return error_response(
-            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 5개까지 선정할 수 있습니다."
+            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 6개까지 선정할 수 있습니다."
         )
     finally:
         connection.close()
@@ -199,7 +199,7 @@ async def patch_briefing_issue(
         )
     except repo.TopIssueLimitExceeded:
         return error_response(
-            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 5개까지 선정할 수 있습니다."
+            "TOP_ISSUE_LIMIT_EXCEEDED", "Top Issues는 최대 6개까지 선정할 수 있습니다."
         )
     finally:
         connection.close()

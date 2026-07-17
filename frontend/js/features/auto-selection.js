@@ -9,8 +9,9 @@ let running = false;
 
 function setBusy(value) {
   running = value;
+  els.autoSelectBtn.setAttribute("aria-busy", String(value));
   els.autoSelectBtn.disabled = value || state.status === "final" || !state.articles.length;
-  els.autoSelectBtn.textContent = value ? "Gemma 추천 분석 중…" : "Gemma 추천 20건";
+  els.autoSelectBtn.textContent = value ? "Gemma 추천 분석 중…" : "Gemma 추천 12건";
 }
 
 function renderRecommendations(run) {
@@ -21,7 +22,13 @@ function renderRecommendations(run) {
   els.autoSelectionList.innerHTML = recommendations.map(item => `
     <article class="auto-selection-item">
       <span class="auto-selection-rank">${item.rank}</span>
-      <div><strong>${escapeHtml(item.title || "제목 없음")}</strong><small>${escapeHtml(item.source || "출처 미상")}</small><p>${escapeHtml(item.reason)}</p></div>
+      <div>
+        <strong>${escapeHtml(item.title || "제목 없음")}</strong>
+        <small>${escapeHtml(item.source || "출처 미상")} · ${item.rank <= 6 ? "핵심 선정" : "추가 참고"}</small>
+        <p><b>기사 사실</b> ${escapeHtml(item.articleFact || item.reason || "-")}</p>
+        <p><b>공사 연관성</b> ${escapeHtml(item.kescoRelevance || "-")}</p>
+        <p><b>선정 이유</b> ${escapeHtml(item.selectionReason || item.reason || "-")}</p>
+      </div>
     </article>
   `).join("");
   const limitations = run?.response?.limitations || [];
@@ -32,8 +39,8 @@ function renderRecommendations(run) {
 
 export async function openAutoSelectionProposal() {
   if (running || state.status === "final") return;
-  if (state.articles.filter(article => article.included).length >= 20) {
-    showToast("이미 브리핑 기사가 20건 이상 선정되어 있습니다.", "error");
+  if (state.articles.filter(article => article.included).length >= 12) {
+    showToast("이미 브리핑 기사가 12건 이상 선정되어 있습니다.", "error");
     return;
   }
   setBusy(true);
@@ -66,7 +73,7 @@ export async function applyAutoSelectionProposal() {
     setState(await loadDailyState(state.date));
     renderAll();
     els.autoSelectionOverlay.classList.remove("open");
-    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 브리핑에 추가했습니다.`, "success");
+    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 추가하고 Top Issues ${result.data.topIssueArticleIds?.length || 0}칸을 채웠습니다.`, "success");
     recommendationRun = null;
   } catch (error) {
     if (["BRIEFING_REVISION_CONFLICT", "AI_INPUT_STALE"].includes(error.code)) {

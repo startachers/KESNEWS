@@ -43,7 +43,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert issues_feature.status_code == 200
     assert "issue.selected" in issues_feature.text
     assert "article.topIssue" in issues_feature.text
-    assert "MAX_TOP_ISSUES = 5" in issues_feature.text
+    assert "MAX_TOP_ISSUES = 6" in issues_feature.text
     assert "같은 사건 기사" in issues_feature.text
 
     articles_feature = client.get("/js/features/articles.js")
@@ -329,22 +329,22 @@ def test_individual_article_top_issue_tag_persists_independently():
     assert articles[0]["included"] is True
 
 
-def test_top_issues_allow_five_and_reject_sixth_tag():
+def test_top_issues_allow_six_and_reject_seventh_tag():
     report_date = "2026-08-15"
     _create_briefing(report_date)
     article_ids = [
         _create_article(
             report_date,
-            f"top-five-{index}",
+            f"top-six-{index}",
             f"전기안전 점검 Top 이슈 후보 {index}",
             f"지역일보{index}",
             f"2026-08-15T0{index}:00:00Z",
         )
-        for index in range(6)
+        for index in range(7)
     ]
     revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
 
-    for article_id in article_ids[:5]:
+    for article_id in article_ids[:6]:
         response = client.patch(
             f"/api/briefings/{report_date}/articles/{article_id}",
             json={"expectedRevision": revision, "topIssue": True},
@@ -353,7 +353,7 @@ def test_top_issues_allow_five_and_reject_sixth_tag():
         revision = response.json()["data"]["revision"]
 
     rejected = client.patch(
-        f"/api/briefings/{report_date}/articles/{article_ids[5]}",
+        f"/api/briefings/{report_date}/articles/{article_ids[6]}",
         json={"expectedRevision": revision, "topIssue": True},
     )
     assert rejected.status_code == 409
@@ -365,7 +365,7 @@ def test_top_issues_allow_five_and_reject_sixth_tag():
     )
     assert removed.status_code == 200
     replacement = client.patch(
-        f"/api/briefings/{report_date}/articles/{article_ids[5]}",
+        f"/api/briefings/{report_date}/articles/{article_ids[6]}",
         json={
             "expectedRevision": removed.json()["data"]["revision"],
             "topIssue": True,

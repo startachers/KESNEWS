@@ -18,7 +18,7 @@ _PATCH_COLUMNS = {
     "aiInputSignature": "ai_input_signature",
 }
 
-MAX_TOP_ISSUES = 5
+MAX_TOP_ISSUES = 6
 
 
 class BriefingNotFound(Exception):
@@ -287,9 +287,10 @@ def apply_ai_recommendations(
     expected_revision: int,
     article_ids: list[str],
     *,
-    selection_limit: int = 20,
-) -> tuple[sqlite3.Row, list[str]]:
-    """기존 수동 선정을 해제하지 않고 추천 기사만 상한까지 추가한다."""
+    selection_limit: int = 12,
+    top_issue_limit: int = MAX_TOP_ISSUES,
+) -> tuple[sqlite3.Row, list[str], list[str]]:
+    """기존 수동 상태를 보존하고 추천 기사 및 빈 Top Issue 자리만 채운다."""
     briefing = get_by_date(connection, report_date)
     if briefing is None:
         raise BriefingNotFound()
@@ -303,6 +304,8 @@ def apply_ai_recommendations(
         (briefing["id"],),
     ).fetchone()[0]
     applied: list[str] = []
+    top_issue_count = _top_issue_count(connection, briefing["id"])
+    top_issue_article_ids: list[str] = []
     for article_id in dict.fromkeys(article_ids):
         if selected_count >= selection_limit:
             break
@@ -331,7 +334,23 @@ def apply_ai_recommendations(
         applied.append(article_id)
         selected_count += 1
 
-    return bump_revision(connection, briefing["id"], expected_revision), applied
+        if top_issue_count < top_issue_limit:
+            connection.execute(
+                """
+                UPDATE briefing_articles
+                SET top_issue = 1, updated_at = ?
+                WHERE briefing_id = ? AND article_id = ? AND top_issue = 0
+                """,
+                (now_iso(), briefing["id"], article_id),
+            )
+            top_issue_article_ids.append(article_id)
+            top_issue_count += 1
+
+    return (
+        bump_revision(connection, briefing["id"], expected_revision),
+        applied,
+        top_issue_article_ids,
+    )
 
 
 def set_article_state(

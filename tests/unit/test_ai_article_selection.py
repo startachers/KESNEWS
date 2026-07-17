@@ -87,7 +87,7 @@ def test_high_impact_local_incident_remains_eligible():
     assert set(evidence.values()) == {"local-incident"}
 
 
-def test_overseas_incident_is_deprioritized_but_remains_eligible():
+def test_overseas_incident_without_domestic_link_is_excluded():
     articles = [
         {
             "id": "overseas-incident",
@@ -107,9 +107,53 @@ def test_overseas_incident_is_deprioritized_but_remains_eligible():
 
     candidates, evidence = build_candidate_input(articles, [])
 
-    assert evidence == {"C01": "domestic-incident", "C02": "overseas-incident"}
+    assert evidence == {"C01": "domestic-incident"}
     assert candidates[0]["overseasIncident"] is False
-    assert candidates[1]["overseasIncident"] is True
+
+
+def test_overseas_incident_with_specific_domestic_policy_link_remains_eligible():
+    articles = [{
+        "id": "overseas-reference",
+        "title": "미국 변전소 화재, 국내 전력설비 기준 개정에 시사점",
+        "eventType": "accident",
+    }]
+
+    candidates, evidence = build_candidate_input(articles, [])
+
+    assert evidence == {"C01": "overseas-reference"}
+    assert candidates[0]["overseasIncident"] is True
+
+
+def test_general_fire_without_electrical_connection_is_excluded():
+    articles = [
+        {"id": "bamboo", "title": "창녕 대나무밭 화재", "description": "쓰레기 소각 부주의"},
+        {"id": "battery", "title": "BIFC 배터리 충전 중 화재", "eventType": "accident"},
+    ]
+
+    _, evidence = build_candidate_input(articles, [])
+
+    assert set(evidence.values()) == {"battery"}
+
+
+def test_candidate_compression_keeps_at_most_two_articles_per_issue():
+    articles = [
+        {
+            "id": f"grid-{index}",
+            "title": f"정부 전력망 정책 후속 보도 {index}",
+            "relevanceScore": 90 - index,
+        }
+        for index in range(3)
+    ]
+    articles.append({"id": "aircon", "title": "에어컨 전기 화재 급증"})
+    issues = [{
+        "id": "grid-issue",
+        "autoTitle": "전력망 정책",
+        "articleIds": ["grid-0", "grid-1", "grid-2"],
+    }]
+
+    _, evidence = build_candidate_input(articles, issues)
+
+    assert set(evidence.values()) == {"grid-0", "grid-1", "aircon"}
 
 
 def test_government_economy_and_ai_candidates_are_reserved_and_required():
@@ -131,19 +175,19 @@ def test_government_economy_and_ai_candidates_are_reserved_and_required():
             },
             {
                 "id": "economy",
-                "title": "전기요금과 물가 전망",
+                "title": "정부, 전기요금과 물가 정책 발표",
                 "category": "macro_economy",
             },
             {
                 "id": "ai",
-                "title": "AI 데이터센터 전력수요 증가",
+                "title": "정부, AI 데이터센터 전력수요 정책 발표",
                 "category": "ai_trend",
             },
         ]
     )
 
     candidates, evidence = build_candidate_input(articles, [])
-    required = required_topic_groups(articles, candidates, 20)
+    required = required_topic_groups(articles, candidates, 12)
 
     assert len(candidates) == 60
     assert {"government", "economy", "ai"} <= set(evidence.values())
@@ -172,7 +216,7 @@ def test_existing_selected_topic_satisfies_its_quota():
 
     candidates, _ = build_candidate_input(articles, [])
 
-    assert required_topic_groups(articles, candidates, 19) == ["economy", "ai"]
+    assert required_topic_groups(articles, candidates, 11) == []
 
 
 def test_ai_response_missing_required_topic_is_rejected_after_retry():
@@ -185,8 +229,8 @@ def test_ai_response_missing_required_topic_is_rejected_after_retry():
             return json.dumps(
                 {
                     "recommendations": [
-                        {"evidenceId": "C03", "rank": 1, "reason": "AI 기사"},
-                        {"evidenceId": "C04", "rank": 2, "reason": "일반 기사"},
+                        {"evidenceId": "C03", "rank": 1, "articleFact": "AI 기사", "kescoRelevance": "전력수요", "selectionReason": "경영 참고"},
+                        {"evidenceId": "C04", "rank": 2, "articleFact": "일반 기사", "kescoRelevance": "간접", "selectionReason": "참고"},
                     ],
                     "limitations": [],
                 }
