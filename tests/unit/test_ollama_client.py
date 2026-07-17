@@ -55,7 +55,7 @@ def test_generate_sends_structured_bounded_request(monkeypatch):
     }
 
 
-def test_31b_uses_safe_16k_context(monkeypatch):
+def test_31b_uses_64k_context_by_default(monkeypatch):
     client = OllamaClient(context_length=65_536)
     captured = {}
 
@@ -64,7 +64,20 @@ def test_31b_uses_safe_16k_context(monkeypatch):
 
     monkeypatch.setattr("backend.app.services.ai.ollama_client.http.client.HTTPConnection", fake_connection)
     client.generate(model="gemma4:31b", prompt="test")
-    assert captured["payload"]["options"]["num_ctx"] == 16_384
+    assert captured["payload"]["options"]["num_ctx"] == 65_536
+
+
+def test_31b_context_can_still_be_lowered_with_environment(monkeypatch):
+    client = OllamaClient(context_length=65_536)
+    captured = {}
+
+    def fake_connection(host, port, timeout):  # noqa: ARG001
+        return FakeConnection(FakeResponse([b'{"response":"{}","done":true}\n']), captured)
+
+    monkeypatch.setenv("KESCO_OLLAMA_NUM_CTX_31B", "32768")
+    monkeypatch.setattr("backend.app.services.ai.ollama_client.http.client.HTTPConnection", fake_connection)
+    client.generate(model="gemma4:31b", prompt="test")
+    assert captured["payload"]["options"]["num_ctx"] == 32_768
 
 
 def test_cancel_interrupts_connection_before_first_response(monkeypatch):

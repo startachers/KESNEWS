@@ -63,7 +63,7 @@ Phase 4에서 SQLite migration(`backend/app/db/`), 작업본·기사 API(`briefi
 
 | ID | 후속 필요 사항 | 배경 | 처리 Phase |
 |---|---|---|---|
-| P8-001 | 브라우저의 `AbortController`는 HTTP 요청만 끊고 `asyncio.to_thread`의 Ollama 생성은 계속되어, 창을 닫은 뒤에도 31B가 GPU를 점유할 수 있었다 | 팬 지속·중복 요청·10분 이상 timeout, 기존 화면에는 취소 버튼 없음 | **Phase 9 선행 핫픽스에서 해소.** 취소 token이 스트리밍 HTTP 소켓을 직접 종료하고, 단일 실행·5분 제한·31B 16K context/2,048 출력 상한·구조화 schema·종료 후 unload를 적용했다. `tests/integration/test_ai_analysis_api.py::test_running_analysis_rejects_duplicate_and_can_be_cancelled`, `tests/unit/test_ollama_client.py::test_cancel_interrupts_connection_before_first_response` |
+| P8-001 | 브라우저의 `AbortController`는 HTTP 요청만 끊고 `asyncio.to_thread`의 Ollama 생성은 계속되어, 창을 닫은 뒤에도 31B가 GPU를 점유할 수 있었다 | 팬 지속·중복 요청·10분 이상 timeout, 기존 화면에는 취소 버튼 없음 | **Phase 9 선행 핫픽스에서 해소.** 취소 token이 스트리밍 HTTP 소켓을 직접 종료하고, 단일 실행·5분 제한·2,048 출력 상한·구조화 schema·종료 후 unload를 적용했다. 31B context는 이후 15건 전문 입력의 출력 중단을 해소하기 위해 기본 64K로 조정했다. `tests/integration/test_ai_analysis_api.py::test_running_analysis_rejects_duplicate_and_can_be_cancelled`, `tests/unit/test_ollama_client.py::test_cancel_interrupts_connection_before_first_response` |
 
 ## 기사 수집 설계 변경 후속 항목
 
