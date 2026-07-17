@@ -122,7 +122,8 @@ a { color: inherit; }
 .btn-ghost:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.30); }
 .btn-icon { width: 38px; padding: 0; }
 .btn-subtle { background: var(--soft); }
-.btn-danger { color: var(--red); }
+.btn-danger { color: var(--red); background: #fff7f6; border-color: #efc7c2; }
+.btn-danger:hover { color: #8f2727; background: #fff0ee; border-color: #dda9a2; }
 
 .phase-actions {
   position: sticky;
@@ -394,6 +395,7 @@ a { color: inherit; }
 .date-input { font-weight: 800; color: var(--navy) !important; }
 .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }
 .side-actions .btn { padding-inline: 8px; font-size: 11px; }
+.side-card #resetTodayBtn { width: 100%; margin-top: 9px; }
 .briefing-state { margin: 10px 0 0; padding: 8px 10px; border-radius: 9px; background: var(--soft); color: #657681; font-size: 9px; }
 .finalized .briefing-state { background: var(--teal-soft); color: var(--teal-dark); font-weight: 800; }
 .finalized .article-card { box-shadow: none; }

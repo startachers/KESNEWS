@@ -26,8 +26,6 @@ function renderRecommendations(run) {
         <strong>${escapeHtml(item.title || "제목 없음")}</strong>
         <small>${escapeHtml(item.source || "출처 미상")} · ${item.rank <= 6 ? "핵심 선정" : "추가 참고"}</small>
         <p><b>기사 사실</b> ${escapeHtml(item.articleFact || item.reason || "-")}</p>
-        <p><b>공사 연관성</b> ${escapeHtml(item.kescoRelevance || "-")}</p>
-        <p><b>선정 이유</b> ${escapeHtml(item.selectionReason || item.reason || "-")}</p>
       </div>
     </article>
   `).join("");
@@ -73,7 +71,7 @@ export async function applyAutoSelectionProposal() {
     setState(await loadDailyState(state.date));
     renderAll();
     els.autoSelectionOverlay.classList.remove("open");
-    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 추가하고 Top Issues ${result.data.topIssueArticleIds?.length || 0}칸을 채웠습니다.`, "success");
+    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 추가하고 추천 우선순위 상위 ${result.data.topIssueArticleIds?.length || 0}건으로 Top Issues를 다시 선정했습니다.`, "success");
     recommendationRun = null;
   } catch (error) {
     if (["BRIEFING_REVISION_CONFLICT", "AI_INPUT_STALE"].includes(error.code)) {

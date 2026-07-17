@@ -121,7 +121,7 @@ def test_recommendation_rejects_zero_when_candidates_exist():
     assert client.get(f"/api/briefings/{report_date}").json()["data"]["revision"] == revision
 
 
-def test_apply_preserves_existing_selection_and_article_editor_state():
+def test_apply_preserves_existing_selection_and_editor_state_but_replaces_top_issue():
     report_date = "2025-04-02"
     article_ids, revision = setup_candidates(report_date, 2)
     first = client.patch(
@@ -141,9 +141,58 @@ def test_apply_preserves_existing_selection_and_article_editor_state():
     articles = {item["id"]: item for item in client.get(f"/api/articles?report_date={report_date}").json()["data"]["articles"]}
     assert articles[article_ids[0]]["included"] is True
     assert articles[article_ids[0]]["starred"] is True
-    assert articles[article_ids[0]]["topIssue"] is True
+    assert articles[article_ids[0]]["topIssue"] is False
     assert articles[article_ids[0]]["note"] == "수동 메모"
     assert articles[article_ids[1]]["included"] is True
+    assert articles[article_ids[1]]["topIssue"] is True
+
+
+def test_apply_clears_existing_issue_top_tag_before_ranking_recommended_articles():
+    report_date = "2025-04-07"
+    article_ids, revision = setup_candidates(report_date, 4)
+    grouped = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids[:2],
+            "expectedRevision": revision,
+        },
+    )
+    assert grouped.status_code == 200
+    issue_id = grouped.json()["data"]["issue"]["id"]
+    revision = grouped.json()["data"]["revision"]
+    tagged = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue_id}",
+        json={"expectedRevision": revision, "selected": True, "note": "기존 Top 이슈 메모"},
+    )
+    assert tagged.status_code == 200
+    revision = tagged.json()["data"]["revision"]
+    app.state.ollama_client = FakeSelectionOllama(recommendations(3))
+
+    proposed = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma-test"},
+    )
+    assert proposed.status_code == 200
+    run = proposed.json()["data"]["run"]
+    applied = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations/apply",
+        json={"expectedRevision": revision, "runId": run["id"]},
+    )
+
+    assert applied.status_code == 200
+    top_issue_ids = applied.json()["data"]["topIssueArticleIds"]
+    assert top_issue_ids == applied.json()["data"]["appliedArticleIds"][:6]
+    issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    issue = next(item for item in issues if item["id"] == issue_id)
+    assert issue["selected"] is False
+    assert issue["note"] == "기존 Top 이슈 메모"
+    articles = client.get(
+        f"/api/articles?report_date={report_date}"
+    ).json()["data"]["articles"]
+    assert {item["id"] for item in articles if item["topIssue"]} == set(top_issue_ids)
 
 
 def test_recommendation_selects_twelve_and_fills_six_top_issue_cards():

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.app.services.ai.analyzer import AiClient
 from backend.app.services.ai.runtime import CancellationToken
 
-PROMPT_VERSION = "article-selection-v8"
+PROMPT_VERSION = "article-selection-v9"
 MAX_SELECTED_ARTICLES = 12
 CORE_SELECTION_COUNT = 6
 MAX_AI_CANDIDATES = 60
@@ -341,7 +341,7 @@ def input_signature(
         sort_keys=True,
         separators=(",", ":"),
     )
-    return f"selection-v8-{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
+    return f"selection-v9-{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
 
 
 def _prompt(
@@ -386,6 +386,48 @@ selectionReason(CEO 보고 가치)을 분리해 작성한다. 연관성을 추�
 """
 
 
+def _completion_prompt(
+    report_date: str,
+    start_rank: int,
+    needed_count: int,
+    candidates: list[dict[str, Any]],
+    preferred_groups: list[str],
+) -> str:
+    schema = json.dumps(SelectionResult.model_json_schema(), ensure_ascii=False)
+    data = json.dumps(candidates, ensure_ascii=False, indent=2)
+    preferred_labels = [TOPIC_GROUP_LABELS[group] for group in preferred_groups]
+    end_rank = start_rank + needed_count - 1
+    core_needed = max(0, min(CORE_SELECTION_COUNT, end_rank) - start_rank + 1)
+    return f"""당신은 한국전기안전공사 CEO 일일 언론브리핑 추천의 부족분을 보충한다.
+이미 확정된 앞 순위와 중복되지 않는 아래 후보만 사용해 정확히 {needed_count}건을 반환한다.
+응답 rank는 보충 응답 안에서 1부터 {needed_count}까지 연속으로 쓴다. 서버가 이를 최종
+rank {start_rank}~{end_rank}로 변환한다. 품질 판단을 이유로 개수를 줄이지 않는다.
+보충 응답의 앞 {core_needed}건은 공사 직접 언급·법정업무·전기안전 관련 후보를 우선하고,
+나머지는 정부정책·거시경제·AI 중요 동향을 포함할 수 있다: {json.dumps(preferred_labels, ensure_ascii=False)}.
+각 추천은 articleFact, kescoRelevance, selectionReason을 기사 근거 안에서 작성한다.
+후보 ID만 사용하고 JSON 객체만 출력한다.
+
+보고일: {report_date}
+
+[JSON schema]
+{schema}
+
+[남은 후보 기사]
+{data}
+"""
+
+
+def _decode_result(raw: str) -> SelectionResult:
+    candidate = raw.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        candidate = "\n".join(lines[1:-1]) if len(lines) >= 3 else candidate
+    try:
+        return SelectionResult.model_validate(json.loads(candidate))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise SelectionError(str(exc), raw_response=raw) from exc
+
+
 def _parse(
     raw: str,
     evidence_ids: set[str],
@@ -393,14 +435,7 @@ def _parse(
     relevance_by_evidence: dict[str, int],
     candidate_by_evidence: dict[str, dict[str, Any]],
 ) -> SelectionResult:
-    candidate = raw.strip()
-    if candidate.startswith("```"):
-        lines = candidate.splitlines()
-        candidate = "\n".join(lines[1:-1]) if len(lines) >= 3 else candidate
-    try:
-        result = SelectionResult.model_validate(json.loads(candidate))
-    except (json.JSONDecodeError, ValidationError) as exc:
-        raise SelectionError(str(exc), raw_response=raw) from exc
+    result = _decode_result(raw)
     ids = [item.evidenceId for item in result.recommendations]
     ranks = [item.rank for item in result.recommendations]
     if len(ids) != target_count:
@@ -510,7 +545,92 @@ def recommend(
             return SelectionOutput(result.model_dump(), raw, attempt)
         except SelectionError as exc:
             last_error = exc
+            if attempt != 1:
+                continue
+            try:
+                partial = _decode_result(raw)
+            except SelectionError:
+                continue
+            partial_ids = [item.evidenceId for item in partial.recommendations]
+            partial_ranks = [item.rank for item in partial.recommendations]
+            if not (
+                0 < len(partial_ids) < target_count
+                and len(set(partial_ids)) == len(partial_ids)
+                and all(item in evidence for item in partial_ids)
+                and sorted(partial_ranks) == list(range(1, len(partial_ids) + 1))
+            ):
+                continue
+            needed_count = target_count - len(partial_ids)
+            selected_partial_ids = set(partial_ids)
+            remaining_candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate["id"]) not in selected_partial_ids
+            ]
+            completion_raw = client.generate(
+                model=model,
+                prompt=_completion_prompt(
+                    report_date,
+                    len(partial_ids) + 1,
+                    needed_count,
+                    remaining_candidates,
+                    preferred_groups,
+                ),
+                format_schema=SelectionResult.model_json_schema(),
+                cancel_token=cancel_token,
+            )
+            try:
+                completion = _decode_result(completion_raw)
+            except SelectionError:
+                last_error = SelectionError(
+                    f"추천은 정확히 {target_count}건이어야 합니다.",
+                    raw_response=completion_raw,
+                    attempts=2,
+                )
+                break
+            completion_ids = [item.evidenceId for item in completion.recommendations]
+            completion_ranks = [item.rank for item in completion.recommendations]
+            if (
+                len(completion_ids) != needed_count
+                or len(set(completion_ids)) != len(completion_ids)
+                or any(
+                    item in selected_partial_ids or item not in evidence
+                    for item in completion_ids
+                )
+                or sorted(completion_ranks) != list(range(1, needed_count + 1))
+            ):
+                last_error = SelectionError(
+                    f"추천은 정확히 {target_count}건이어야 합니다.",
+                    raw_response=completion_raw,
+                    attempts=2,
+                )
+                break
+            combined = SelectionResult(
+                recommendations=[
+                    *partial.recommendations,
+                    *[
+                        item.model_copy(update={"rank": len(partial_ids) + item.rank})
+                        for item in completion.recommendations
+                    ],
+                ],
+                limitations=[*partial.limitations, *completion.limitations],
+            )
+            combined_raw = json.dumps(combined.model_dump(), ensure_ascii=False)
+            try:
+                result = _parse(
+                    combined_raw,
+                    set(evidence),
+                    target_count,
+                    relevance_by_evidence,
+                    candidate_by_evidence,
+                )
+                return SelectionOutput(result.model_dump(), combined_raw, 2)
+            except SelectionError as combined_error:
+                last_error = combined_error
+                last_error.attempts = 2
+                break
     assert last_error is not None
-    last_error.raw_response = raw
+    if last_error.raw_response is None:
+        last_error.raw_response = raw
     last_error.attempts = 2
     raise last_error

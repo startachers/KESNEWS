@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.api.analysis import ai_state
+from backend.app.core.clock import today_seoul
 from backend.app.repositories import briefing_repository as repo
 from backend.app.repositories import issue_repository as issues_repo
-from backend.app.repositories.database import get_connection
+from backend.app.repositories.database import backup_database, get_connection
 
 router = APIRouter()
 
@@ -55,6 +56,11 @@ class IssueStatePatchRequest(BaseModel):
     sortOrder: int | None = None
     editorReviewStars: int | None = Field(default=None, ge=1, le=5)
     editorReviewReason: str | None = Field(default=None, max_length=500)
+
+
+class DailyWorkResetRequest(BaseModel):
+    expectedRevision: int
+    confirmation: Literal["RESET_TODAY"]
 
 
 def _serialize(row: sqlite3.Row) -> dict[str, Any]:
@@ -123,6 +129,72 @@ async def put_briefing(report_date: str, request: BriefingPutRequest) -> Any:
     finally:
         connection.close()
     return ok_envelope(_serialize(row), meta={"revision": row["revision"]})
+
+
+@router.post("/api/briefings/{report_date}/reset")
+async def reset_daily_work(report_date: str, request: DailyWorkResetRequest) -> Any:
+    if report_date != today_seoul():
+        return error_response(
+            "DAILY_RESET_TODAY_ONLY", "오늘 날짜의 작업만 초기화할 수 있습니다."
+        )
+    connection = get_connection()
+    try:
+        briefing = repo.get_by_date(connection, report_date)
+        if briefing is None:
+            return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+        if briefing["status"] == "final":
+            return error_response(
+                "BRIEFING_FINALIZED", "최종 확정된 작업본은 초기화할 수 없습니다."
+            )
+        if briefing["revision"] != request.expectedRevision:
+            return error_response(
+                "BRIEFING_REVISION_CONFLICT",
+                "다른 화면에서 브리핑이 변경됐습니다.",
+            )
+    finally:
+        connection.close()
+
+    try:
+        backup_path = backup_database()
+    except sqlite3.DatabaseError as exc:
+        return error_response("DAILY_RESET_BACKUP_FAILED", f"초기화 전 백업에 실패했습니다: {exc}")
+
+    connection = get_connection()
+    try:
+        with connection:
+            row, deleted = repo.reset_daily_work(
+                connection, report_date, request.expectedRevision
+            )
+    except repo.BriefingNotFound:
+        return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+    except repo.BriefingFinalized:
+        return error_response(
+            "BRIEFING_FINALIZED", "최종 확정된 작업본은 초기화할 수 없습니다."
+        )
+    except repo.RevisionConflict:
+        return error_response(
+            "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+        )
+    except repo.DailyWorkResetBlocked:
+        return error_response(
+            "DAILY_RESET_ACTIVE_RUN",
+            "기사 수집이나 AI 분석이 실행 중입니다. 완료 또는 취소 후 초기화해 주세요.",
+        )
+    except sqlite3.IntegrityError:
+        return error_response(
+            "DAILY_RESET_CONSTRAINT_FAILED",
+            "다른 날짜와 공유된 기록을 안전하게 분리하지 못해 초기화를 중단했습니다.",
+        )
+    finally:
+        connection.close()
+    data = _serialize(row)
+    data.update(
+        {
+            "deleted": deleted,
+            "backupFile": backup_path.name if backup_path is not None else None,
+        }
+    )
+    return ok_envelope(data, meta={"revision": row["revision"]})
 
 
 @router.patch("/api/briefings/{report_date}/articles/{article_id}")

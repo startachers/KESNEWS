@@ -127,8 +127,10 @@ updated_at
 | 브리핑 선정 | true | false | 요약·보고 대상 |
 | 숨김 | false | true | 해당 날짜 작업목록에서 숨김, 복원 가능 |
 
-`top_issue`는 개별 기사를 Top Issues에 직접 올리는 수동 태그다. `selected`(브리핑 선정),
+`top_issue`는 개별 기사를 Top Issues에 직접 올리는 태그다. `selected`(브리핑 선정),
 `starred`(중요 기사)와 서로 독립이다. `dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
+담당자가 직접 편집할 수 있지만 Gemma 기사 추천을 명시적으로 적용하면 기존 군집·기사 Top 태그를
+초기화하고 적용된 추천 순위 상위 6건으로 교체한다.
 
 ### 2.3 DELETE 사용 제한
 
@@ -234,6 +236,9 @@ POST /api/briefings/{date}/selection-recommendations/apply
 - Gemma 추천은 현재 선정 수를 고려해 총 12건이 되도록 부족분을 추천한다. 미선정 후보가 부족한
   경우에만 후보 수만큼 요청하며, 그 외에는 요청 수와 정확히 같은 결과만 성공으로 인정한다.
   1~6위는 공사 핵심 선정, 7~12위는 정부·경제·AI 등을 포함한 CEO 추가 참고로 구분한다.
+- Gemma의 1차 응답이 요청 수보다 적으면 서버는 이미 추천된 ID를 제외한 남은 후보만으로 부족분을
+  한 차례 추가 요청한다. 보충 결과를 기존 결과 뒤에 합친 다음 전체 추천 수, 연속 순위, 품질 gate,
+  제목 정합성과 동일 이슈 중복을 다시 검증하며, 최종 요청 수를 채우지 못하면 성공으로 저장하지 않는다.
 - 응답은 후보 실행 ID, 1부터 연속된 순위와 기사별 `articleFact`(기사 사실),
   `kescoRelevance`(공사 연관성), `selectionReason`(선정 이유)을 분리해 포함한다. 서버는 추천 ID가
   해당 실행의 고정 evidence index에 존재하는지, 중복이 없는지, 요청 상한 이하인지, 순위가 실제
@@ -244,12 +249,32 @@ POST /api/briefings/{date}/selection-recommendations/apply
   정상 추천과 실제 기사 선정 상태를 변경하지 않는다.
 - apply는 `expectedRevision`, `runId`를 받고 입력 서명을 다시 검증한다. 성공한 미적용 실행만
   적용할 수 있다.
-- apply는 추천 기사에 `selected=true`를 설정하고 추천 순위순으로 비어 있는 Top Issues 자리만
-  `top_issue=true`로 채운다. 기존 선정 기사나 기존 군집·기사 Top 태그를 자동 해제하지 않으며,
-  `starred`, `note`, `dismissed`, 수동 분류를 변경하지 않는다. `dismissed=true`는 적용 대상에서
-  제외한다. 이미 수동 선정된 공사 보도자료 기사와 수동 Top 태그는 그대로 보존한다.
+- apply는 추천 기사에 `selected=true`를 설정하는 같은 transaction에서 기존
+  `briefing_issues.selected`와 `briefing_articles.top_issue`를 모두 해제하고, 실제 적용된 추천 순위
+  상위 6건에만 `top_issue=true`를 설정한다. 기존 기사 선정 상태와 `starred`, `note`, `dismissed`,
+  수동 분류는 변경하지 않는다. `dismissed=true`는 적용 대상에서 제외한다.
 - 추천 생성은 AI 결과의 자동 확정이 아니다. 담당자가 화면에서 추천 목록과 이유를 확인하고
   명시적으로 apply해야 실제 선정 상태가 바뀐다.
+
+### 2.8 오늘 작업 초기화
+
+```text
+POST /api/briefings/{date}/reset
+```
+
+- 요청은 `expectedRevision`, `confirmation="RESET_TODAY"`를 받으며 `date`가 서울 기준 오늘과
+  같을 때만 허용한다.
+- 초기화 직전에 SQLite online backup을 생성하고 무결성 검사를 통과해야 mutation을 시작한다.
+- final 작업본은 초기화하지 않는다. 이전에 확정한 `briefing_versions` 불변 snapshot과 보고서
+  백업은 삭제하지 않는다.
+- 하나의 transaction에서 오늘 날짜의 수집 실행·provider observation 연결, 기사 작업목록과
+  편집 상태, 오늘 브리핑의 군집 Top·메모·검토 연결, AI 분석·기사 추천 실행, 보고 편집본을
+  삭제하고 작업본의 담당자·요약·지시사항·AI 상태를 초기값으로 되돌린다. 오늘 군집 실행은
+  `reset` 상태로 비활성화해 재수집 뒤 새 군집 실행이 다시 계산하도록 한다.
+- 다른 보고일에서 참조할 수 있는 `articles` 원본과 자동·수동 평가 자체는 물리 삭제하지 않는다.
+  여러 보고일에서 공유할 수 있는 `issues`, membership 원본도 물리 삭제하지 않는다. 오늘 날짜의
+  수집·작업본 연결을 제거하므로 초기화 직후 오늘 기사·이슈 목록에는 표시되지 않는다.
+- 수집 또는 AI 실행 중, revision 충돌, 백업 실패 시 아무 작업 데이터도 삭제하지 않는다.
 
 ---
 

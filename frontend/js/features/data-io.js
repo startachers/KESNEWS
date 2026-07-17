@@ -7,7 +7,7 @@ import { getRelevance, relevanceSort } from "./collection.js";
 import * as api from "../api/client.js";
 import { friendlyError, safeUrl } from "../utils/strings.js";
 import { downloadBlob } from "../utils/dom.js";
-import { formatDateTime } from "../utils/dates.js";
+import { formatDateTime, localDateKey } from "../utils/dates.js";
 import { showToast, setStatus } from "../ui/notifications.js?v=20260716-1";
 import { renderAll } from "../ui/renderers.js";
 import { setRuleSummary, refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
@@ -124,6 +124,46 @@ export async function reopenCurrentBriefing() {
     setStatus("idle", `수정 중 · 최종본 v${state.latestFinalVersion} 보존`);
   } catch (error) {
     showToast(`수정 재개 실패: ${friendlyError(error)}`, "error");
+  }
+}
+
+export async function resetTodayWork() {
+  if (state.date !== localDateKey()) {
+    showToast("오늘 날짜의 작업만 초기화할 수 있습니다.", "error");
+    return;
+  }
+  if (state.status === "final") {
+    showToast("최종 확정된 작업본은 초기화할 수 없습니다.", "error");
+    return;
+  }
+  const confirmed = window.confirm(
+    "오늘 수집한 기사, 선정·메모·Top Issues, 군집, AI 분석과 추천, 요약을 모두 삭제합니다. 초기화 전 DB 백업은 자동 생성됩니다. 처음부터 다시 시작하시겠습니까?"
+  );
+  if (!confirmed) return;
+  const button = document.getElementById("resetTodayBtn");
+  button.disabled = true;
+  try {
+    await flushArticleChanges();
+    await flushDailyState();
+    const result = await api.resetTodayWork(state.date, state.revision);
+    setState(await loadDailyState(state.date));
+    setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "review" });
+    els.articleSearch.value = "";
+    els.categoryFilter.value = "all";
+    els.riskFilter.value = "all";
+    els.selectionFilter.value = "all";
+    els.sortOrder.value = "review";
+    renderAll();
+    setStatus("idle", "오늘 작업 초기화 완료 · 기사 수집부터 다시 시작하세요");
+    showToast(`오늘 작업을 초기화했습니다. 안전 백업: ${result.data.backupFile}`, "success");
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      setState(await loadDailyState(state.date));
+      renderAll();
+    }
+    showToast(`오늘 작업 초기화 실패: ${friendlyError(error)}`, "error");
+  } finally {
+    button.disabled = false;
   }
 }
 

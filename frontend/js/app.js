@@ -2,17 +2,17 @@ import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDail
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
-import { renderAll } from "./ui/renderers.js?v=20260717-2";
+import { renderAll } from "./ui/renderers.js?v=20260717-3";
 import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260716-19";
 import { runSearch } from "./features/collection.js?v=20260716-19";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260716-15";
-import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport } from "./features/data-io.js";
+import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport, resetTodayWork } from "./features/data-io.js";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
 import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260716-1";
-import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260717-3";
+import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260717-5";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
@@ -52,6 +52,7 @@ function bindEvents() {
   $("editKeywordsBtn").addEventListener("click", openSettings);
   $("saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
   $("resetSettingsBtn").addEventListener("click", resetSettingsForm);
+  $("resetTodayBtn").addEventListener("click", resetTodayWork);
   $("restartServerBtn").dataset.restartHandler = "module";
   $("restartServerBtn").addEventListener("click", restartServerFromSettings);
   $("addArticleBtn").addEventListener("click", openArticleModal);

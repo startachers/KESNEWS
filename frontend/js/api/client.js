@@ -32,6 +32,13 @@ export function putBriefing(date, expectedRevision, patch) {
   return request(`/briefings/${date}`, { method: "PUT", body: JSON.stringify({ expectedRevision, patch }) });
 }
 
+export function resetTodayWork(date, expectedRevision) {
+  return request(`/briefings/${encodeURIComponent(date)}/reset`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision, confirmation: "RESET_TODAY" }),
+  }, 30000);
+}
+
 export function finalizeBriefing(date, expectedRevision) {
   return request(`/briefings/${date}/finalize`, {
     method: "POST",

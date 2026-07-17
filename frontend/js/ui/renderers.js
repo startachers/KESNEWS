@@ -1,6 +1,6 @@
 import { $, state, settings, els, isSearching } from "../state/store.js";
 import { escapeHtml, shortText } from "../utils/strings.js";
-import { formatDateTime, formatTime } from "../utils/dates.js";
+import { formatDateTime, formatTime, localDateKey } from "../utils/dates.js";
 import { renderSummary } from "../features/ai-analysis.js";
 import { renderTopIssues } from "../features/issues.js";
 import { renderArticles } from "../features/articles.js?v=20260716-15";
@@ -35,6 +35,7 @@ export function renderHeader() {
   els.autoSelectBtn.title = selectionFull ? "이미 브리핑 기사가 12건 이상 선정되어 있습니다." : "공사 관련성을 우선해 핵심 6건과 참고 6건을 추천합니다.";
   $("addArticleBtn").disabled = finalized;
   $("importBtn").disabled = finalized;
+  $("resetTodayBtn").disabled = finalized || isSearching || state.date !== localDateKey();
   els.finalizeBtn.hidden = finalized;
   els.reopenBtn.hidden = !finalized;
   els.finalReportBtn.hidden = !state.latestFinalVersion;

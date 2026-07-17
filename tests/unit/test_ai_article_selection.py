@@ -361,6 +361,67 @@ def test_ai_response_with_fewer_than_target_count_is_rejected():
         )
 
 
+def test_ai_response_with_ten_items_is_completed_from_remaining_candidates():
+    class FakeClient:
+        def __init__(self):
+            self.prompts = []
+
+        def generate(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            if len(self.prompts) == 1:
+                indexes = range(1, 11)
+            else:
+                indexes = range(11, 13)
+            return json.dumps({
+                "recommendations": [
+                    {
+                        "evidenceId": f"C{index:02d}",
+                        "rank": index if len(self.prompts) == 1 else index - 10,
+                        "articleFact": f"기사 사실 {index}",
+                        "kescoRelevance": f"공사 연관성 {index}",
+                        "selectionReason": f"선정 이유 {index}",
+                    }
+                    for index in indexes
+                ],
+                "limitations": [],
+            })
+
+    fake = FakeClient()
+    candidates = [
+        {
+            "id": f"C{index:02d}",
+            "title": f"전기안전 후보 {index}",
+            "kescoRelevanceLevel": 2,
+            "titleTopicAligned": True,
+            "topicGroups": [],
+            "issueIds": [],
+        }
+        for index in range(1, 61)
+    ]
+
+    output = recommend(
+        fake,
+        model="gemma-test",
+        report_date="2026-07-17",
+        target_count=12,
+        candidates=candidates,
+        evidence={candidate["id"]: candidate["id"] for candidate in candidates},
+        preferred_groups=["government", "economy", "ai"],
+    )
+
+    assert len(output.result["recommendations"]) == 12
+    assert [item["rank"] for item in output.result["recommendations"]] == list(range(1, 13))
+    assert [item["evidenceId"] for item in output.result["recommendations"]][-2:] == [
+        "C11",
+        "C12",
+    ]
+    assert output.attempts == 2
+    assert len(fake.prompts) == 2
+    assert "정확히 2건" in fake.prompts[1]
+    assert '"id": "C11"' in fake.prompts[1]
+    assert '"id": "C01"' not in fake.prompts[1]
+
+
 def test_general_economy_and_ai_articles_are_allowed_only_in_supplemental_ranks():
     class FakeClient:
         def generate(self, **_kwargs):

@@ -37,6 +37,10 @@ class TopIssueLimitExceeded(Exception):
     pass
 
 
+class DailyWorkResetBlocked(Exception):
+    pass
+
+
 def _top_issue_count(connection: sqlite3.Connection, briefing_id: str) -> int:
     row = connection.execute(
         """
@@ -64,6 +68,128 @@ def list_recent(connection: sqlite3.Connection, limit: int = 100) -> list[sqlite
     return connection.execute(
         "SELECT * FROM briefings ORDER BY report_date DESC LIMIT ?", (limit,)
     ).fetchall()
+
+
+def reset_daily_work(
+    connection: sqlite3.Connection, report_date: str, expected_revision: int
+) -> tuple[sqlite3.Row, dict[str, int]]:
+    """불변 최종본은 보존하고 해당 보고일의 현재 작업 데이터 연결을 모두 제거한다."""
+    briefing = get_by_date(connection, report_date)
+    if briefing is None:
+        raise BriefingNotFound()
+    if briefing["status"] == "final":
+        raise BriefingFinalized()
+    if briefing["revision"] != expected_revision:
+        raise RevisionConflict()
+    running_count = connection.execute(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM collection_runs WHERE report_date = ? AND status = 'running')
+          + (SELECT COUNT(*) FROM ai_runs WHERE briefing_id = ? AND status = 'running')
+          + (SELECT COUNT(*) FROM ai_selection_runs WHERE briefing_id = ? AND status = 'running')
+        """,
+        (report_date, briefing["id"], briefing["id"]),
+    ).fetchone()[0]
+    if running_count:
+        raise DailyWorkResetBlocked()
+
+    counts = {
+        "articles": connection.execute(
+            "SELECT COUNT(*) FROM briefing_articles WHERE briefing_id = ?",
+            (briefing["id"],),
+        ).fetchone()[0],
+        "issues": connection.execute(
+            """
+            SELECT COUNT(*) FROM issues
+            WHERE last_cluster_run_id IN (
+                SELECT id FROM cluster_runs WHERE report_date = ?
+            )
+            """,
+            (report_date,),
+        ).fetchone()[0],
+        "collectionRuns": connection.execute(
+            "SELECT COUNT(*) FROM collection_runs WHERE report_date = ?",
+            (report_date,),
+        ).fetchone()[0],
+        "aiRuns": connection.execute(
+            "SELECT COUNT(*) FROM ai_runs WHERE briefing_id = ?",
+            (briefing["id"],),
+        ).fetchone()[0],
+        "selectionRuns": connection.execute(
+            "SELECT COUNT(*) FROM ai_selection_runs WHERE briefing_id = ?",
+            (briefing["id"],),
+        ).fetchone()[0],
+    }
+
+    connection.execute(
+        "DELETE FROM briefing_report_drafts WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute(
+        "DELETE FROM ai_selection_runs WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute("DELETE FROM ai_runs WHERE briefing_id = ?", (briefing["id"],))
+    connection.execute(
+        "DELETE FROM issue_review_assessments WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute(
+        "DELETE FROM briefing_issues WHERE briefing_id = ?", (briefing["id"],)
+    )
+    # issue 원본과 membership은 여러 보고일의 검토 기록에서 재사용될 수 있다. 오늘 실행만
+    # 비활성화하고 briefing별 Top/메모/검토 연결은 위에서 제거한다. 기사 후보 연결이 제거되므로
+    # 오늘 화면에서는 이슈가 사라지고, 재수집 후 새 군집 실행이 다시 계산한다.
+    connection.execute(
+        "UPDATE cluster_runs SET status = 'reset', applied_at = NULL "
+        "WHERE report_date = ? AND status != 'running'",
+        (report_date,),
+    )
+    connection.execute(
+        "DELETE FROM briefing_articles WHERE briefing_id = ?", (briefing["id"],)
+    )
+    connection.execute(
+        """
+        DELETE FROM article_observations
+        WHERE collection_run_provider_id IN (
+            SELECT crp.id
+            FROM collection_run_providers crp
+            JOIN collection_runs cr ON cr.id = crp.collection_run_id
+            WHERE cr.report_date = ?
+        )
+        """,
+        (report_date,),
+    )
+    connection.execute(
+        """
+        DELETE FROM collection_run_providers
+        WHERE collection_run_id IN (
+            SELECT id FROM collection_runs WHERE report_date = ?
+        )
+        """,
+        (report_date,),
+    )
+    connection.execute("DELETE FROM collection_runs WHERE report_date = ?", (report_date,))
+    row = connection.execute(
+        """
+        UPDATE briefings
+        SET prepared_by = NULL,
+            status = 'draft',
+            situation_summary = NULL,
+            action_note = NULL,
+            summary_mode = NULL,
+            ai_model = NULL,
+            ai_prompt_version = NULL,
+            ai_generated_at = NULL,
+            ai_input_signature = NULL,
+            finalized_at = NULL,
+            revision = revision + 1,
+            updated_at = ?
+        WHERE id = ? AND revision = ?
+        RETURNING *
+        """,
+        (now_iso(), briefing["id"], expected_revision),
+    ).fetchone()
+    if row is None:
+        raise RevisionConflict()
+    return row, counts
 
 
 def create_or_update(
@@ -290,7 +416,7 @@ def apply_ai_recommendations(
     selection_limit: int = 12,
     top_issue_limit: int = MAX_TOP_ISSUES,
 ) -> tuple[sqlite3.Row, list[str], list[str]]:
-    """기존 수동 상태를 보존하고 추천 기사 및 빈 Top Issue 자리만 채운다."""
+    """추천 기사를 추가하고 기존 Top 태그를 추천 순위 상위 기사로 교체한다."""
     briefing = get_by_date(connection, report_date)
     if briefing is None:
         raise BriefingNotFound()
@@ -303,9 +429,18 @@ def apply_ai_recommendations(
         "SELECT COUNT(*) FROM briefing_articles WHERE briefing_id = ? AND selected = 1",
         (briefing["id"],),
     ).fetchone()[0]
+    updated_at = now_iso()
+    connection.execute(
+        "UPDATE briefing_articles SET top_issue = 0, updated_at = ? "
+        "WHERE briefing_id = ? AND top_issue = 1",
+        (updated_at, briefing["id"]),
+    )
+    connection.execute(
+        "UPDATE briefing_issues SET selected = 0, updated_at = ? "
+        "WHERE briefing_id = ? AND selected = 1",
+        (updated_at, briefing["id"]),
+    )
     applied: list[str] = []
-    top_issue_count = _top_issue_count(connection, briefing["id"])
-    top_issue_article_ids: list[str] = []
     for article_id in dict.fromkeys(article_ids):
         if selected_count >= selection_limit:
             break
@@ -334,17 +469,16 @@ def apply_ai_recommendations(
         applied.append(article_id)
         selected_count += 1
 
-        if top_issue_count < top_issue_limit:
-            connection.execute(
-                """
-                UPDATE briefing_articles
-                SET top_issue = 1, updated_at = ?
-                WHERE briefing_id = ? AND article_id = ? AND top_issue = 0
-                """,
-                (now_iso(), briefing["id"], article_id),
-            )
-            top_issue_article_ids.append(article_id)
-            top_issue_count += 1
+    top_issue_article_ids = applied[:top_issue_limit]
+    for article_id in top_issue_article_ids:
+        connection.execute(
+            """
+            UPDATE briefing_articles
+            SET top_issue = 1, updated_at = ?
+            WHERE briefing_id = ? AND article_id = ?
+            """,
+            (now_iso(), briefing["id"], article_id),
+        )
 
     return (
         bump_revision(connection, briefing["id"], expected_revision),

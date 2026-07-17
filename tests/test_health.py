@@ -27,10 +27,11 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260717-3" in response.text
+    assert "js/app.js?v=20260717-6" in response.text
+    assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
-    assert "css/app.css?v=20260717-14" in response.text
+    assert "css/app.css?v=20260717-15" in response.text
     assert 'id="autoSelectBtn" type="button" aria-busy="false"' in response.text
 
     app_script = client.get("/js/app.js")
@@ -39,6 +40,7 @@ def test_index_html_is_served_at_root():
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
+    assert '$("resetTodayBtn").addEventListener("click", resetTodayWork)' in app_script.text
 
     restart_guard = client.get("/js/restart-guard.js")
     assert restart_guard.status_code == 200
@@ -57,10 +59,21 @@ def test_index_html_is_served_at_root():
 
     auto_selection_script = client.get("/js/features/auto-selection.js")
     assert 'setAttribute("aria-busy", String(value))' in auto_selection_script.text
+    assert "<b>기사 사실</b>" in auto_selection_script.text
+    assert "<b>공사 연관성</b>" not in auto_selection_script.text
+    assert "<b>선정 이유</b>" not in auto_selection_script.text
+
+    data_io_script = client.get("/js/features/data-io.js")
+    assert "오늘 수집한 기사, 선정·메모·Top Issues" in data_io_script.text
+    assert "await api.resetTodayWork(state.date, state.revision)" in data_io_script.text
+
+    api_client = client.get("/js/api/client.js")
+    assert 'confirmation: "RESET_TODAY"' in api_client.text
 
     stylesheet = client.get("/css/app.css")
     assert "button:disabled { cursor: not-allowed;" in stylesheet.text
     assert 'button[aria-busy="true"] { cursor: progress;' in stylesheet.text
+    assert ".side-card #resetTodayBtn" in stylesheet.text
 
 
 def test_frontend_assets_disable_browser_cache():
