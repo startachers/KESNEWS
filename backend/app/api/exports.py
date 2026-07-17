@@ -31,8 +31,9 @@ async def export_markdown(report_date: str) -> Any:
         context = markdown_export.build_exchange_context(connection, report_date)
         if not context.articles:
             return error_response("REPORT_DRAFT_INVALID", "Markdown으로 내보낼 선정 기사가 없습니다.")
+        weather_context = markdown_export.weather_context_for_briefing(connection, briefing["id"])
         content = markdown_export.build_markdown(
-            report_date, briefing["prepared_by"] or "", context
+            report_date, briefing["prepared_by"] or "", context, weather_context
         )
     finally:
         connection.close()
