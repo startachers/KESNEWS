@@ -33,6 +33,11 @@ def _merge_partial_regions(
         for item in regions
         if item.get("maxHourlyPrecipitation")
     ]
+    daily_precipitation = [
+        item["dailyPrecipitation"]
+        for item in regions
+        if item.get("dailyPrecipitation")
+    ]
     winds = [
         item["maxWindSpeed"]
         for item in regions
@@ -53,6 +58,11 @@ def _merge_partial_regions(
         key=lambda item: item["max"] if item.get("max") is not None else item.get("min", 0) + 10000,
         default=None,
     )
+    max_daily_precipitation = max(
+        daily_precipitation,
+        key=lambda item: item["max"] if item.get("max") is not None else item.get("min", 0) + 10000,
+        default=None,
+    )
     return {
         **current,
         "weatherText": weather_text,
@@ -63,6 +73,7 @@ def _merge_partial_regions(
         },
         "maxPrecipitationProbability": max(pops) if pops else None,
         "maxHourlyPrecipitation": max_hourly_precipitation,
+        "dailyPrecipitation": max_daily_precipitation,
         "maxWindSpeed": max(winds) if winds else None,
         "regions": regions,
     }

@@ -217,22 +217,14 @@ def _critical_alerts(snapshot: dict[str, Any]) -> str:
     )
 
 
-WEATHER_LEVEL_LABELS = {
-    "critical": "긴급",
-    "watch": "주의",
-    "info": "참고",
-    "normal": "정상",
-    "unknown": "확인 불가",
-}
-
 WEATHER_REGION_LABELS = {
     "national": "전국",
     "capital": "수도권",
-    "gangwon": "강원권",
-    "chungcheong": "충청권",
-    "honam": "호남권",
-    "yeongnam": "영남권",
-    "jeju": "제주권",
+    "gangwon": "강원",
+    "chungcheong": "충청",
+    "honam": "호남",
+    "yeongnam": "영남",
+    "jeju": "제주",
 }
 
 
@@ -246,8 +238,8 @@ def _weather_day_date(day: dict[str, Any]) -> date | None:
 def _weather_period_label(days: list[dict[str, Any]]) -> str:
     dated = [parsed for day in days if (parsed := _weather_day_date(day)) is not None]
     if not dated:
-        return "향후 예보"
-    labels = [f"{WEEKDAY_LABELS[item.weekday()]}요일" for item in dated]
+        return "날짜 미상"
+    labels = [f"{item.month}. {item.day}" for item in dated]
     if len(dated) == 1:
         return labels[0]
     consecutive = all(
@@ -255,7 +247,10 @@ def _weather_period_label(days: list[dict[str, Any]]) -> str:
         for previous, current in zip(dated, dated[1:], strict=False)
     )
     if consecutive:
-        return f"{labels[0]}~{labels[-1]}"
+        end = str(dated[-1].day) if dated[0].month == dated[-1].month else labels[-1]
+        return f"{labels[0]}~{end}"
+    if all(item.month == dated[0].month for item in dated):
+        return f"{dated[0].month}. " + "·".join(str(item.day) for item in dated)
     return "·".join(labels)
 
 
@@ -284,101 +279,148 @@ def _weather_periods(
     return periods
 
 
-def _weather_signal_summary(
-    signals: list[dict[str, Any]], hazards: set[str],
-) -> tuple[str, str, str, str]:
-    matched = [signal for signal in signals if signal.get("hazard") in hazards]
-    region_ids = list(
-        dict.fromkeys(
-            region_id
-            for signal in matched
-            for region_id in (signal.get("regionIds") or [])
+def _precipitation_peak(amount: Any) -> float | None:
+    if not isinstance(amount, dict):
+        return None
+    value = amount.get("max")
+    if value is None:
+        value = amount.get("min")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _millimeter_label(value: float) -> str:
+    return str(int(value)) if value.is_integer() else f"{value:.1f}"
+
+
+def _weather_region_summary(
+    days: list[dict[str, Any]], signals: list[dict[str, Any]], hazard: str,
+) -> str:
+    scores: dict[str, float] = {}
+    for day in days:
+        for region in day.get("regions") or []:
+            region_id = str(region.get("regionId") or "")
+            if hazard == "heavy_rain":
+                value = _precipitation_peak(region.get("maxHourlyPrecipitation"))
+                threshold = 10
+            else:
+                value = (region.get("temperature") or {}).get("max")
+                threshold = 33
+            if region_id and value is not None and value >= threshold:
+                scores[region_id] = max(scores.get(region_id, 0), float(value))
+    ordered = [item[0] for item in sorted(scores.items(), key=lambda item: -item[1])]
+    if not ordered:
+        ordered = list(
+            dict.fromkeys(
+                str(region_id)
+                for signal in signals
+                if signal.get("hazard") == hazard
+                for region_id in (signal.get("regionIds") or [])
+            )
         )
-    )
-    regions = "·".join(
-        WEATHER_REGION_LABELS.get(region_id, region_id) for region_id in region_ids
-    )
-    risks = next(
-        (
+    labels = [WEATHER_REGION_LABELS.get(region_id, region_id) for region_id in ordered]
+    return "·".join(labels[:3]) + (" 등" if len(labels) > 3 else "")
+
+
+def _weather_concern(signals: list[dict[str, Any]], hazard: str) -> str:
+    hazards = {"폭우": {"heavy_rain", "typhoon"}, "폭염": {"heat"}}
+    concerns = list(
+        dict.fromkeys(
             str(risk)
-            for signal in matched
+            for signal in signals
+            if signal.get("hazard") in hazards.get(hazard, set())
             for risk in (signal.get("electricalRisks") or [])
             if risk
-        ),
-        "",
+        )
     )
-    checks = next(
-        (
-            str(check)
-            for signal in matched
-            for check in (signal.get("recommendedChecks") or [])
-            if check
-        ),
-        "",
-    )
-    level_order = {"critical": 4, "watch": 3, "info": 2, "normal": 1, "unknown": 0}
-    level = max(
-        (str(signal.get("level") or "normal") for signal in matched),
-        key=lambda value: level_order.get(value, 0),
-        default="normal",
-    )
-    return regions, risks, checks, level
+    if concerns:
+        return "·".join(concerns[:2])
+    return {
+        "폭우": "저지대 전기설비 침수·누전·감전",
+        "폭염": "냉방설비 배선·접속부 과열",
+    }.get(hazard, "예보 변동 확인 필요")
+
+
+def _weather_signal_score(signals: list[dict[str, Any]], hazards: set[str]) -> int:
+    levels = {
+        str(signal.get("level") or "normal")
+        for signal in signals
+        if signal.get("hazard") in hazards
+    }
+    return 20 if "critical" in levels else 10 if "watch" in levels else 0
 
 
 def _render_weather_forecasts(context: dict[str, Any]) -> str:
     days = list(context.get("days") or [])[:7]
     signals = list(context.get("riskSignals") or [])
-    forecasts: list[tuple[str, str, str]] = []
-
-    rain_signals = _weather_signal_summary(signals, {"heavy_rain", "typhoon"})
+    forecasts: list[tuple[int, str, str, str]] = []
     rain_periods = _weather_periods(
         days,
-        lambda day: (
-            any(token in str(day.get("weatherText") or "") for token in ("비", "소나기", "호우", "태풍"))
-            or (day.get("maxPrecipitationProbability") or 0) >= 60
-        ),
+        lambda day: _precipitation_peak(day.get("maxHourlyPrecipitation")) is not None,
     )
     for period in rain_periods[:2]:
-        maximum = max(
-            (day.get("maxPrecipitationProbability") or 0 for day in period),
+        hourly = max(
+            (_precipitation_peak(day.get("maxHourlyPrecipitation")) or 0 for day in period),
             default=0,
         )
-        regions, risks, checks, level = rain_signals
-        sentence = f"비 예보가 이어지며 최고 강수확률은 {maximum}%입니다."
+        daily = max(
+            (_precipitation_peak(day.get("dailyPrecipitation")) or 0 for day in period),
+            default=0,
+        )
+        hazard = "폭우" if hourly >= 30 or daily >= 80 else "비"
+        details = f"최대 시간당 {_millimeter_label(hourly)}mm"
+        if daily:
+            details += f" · 일 최대 {_millimeter_label(daily)}mm"
+        regions = _weather_region_summary(period, signals, "heavy_rain")
         if regions:
-            sentence += f" 특히 {regions}은 {risks or '침수·누전 위험'}에 주의해야 합니다."
-        if checks:
-            sentence += f" {checks} 등 사전 대비가 필요합니다."
-        forecasts.append((_weather_period_label(period), sentence, level))
+            details += f" / {regions}"
+        score = (
+            100 if hourly >= 30 or daily >= 80
+            else 70 if hourly >= 10 or daily >= 30
+            else 30
+        ) + _weather_signal_score(signals, {"heavy_rain", "typhoon"})
+        forecasts.append(
+            (
+                score,
+                hazard,
+                f"{_weather_period_label(period)}　{details}",
+                _weather_concern(signals, hazard),
+            )
+        )
 
     heat_days = [
         day
         for day in days
         if ((day.get("temperature") or {}).get("max") or -999) >= 33
     ]
-    if heat_days and len(forecasts) < 3:
+    if heat_days:
         maximum = max((day.get("temperature") or {}).get("max") for day in heat_days)
-        regions, risks, checks, level = _weather_signal_summary(signals, {"heat"})
-        sentence = f"낮 최고기온이 {maximum}℃까지 오를 전망입니다."
+        regions = _weather_region_summary(heat_days, signals, "heat")
+        details = f"최고 {maximum}℃"
         if regions:
-            sentence += f" {regions}은 {risks or '냉방설비 과열'}에 주의해야 합니다."
-        if checks:
-            sentence += f" {checks} 등 예방점검이 필요합니다."
-        forecasts.append((_weather_period_label(heat_days), sentence, level))
-
-    if not forecasts:
+            details += f" / {regions}"
+        score = (90 if maximum >= 35 else 60) + _weather_signal_score(signals, {"heat"})
         forecasts.append(
             (
-                _weather_period_label(days),
-                "현재 예보 기준 별도 위험기상 신호는 없으며, 예보 변동 여부를 지속 확인합니다.",
-                "normal",
+                score,
+                "폭염",
+                f"{_weather_period_label(heat_days)}　{details}",
+                _weather_concern(signals, "폭염"),
             )
         )
 
-    return "".join(
-        f'<article class="weather-forecast weather-{_text(level)}">'
-        f'<strong>{_text(period)}</strong><p>{_text(sentence)}</p></article>'
-        for period, sentence, level in forecasts[:3]
+    if not forecasts:
+        forecasts.append(
+            (0, "예보", f"{_weather_period_label(days)}　특이 기상 없음", "예보 변동 확인 필요")
+        )
+
+    _, hazard, summary, concern = max(forecasts, key=lambda item: item[0])
+    return (
+        f'<article class="weather-forecast weather-{_text(hazard)}">'
+        f'<strong>({_text(hazard)})</strong><p><b>{_text(summary)}</b>'
+        f'<span>우려: {_text(concern)}</span></p></article>'
     )
 
 
@@ -398,14 +440,10 @@ def _render_weather(snapshot: dict[str, Any]) -> str:
         if source_warnings
         else ""
     )
-    level = context.get("overallLevel") or "unknown"
     return (
-        '<section class="section weather-section"><h2>'
+        '<section class="section weather-section"><div class="weather-heading"><h2>'
         '기상 기반 선제대응</h2>'
-        f'<div class="weather-overview weather-{_text(level)}"><div><small>전국 위험도</small>'
-        f'<strong>{_text(WEATHER_LEVEL_LABELS.get(level, level))}</strong></div>'
-        f'<p>기상청 발표 {_text(_datetime_label(context.get("issuedAt"), "시각 미상"))} · '
-        f'담당자 검토 {_text(_datetime_label(attachment.get("reviewedAt"), "미검토"))}</p></div>'
+        f'<small>기상청 {_text(_datetime_label(context.get("issuedAt"), "시각 미상"))} 발표</small></div>'
         f'{warning}<div class="weather-forecasts">{_render_weather_forecasts(context)}</div>'
         '</section>'
     )
@@ -614,10 +652,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .article .desc{display:-webkit-box;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:var(--copy-size);line-height:1.35;white-space:normal;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}
     .empty{color:#7c8991}
     .warning{padding:10px 14px;border-left:3px solid #c97a16;background:#fff4df;color:#72501f;font-size:12.5px}
-    .weather-section{margin-top:20px}.weather-section h2{margin-bottom:6px}
-    .weather-overview{display:flex;justify-content:space-between;align-items:center;min-height:34px;padding:5px 10px;border-left:4px solid var(--teal);background:#eff8f6}.weather-overview>div{display:flex;align-items:baseline;gap:7px}.weather-overview small{color:var(--muted);font-size:10px}.weather-overview strong{font-size:14px;color:var(--teal);line-height:1}.weather-overview p{margin:0;color:var(--muted);font-size:10px}.weather-overview.weather-critical{border-color:var(--red);background:#fdf0f0}.weather-overview.weather-critical strong{color:var(--red)}.weather-overview.weather-watch{border-color:var(--amber);background:#fff8e9}.weather-overview.weather-watch strong{color:var(--amber)}.weather-overview.weather-unknown{border-color:#66757f;background:#f1f3f4}.weather-overview.weather-unknown strong{color:#4c5961}
+    .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-section .warning{margin:4px 0 0;padding:4px 8px;font-size:10px}
-    .weather-forecasts{display:grid;gap:5px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;align-items:start;padding:7px 10px;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:6px;background:#fff}.weather-forecast.weather-critical{border-left-color:var(--red);background:#fdf7f7}.weather-forecast.weather-watch{border-left-color:var(--amber);background:#fffbf4}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.65}.weather-forecast>p{margin:0;font-size:var(--copy-size);line-height:1.65}
+    .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
     .footer{margin-top:16px;padding-top:9px;border-top:1px solid var(--line);color:#77858e;font-size:9.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     @media(max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%!important;transform:none!important}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.article-title-row{display:block}.article .meta{margin-top:3px}.decision-grid{grid-template-columns:1fr}.weather-forecast{grid-template-columns:1fr;gap:2px}}
     @page{size:A4;margin:0}

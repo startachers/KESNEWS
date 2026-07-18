@@ -42,7 +42,9 @@ def test_short_and_mid_forecasts_join_into_seven_days():
         {"regionId": "capital", "fcstDate": "20260717", "category": "TMX", "fcstValue": "31"},
         {"regionId": "capital", "fcstDate": "20260717", "category": "POP", "fcstValue": "70"},
         {"regionId": "capital", "fcstDate": "20260717", "category": "PCP", "fcstValue": "30.0~50.0mm"},
+        {"regionId": "capital", "fcstDate": "20260717", "category": "PCP", "fcstValue": "20mm"},
         {"regionId": "capital", "fcstDate": "20260717", "category": "PTY", "fcstValue": "1"},
+        {"regionId": "honam", "fcstDate": "20260717", "category": "PCP", "fcstValue": "5mm"},
     ]
     mid = [
         {"regionId": "capital", "kind": "land", "wf4Am": "흐리고 비", "rnSt4Am": 60, "wf4Pm": "흐림", "rnSt4Pm": 30},
@@ -50,7 +52,13 @@ def test_short_and_mid_forecasts_join_into_seven_days():
     ]
 
     days = build_daily_summaries(
-        "2026-07-17", short, mid, [{"id": "capital", "label": "수도권"}]
+        "2026-07-17",
+        short,
+        mid,
+        [
+            {"id": "capital", "label": "수도권"},
+            {"id": "honam", "label": "호남권"},
+        ],
     )
 
     assert len(days) == 7
@@ -62,6 +70,13 @@ def test_short_and_mid_forecasts_join_into_seven_days():
         "max": 50.0,
         "unit": "mm/h",
     }
+    assert days[0]["dailyPrecipitation"] == {
+        "text": "50~70mm",
+        "min": 50.0,
+        "max": 70.0,
+        "unit": "mm/day",
+    }
+    assert days[0]["regions"][1]["dailyPrecipitation"]["max"] == 5.0
     assert days[4]["date"] == "2026-07-21"
     assert "비" in days[4]["weatherText"]
     assert days[4]["maxPrecipitationProbability"] == 60

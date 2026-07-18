@@ -310,6 +310,36 @@ def _precipitation_amount(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _amount_text(lower: float, upper: float | None) -> str:
+    def compact(value: float) -> str:
+        return str(int(value)) if value.is_integer() else f"{value:.1f}"
+
+    if upper is None:
+        return f"{compact(lower)}mm이상"
+    if lower == upper:
+        return f"{compact(upper)}mm"
+    return f"{compact(lower)}~{compact(upper)}mm"
+
+
+def _daily_precipitation_amount(
+    precipitation: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not precipitation:
+        return None
+    lower = round(sum(float(item.get("min") or 0) for item in precipitation), 1)
+    upper = (
+        None
+        if any(item.get("max") is None for item in precipitation)
+        else round(sum(float(item["max"]) for item in precipitation), 1)
+    )
+    return {
+        "text": _amount_text(lower, upper),
+        "min": lower,
+        "max": upper,
+        "unit": "mm/day",
+    }
+
+
 def _weather_text(pty: int, sky: int) -> str:
     if pty in {3, 7}:
         return "눈"
@@ -395,6 +425,15 @@ def build_daily_summaries(
             key=lambda item: item["max"] if item["max"] is not None else item["min"] + 10000,
             default=None,
         )
+        daily_precipitation = max(
+            (
+                total
+                for bucket in buckets
+                if (total := _daily_precipitation_amount(bucket["precipitation"]))
+            ),
+            key=lambda item: item["max"] if item["max"] is not None else item["min"] + 10000,
+            default=None,
+        )
         return {
             "weatherText": weather_text if buckets else "정보 없음",
             "temperature": {
@@ -404,6 +443,7 @@ def build_daily_summaries(
             },
             "maxPrecipitationProbability": round(max(pops)) if pops else None,
             "maxHourlyPrecipitation": max_hourly_precipitation,
+            "dailyPrecipitation": daily_precipitation,
             "maxWindSpeed": round(max(winds), 1) if winds else None,
             "riskLevel": "normal" if buckets else "unknown",
             "source": buckets[0]["source"] if buckets else None,

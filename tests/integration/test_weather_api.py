@@ -24,8 +24,10 @@ def _fake_weather_result(report_date: str):
             {
                 "date": report_date,
                 "weatherText": "비",
-                "temperature": {"min": 23, "max": 30, "isNationalRange": True},
+                "temperature": {"min": 23, "max": 35, "isNationalRange": True},
                 "maxPrecipitationProbability": 80,
+                "maxHourlyPrecipitation": {"text": "30~50mm", "min": 30, "max": 50, "unit": "mm/h"},
+                "dailyPrecipitation": {"text": "120~200mm", "min": 120, "max": 200, "unit": "mm/day"},
                 "maxWindSpeed": 6.2,
                 "riskLevel": "watch",
                 "affectedRegionCount": 2,
@@ -134,9 +136,14 @@ def test_weather_refresh_review_and_final_snapshot(monkeypatch):
     preview = client.get(f"/preview/{report_date}")
     assert preview.status_code == 200
     assert "기상 기반 선제대응" in preview.text
-    assert "누전·감전 위험" in preview.text
-    assert "수도권·충청권" in preview.text
-    assert "비 예보가 이어지며 최고 강수확률은 80%입니다." in preview.text
+    assert "(폭우)" in preview.text
+    assert "(폭염)" not in preview.text
+    assert "최대 시간당 50mm · 일 최대 200mm / 수도권·충청" in preview.text
+    assert "우려: 누전·감전 위험" in preview.text
+    assert preview.text.count('<article class="weather-forecast') == 1
+    assert "강수확률" not in preview.text
+    assert "전국 위험도" not in preview.text
+    assert "긴급" not in preview.text
     assert "영향 권역" not in preview.text
     assert "우선 확인" not in preview.text
     assert 'class="weather-day' not in preview.text
