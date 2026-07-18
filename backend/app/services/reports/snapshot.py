@@ -132,7 +132,7 @@ def build_snapshot(
             evidence_id: {
                 "articleId": article_id,
                 "article": articles_by_id.get(article_id)
-                or {"id": article_id, "title": "근거 기사", "source": ""},
+                or {"id": article_id, "title": "관련 기사", "source": ""},
             }
             for evidence_id, article_id in report_draft["evidence"].items()
         }

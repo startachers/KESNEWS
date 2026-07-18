@@ -135,6 +135,13 @@ def test_weather_refresh_review_and_final_snapshot(monkeypatch):
     assert preview.status_code == 200
     assert "기상 기반 선제대응" in preview.text
     assert "누전·감전 위험" in preview.text
+    assert "수도권·충청권" in preview.text
+    assert "비 예보가 이어지며 최고 강수확률은 80%입니다." in preview.text
+    assert "영향 권역" not in preview.text
+    assert "우선 확인" not in preview.text
+    assert 'class="weather-day' not in preview.text
+    assert 'class="weather-forecast' in preview.text
+    assert preview.text.index("참고 동향") < preview.text.index("기상 기반 선제대응")
 
     finalized = client.post(
         f"/api/briefings/{report_date}/finalize",
