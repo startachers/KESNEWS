@@ -135,7 +135,7 @@ def test_weather_refresh_review_and_final_snapshot(monkeypatch):
 
     preview = client.get(f"/preview/{report_date}")
     assert preview.status_code == 200
-    assert "기상 기반 선제대응" in preview.text
+    assert "기상 특이사항" in preview.text
     assert "(폭우)" in preview.text
     assert "(폭염)" not in preview.text
     assert "최대 시간당 50mm · 일 최대 200mm / 수도권·충청" in preview.text
@@ -148,7 +148,7 @@ def test_weather_refresh_review_and_final_snapshot(monkeypatch):
     assert "우선 확인" not in preview.text
     assert 'class="weather-day' not in preview.text
     assert 'class="weather-forecast' in preview.text
-    assert preview.text.index("참고 동향") < preview.text.index("기상 기반 선제대응")
+    assert preview.text.index("참고 동향") < preview.text.index("기상 특이사항")
 
     finalized = client.post(
         f"/api/briefings/{report_date}/finalize",

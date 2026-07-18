@@ -442,7 +442,7 @@ def _render_weather(snapshot: dict[str, Any]) -> str:
     )
     return (
         '<section class="section weather-section"><div class="weather-heading"><h2>'
-        '기상 기반 선제대응</h2>'
+        '기상 특이사항</h2>'
         f'<small>기상청 {_text(_datetime_label(context.get("issuedAt"), "시각 미상"))} 발표</small></div>'
         f'{warning}<div class="weather-forecasts">{_render_weather_forecasts(context)}</div>'
         '</section>'
@@ -573,22 +573,17 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     analysis = _analysis_for_display(
         report_draft.get("content") or ((ai_run.get("response") or {}).get("analysis") or {})
     )
-    stale_notice = (
-        '<p class="warning">주의: AI 분석 이후 선정 기사·메모·이슈 연결이 변경된 상태에서 확정됐습니다.</p>'
-        if (report_draft.get("stale") if report_draft else ai_run.get("stale"))
-        else ""
-    )
     weather_html = _render_weather(snapshot)
     report_articles = {**snapshot, "articles": _report_articles(snapshot)}
     styles = """
-    :root{color-scheme:light;--navy:#12243a;--navy2:#173b51;--teal:#087f76;--mint:#dff3ef;--red:#b02a2a;--amber:#b06a12;--line:#d7dfe3;--soft:#f4f7f7;--ink:#22303a;--muted:#66757f;--copy-size:13px}
-    *{box-sizing:border-box}
+    :root{color-scheme:light;--navy:#12243a;--navy2:#173b51;--teal:#087f76;--mint:#dff3ef;--red:#b02a2a;--amber:#b06a12;--line:#d7dfe3;--soft:#f4f7f7;--ink:#22303a;--muted:#66757f;--copy-size:13px;--report-scale:.93}
+    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{margin:0;background:#e8edef;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.65;font-size:14px}
     .toolbar{position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;gap:8px;padding:10px 20px;background:#10253cee}
     .toolbar a,.toolbar button{border:1px solid #ffffff55;border-radius:8px;padding:7px 14px;background:#fff;color:var(--navy);font-weight:700;font-size:13px;text-decoration:none;cursor:pointer}
     main{width:min(210mm,calc(100% - 28px));margin:24px auto 48px;display:grid;gap:24px}
-    .report-page{position:relative;width:210mm;height:297mm;overflow:hidden;padding:12mm;background:#fff;box-shadow:0 14px 45px #10253c1c}
-    .page-inner{width:100%;transform-origin:top left}
+    .report-page{position:relative;width:210mm;height:297mm;overflow:hidden;padding:12mm 7mm;background:#fff;box-shadow:0 14px 45px #10253c1c}
+    .page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}
     .masthead{position:relative;overflow:hidden;padding:22px 28px 20px;background:linear-gradient(125deg,#0d2138 0%,#173e52 72%,#0b756e 150%);color:#fff}
     .masthead:after{content:"";position:absolute;right:-90px;bottom:-145px;width:340px;height:340px;border:1px solid #ffffff1f;border-radius:50%;box-shadow:0 0 0 55px #ffffff0a,0 0 0 110px #ffffff08}
     .doc-meta{display:flex;justify-content:space-between;padding-bottom:9px;margin-bottom:11px;border-bottom:1px solid #ffffff2e;font-size:11px;letter-spacing:.04em;color:#c7d5e0;font-weight:600}
@@ -643,22 +638,22 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .badge.tone-negative{background:#f3e8f5;color:#7b3f8a}.badge.tone-positive{background:#e3f3f0;color:#086b63}
     .badge.star{background:#fff3d3;color:#8a6410}
     .appendix-head{padding:0 0 12px;border-bottom:2px solid var(--navy)}.appendix-head .eyebrow{color:var(--teal)}.appendix-head h2{margin:4px 0 2px;color:var(--navy);font-size:24px}.appendix-head p{margin:0;color:var(--muted);font-size:12px}
-    .articles{display:grid;gap:4px;margin-top:10px;min-width:0}
-    .article{display:block;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:7px;break-inside:avoid}
+    .articles{display:grid;gap:3px;margin-top:10px;min-width:0}
+    .article{display:block;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:7px;break-inside:avoid}
     .article.critical{border-color:#e4b6b6;border-left:4px solid var(--red);background:#fdf9f9}
-    .article-title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;min-width:0}.article h3{min-width:0;margin:0;font-size:var(--copy-size);line-height:1.35;white-space:normal;overflow-wrap:anywhere}.article h3 a{color:var(--navy)}
-    .article .meta{margin:0;color:#74828b;font-size:10px;white-space:nowrap}
+    .article-main{min-width:0}.article-title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}.article h3{min-width:0;margin:0;overflow:hidden;font-size:16px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}.article h3 a{color:var(--navy)}
+    .article .meta{margin:0;color:#74828b;font-size:10.5px;white-space:nowrap}
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
-    .article .desc{display:-webkit-box;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:var(--copy-size);line-height:1.35;white-space:normal;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
     .empty{color:#7c8991}
     .warning{padding:10px 14px;border-left:3px solid #c97a16;background:#fff4df;color:#72501f;font-size:12.5px}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-section .warning{margin:4px 0 0;padding:4px 8px;font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
     .footer{margin-top:16px;padding-top:9px;border-top:1px solid var(--line);color:#77858e;font-size:9.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    @media(max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%!important;transform:none!important}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.article-title-row{display:block}.article .meta{margin-top:3px}.decision-grid{grid-template-columns:1fr}.weather-forecast{grid-template-columns:1fr;gap:2px}}
+    @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.decision-grid{grid-template-columns:1fr}.weather-forecast{grid-template-columns:1fr;gap:2px}}
     @page{size:A4;margin:0}
-    @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.page-inner{zoom:.68;transform:none!important}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article h3 a,.issue-rep a{color:var(--navy)}}
+    @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article h3 a,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
     <div class="toolbar"><a href="/">편집 화면</a><button type="button" onclick="window.print()">인쇄·PDF</button></div>
@@ -670,42 +665,13 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <div class="date"><strong>{_text(date_label)}</strong><small>{('작성 ' + _text(briefing.get('preparedBy'))) if briefing.get('preparedBy') else '작성자 미지정'}</small></div></div>
     </header>
     <div class="body">
-    {stale_notice}
     <section class="section"><h2>오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'))}</section>
     <section class="section"><h2>경영 시사점</h2>{_render_trend_analysis(analysis)}{_render_decisions_actions(analysis)}</section>
     <section class="section"><h2>참고 동향</h2>{_render_management_reference(analysis)}</section>
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">
-    <header class="appendix-head" id="appendix-articles"><p class="eyebrow">RELATED NEWS</p><h2>관련 기사</h2><p>제목과 핵심 요약을 한 줄씩 정리했습니다. 제목을 누르면 원문으로 이동합니다.</p></header>
+    <header class="appendix-head" id="appendix-articles"><p class="eyebrow">RELATED NEWS</p><h2>관련 기사</h2><p>제목과 핵심 요약을 각각 한 줄로 정리했습니다. 제목을 누르면 원문으로 이동합니다.</p></header>
     <div class="articles">{_article_cards(report_articles)}</div>
     <footer class="footer"><span>최종본은 확정 당시 기사·평가·메모·AI 분석을 보존합니다.</span><span>확정시각 {_text(_datetime_label(snapshot.get('finalizedAt'), '미확정', with_year=True))}</span></footer>
-    </div></section></main>
-    <script>
-    (() => {{
-      const fitAll = () => {{
-        const pages = Array.from(document.querySelectorAll('[data-fit-page]'));
-        let sharedScale = 1;
-        pages.forEach((page) => {{
-          const inner = page.querySelector('.page-inner');
-          inner.style.width = '100%';
-          inner.style.transform = 'none';
-          const style = getComputedStyle(page);
-          const available = page.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-          sharedScale = Math.min(sharedScale, available / inner.scrollHeight);
-        }});
-        sharedScale = Math.max(0.55, Math.min(1, sharedScale * 0.995));
-        pages.forEach((page) => {{
-          const inner = page.querySelector('.page-inner');
-          const style = getComputedStyle(page);
-          const available = page.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-          inner.style.transformOrigin = 'top center';
-          inner.style.transform = sharedScale < 1 ? `scale(${{sharedScale}})` : 'none';
-          page.dataset.fitScale = sharedScale.toFixed(3);
-          page.dataset.fitOverflow = String(inner.scrollHeight * sharedScale > available + 1);
-        }});
-      }};
-      requestAnimationFrame(fitAll);
-      window.addEventListener('beforeprint', fitAll);
-    }})();
-    </script></body></html>"""
+    </div></section></main></body></html>"""

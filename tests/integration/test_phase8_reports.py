@@ -90,9 +90,23 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     preview = client.get(f"/preview/{report_date}")
     assert preview.status_code == 200
     assert "작업본 미리보기" in preview.text
+    assert "AI 분석 이후 선정 기사·메모·이슈 연결이 변경된 상태" not in preview.text
     assert "textarea" not in preview.text
     assert preview.text.count('<section class="report-page') == 2
     assert preview.text.count(" data-fit-page>") == 2
+    assert "padding:12mm 7mm" in preview.text
+    assert "--report-scale:.93" in preview.text
+    assert ".page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}" in preview.text
+    assert "-webkit-print-color-adjust:exact;print-color-adjust:exact" in preview.text
+    assert "@media screen and (max-width:760px)" in preview.text
+    assert "const fitAll" not in preview.text
+    assert "zoom:.68" not in preview.text
+    assert "grid-template-columns:minmax(0,1fr) auto" in preview.text
+    assert '<div class="article-main"><div class="article-title-row"><h3>' in preview.text
+    assert '</p></div><p class="desc">' in preview.text
+    assert ".article h3{min-width:0;margin:0;overflow:hidden;font-size:16px" in preview.text
+    assert ".article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px" in preview.text
+    assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." in preview.text
     assert '<div class="kpis">' not in preview.text
     assert '<span class="number">' not in preview.text
 
