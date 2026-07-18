@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from backend.app.api.analysis import ANALYSIS_TIMEOUT_SECONDS, _context_length
+from backend.app.api.analysis import _context_length
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import ai_selection_repository as selection_repo
 from backend.app.repositories import article_repository as articles_repo
@@ -30,6 +30,7 @@ from backend.app.services.ai.runtime import AnalysisCancelled, CancellationToken
 from backend.app.services.classification.origin import assess_kesco_origin
 
 router = APIRouter()
+SELECTION_TIMEOUT_SECONDS = 300
 
 
 class RecommendRequest(BaseModel):
@@ -180,7 +181,7 @@ async def create_selection_recommendations(
             preferred_groups=preferred_groups,
             cancel_token=cancel_token,
         ))
-        deadline = time.monotonic() + ANALYSIS_TIMEOUT_SECONDS
+        deadline = time.monotonic() + SELECTION_TIMEOUT_SECONDS
         while not worker.done():
             await asyncio.wait({worker}, timeout=0.25)
             if time.monotonic() >= deadline:

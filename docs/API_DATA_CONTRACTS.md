@@ -651,7 +651,8 @@ floor·cap은 4.2절을 따른다.
 - `POST /api/briefings/{date}/analyze`는 앱 전체에서 동시에 1건만 실행한다.
 - 실행 중 새 분석 요청은 `AI_ALREADY_RUNNING`으로 거부한다.
 - `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
-- 브라우저 연결이 끊기거나 총 실행시간 5분을 넘으면 분석을 중단한다.
+- 브라우저 연결이 끊기거나 경영메시지 총 실행시간 10분을 넘으면 분석을 중단한다.
+- 기사 추천 총 실행시간은 기존 5분 제한을 유지한다.
 - 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
 - 경영메시지와 기사 추천의 기본 선택 모델은 `gemma4:31b`다. 설치 모델 목록에 31B가 있으면
   `/api/health.defaultModel`도 31B를 우선 반환한다.

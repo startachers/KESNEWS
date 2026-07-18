@@ -5,10 +5,17 @@ import time
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.api.analysis import DEFAULT_ANALYSIS_TIMEOUT_SECONDS
+from backend.app.api.article_selection import SELECTION_TIMEOUT_SECONDS
 from backend.app.services.ai.ollama_client import OllamaError
 from backend.app.services.extraction.article_body import BodyFetchResult
 
 client = TestClient(app)
+
+
+def test_management_analysis_timeout_is_ten_minutes_and_selection_stays_five():
+    assert DEFAULT_ANALYSIS_TIMEOUT_SECONDS == 600
+    assert SELECTION_TIMEOUT_SECONDS == 300
 
 
 def valid_analysis() -> dict:

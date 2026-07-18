@@ -98,6 +98,10 @@ def test_index_html_is_served_at_root():
 
     api_client = client.get("/js/api/client.js")
     assert 'confirmation: "RESET_TODAY"' in api_client.text
+    assert "const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 630000;" in api_client.text
+    analyze_request = api_client.text.split("export function analyzeBriefing", 1)[1]
+    analyze_request = analyze_request.split("export function cancelBriefingAnalysis", 1)[0]
+    assert "}, MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS);" in analyze_request
 
     stylesheet = client.get("/css/app.css")
     assert "button:disabled { cursor: not-allowed;" in stylesheet.text
