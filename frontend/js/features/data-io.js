@@ -87,8 +87,19 @@ export async function copySummary() {
   }
 }
 
-export function openPreview() {
-  window.open(`/preview/${encodeURIComponent(state.date)}`, "_blank", "noopener");
+export async function openPreview() {
+  const previewWindow = window.open("about:blank", "_blank");
+  if (previewWindow) previewWindow.opener = null;
+  try {
+    await flushArticleChanges();
+    await flushDailyState();
+    const previewUrl = `/preview/${encodeURIComponent(state.date)}`;
+    if (previewWindow) previewWindow.location.replace(previewUrl);
+    else showToast("팝업이 차단되어 CEO 미리보기를 열지 못했습니다.", "error");
+  } catch (error) {
+    previewWindow?.close();
+    showToast(`CEO 미리보기 준비 실패: ${friendlyError(error)}`, "error");
+  }
 }
 
 export function openFinalReport() {

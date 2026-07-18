@@ -86,6 +86,15 @@ def test_index_html_is_served_at_root():
     data_io_script = client.get("/js/features/data-io.js")
     assert "오늘 수집한 기사, 선정·메모·Top Issues" in data_io_script.text
     assert "await api.resetTodayWork(state.date, state.revision)" in data_io_script.text
+    assert "export async function openPreview()" in data_io_script.text
+    preview_function = data_io_script.text.split("export async function openPreview()", 1)[1]
+    preview_function = preview_function.split("export function openFinalReport()", 1)[0]
+    assert preview_function.index("await flushArticleChanges()") < preview_function.index(
+        "previewWindow.location.replace(previewUrl)"
+    )
+    assert preview_function.index("await flushDailyState()") < preview_function.index(
+        "previewWindow.location.replace(previewUrl)"
+    )
 
     api_client = client.get("/js/api/client.js")
     assert 'confirmation: "RESET_TODAY"' in api_client.text

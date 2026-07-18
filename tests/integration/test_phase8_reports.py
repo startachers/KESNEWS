@@ -126,6 +126,27 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert missing.json()["error"]["code"] == "BRIEFING_VERSION_NOT_FOUND"
 
 
+def test_preview_rebuild_excludes_article_deselected_after_previous_preview():
+    report_date = "2026-09-20"
+    article_id = _create_selected_article(report_date)
+    article_anchor = f'id="article-{article_id}"'
+
+    first_preview = client.get(f"/preview/{report_date}")
+    assert first_preview.status_code == 200
+    assert article_anchor in first_preview.text
+
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    deselected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": briefing["revision"], "selected": False},
+    )
+    assert deselected.status_code == 200
+
+    refreshed_preview = client.get(f"/preview/{report_date}")
+    assert refreshed_preview.status_code == 200
+    assert article_anchor not in refreshed_preview.text
+
+
 def test_final_snapshot_preserves_ai_evidence_article_link():
     report_date = "2026-09-03"
     article_id = _create_selected_article(report_date)
