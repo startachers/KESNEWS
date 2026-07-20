@@ -1,3 +1,5 @@
+import threading
+
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -194,6 +196,130 @@ def test_reextract_updates_quality_and_enables_evidence_selection(monkeypatch):
     )
     assert selected.status_code == 200
     assert selected.json()["data"]["representativeArticleId"] == target
+
+
+def test_reextract_all_issue_articles_runs_concurrently_and_scores_each_body(monkeypatch):
+    issue, article_ids = _setup_issue("2096-11-04", count=3)
+    connection = get_connection()
+    try:
+        with connection:
+            connection.executemany(
+                "UPDATE articles SET body_text = '', body_status = 'missing' WHERE id = ?",
+                [(article_id,) for article_id in article_ids],
+            )
+    finally:
+        connection.close()
+
+    barrier = threading.Barrier(len(article_ids))
+    worker_ids: set[int] = set()
+    worker_lock = threading.Lock()
+    full_body = (
+        "관계기관은 전기설비 40곳의 안전점검 결과와 후속 일정, 피해 수치 및 재발 방지 계획을 "
+        "관계기관과 함께 발표했다고 밝혔다. " * 12
+    )
+
+    def fetch_body(url, **kwargs):  # noqa: ARG001
+        with worker_lock:
+            worker_ids.add(threading.get_ident())
+        barrier.wait(timeout=3)
+        return BodyFetchResult(
+            full_body,
+            "success_full",
+            "",
+            url,
+            ({"stage": "article_page", "status": "success"},),
+        )
+
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.service.fetch_article_body_with_retries",
+        fetch_body,
+    )
+    response = client.post(f"/api/issues/{issue['id']}/articles/reextract")
+    assert response.status_code == 200, response.json()
+    result = response.json()["data"]
+    assert result["requestedCount"] == 3
+    assert result["succeededCount"] == 3
+    assert result["failedCount"] == 0
+    assert len(worker_ids) == 3
+    assert len(result["articles"]) == 3
+    assert all(item["contentQualityScore"] >= 75 for item in result["articles"])
+    assert all(item["cleanedText"] for item in result["articles"])
+
+
+def test_reextract_all_issue_articles_rejects_unknown_issue():
+    response = client.post("/api/issues/missing-issue/articles/reextract")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ISSUE_NOT_FOUND"
+
+
+def test_reextract_all_issue_articles_preserves_successes_on_partial_failure(monkeypatch):
+    issue, article_ids = _setup_issue("2096-11-05", count=3)
+    before = client.get(f"/api/issues/{issue['id']}/articles").json()["data"]["articles"]
+    previous_failed_text = next(
+        item["cleanedText"] for item in before if item["articleId"] == article_ids[1]
+    )
+    connection = get_connection()
+    try:
+        with connection:
+            connection.executemany(
+                "UPDATE articles SET body_text = '', body_status = 'missing' WHERE id = ?",
+                [(article_id,) for article_id in article_ids],
+            )
+    finally:
+        connection.close()
+
+    full_body = "전기설비 안전점검 결과와 후속 조치 계획을 공식 발표했다. " * 30
+
+    def fetch_body(url, **kwargs):  # noqa: ARG001
+        if url.endswith("/1"):
+            raise RuntimeError("publisher timeout")
+        return BodyFetchResult(
+            full_body,
+            "success_full",
+            "",
+            url,
+            ({"stage": "article_page", "status": "success"},),
+        )
+
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.service.fetch_article_body_with_retries",
+        fetch_body,
+    )
+    response = client.post(f"/api/issues/{issue['id']}/articles/reextract")
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert result["succeededCount"] == 2
+    assert result["failedCount"] == 1
+    assert result["failures"][0]["articleId"] == article_ids[1]
+    by_id = {item["articleId"]: item for item in result["articles"]}
+    assert by_id[article_ids[0]]["cleanedText"]
+    assert by_id[article_ids[2]]["cleanedText"]
+    assert by_id[article_ids[1]]["cleanedText"] == previous_failed_text
+
+
+def test_markdown_export_repairs_missing_representative_after_body_refresh():
+    report_date = "2096-11-06"
+    issue, article_ids = _setup_issue(report_date, count=2)
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    selected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_ids[0]}",
+        json={"expectedRevision": briefing["revision"], "selected": True},
+    )
+    assert selected.status_code == 200
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "UPDATE issues SET auto_priority = 'required', representative_article_id = NULL WHERE id = ?",
+                (issue["id"],),
+            )
+    finally:
+        connection.close()
+
+    response = client.post(f"/api/exports/{report_date}.md")
+    assert response.status_code == 200, response.text
+    repaired = client.get(f"/api/issues/{issue['id']}/articles").json()["data"]
+    assert repaired["representativeArticleId"] in article_ids
 
 
 def test_required_issue_without_representative_blocks_markdown():

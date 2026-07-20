@@ -98,8 +98,12 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
     })
     result["status"] = quality_result["extractionStatus"]
     if not result["analysisEligible"] and not result["failureReason"]:
+        blocking_reasons = {
+            "문장 종료 불완전", "완전한 문장 부족", "언론사 확인 불가",
+            "보도 시각 확인 불가", "신뢰 언론사 허용목록 제외",
+        }
         result["failureReason"] = next(
-            (reason for reason in result["qualityReasons"] if reason not in {"전문 확보", "유효 RSS 요약"}),
+            (reason for reason in result["qualityReasons"] if reason in blocking_reasons),
             "quality_below_threshold",
         )
     return result
@@ -158,6 +162,15 @@ def reextract_article(connection: sqlite3.Connection, article: dict[str, Any]) -
     """기사 한 건을 다시 추출하고 원문과 불변 추출 이력을 함께 갱신한다."""
     config = load_config()
     prepared = _prepare(article, config, allow_network=True)
+    _persist_reextraction(connection, article, prepared)
+    return prepared
+
+
+def _persist_reextraction(
+    connection: sqlite3.Connection,
+    article: dict[str, Any],
+    prepared: dict[str, Any],
+) -> None:
     _save_extraction(connection, prepared)
     quality.record_event(connection, prepared, prepared)
     if prepared["status"] == "success_full" and prepared.get("rawText"):
@@ -176,7 +189,39 @@ def reextract_article(connection: sqlite3.Connection, article: dict[str, Any]) -
             body_status=article.get("bodyStatus") or "missing",
             body_error=prepared.get("failureReason") or "본문 추출 실패",
         )
-    return prepared
+
+
+def reextract_articles(
+    connection: sqlite3.Connection,
+    articles: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """관련기사 전체를 동시에 추출한 뒤 결과를 한 DB transaction에 기록한다."""
+    if not articles:
+        return [], []
+    config = load_config()
+    prepared: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
+    with ThreadPoolExecutor(max_workers=len(articles)) as executor:
+        futures = [
+            (article, executor.submit(_prepare, article, config, allow_network=True))
+            for article in articles
+        ]
+        for article, future in futures:
+            try:
+                result = future.result()
+                connection.execute("SAVEPOINT reextract_article")
+                _persist_reextraction(connection, article, result)
+                connection.execute("RELEASE SAVEPOINT reextract_article")
+            except Exception as exc:  # 한 언론사 실패가 나머지 기사 결과를 버리지 않게 분리한다.
+                try:
+                    connection.execute("ROLLBACK TO SAVEPOINT reextract_article")
+                    connection.execute("RELEASE SAVEPOINT reextract_article")
+                except sqlite3.OperationalError:
+                    pass
+                failures.append({"articleId": article["id"], "message": str(exc)})
+                continue
+            prepared.append(result)
+    return prepared, failures
 
 
 def _persist_searched_article(

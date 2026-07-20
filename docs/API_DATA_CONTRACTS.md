@@ -302,10 +302,16 @@ POST /api/briefings/{date}/selection-recommendations/apply
 GET   /api/issues/{issue_id}/articles
 PATCH /api/issues/{issue_id}/evidence
 POST  /api/articles/{article_id}/reextract
+POST  /api/issues/{issue_id}/articles/reextract
 ```
 
 - 품질 조회는 최신 `article_extractions` 이력의 추출 상태, 결정론적 품질 점수·등급,
   정제 전후 길이, 완전 문장 수, 오염 플래그, 추출 방식·시각과 정제 본문을 반환한다.
+- 품질 점수는 비교·정렬용 지표다. 최소 본문 길이, 문장 완결성, 출처·시각 및 언론사 허용
+  조건을 통과한 정제 본문을 점수만으로 분석 제외하지 않으며, 제거 완료된 페이지 부가 콘텐츠와
+  언론사 AI 부가 섹션은 사유로 표시하되 정제 본문의 충실도 점수를 감점하지 않는다.
+- 정제 본문 끝에 페이지 조각이 남아도 완결 문장이 2개 이상이면 `문장 종료 불완전`을 품질
+  사유로만 표시하고 분석 근거 자격은 유지한다.
 - evidence PATCH는 `expectedRevision`과 대표기사 최대 1건, 보조근거 최대 2건,
   분석 제외 기사 목록을 받는다. 현재 유효 membership에 없는 ID는 거부한다.
 - 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 군집과
@@ -321,6 +327,9 @@ POST  /api/articles/{article_id}/reextract
   `REQUIRED_ARTICLE_EVIDENCE_MISSING`으로 생성을 중단한다.
 - 단건 재추출은 원 기사 원문을 삭제하지 않고 새 `article_extractions` 이력을 추가한다.
   성공 후 자동 대표 후보만 다시 계산하며 수동 역할은 조용히 해제하지 않는다.
+- 이슈 전체 재추출은 현재 유효 membership의 모든 기사를 동시에 추출·평가한다. 기사별 결과는
+  각각 새 `article_extractions` 이력으로 남기며 일부 실패가 다른 기사 결과를 제거하지 않는다.
+  응답은 요청·성공·실패 건수와 실패 기사 ID를 반환하고, 완료 후 자동 대표 후보만 재계산한다.
 
 ### 2.9 오늘 작업 초기화
 

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import issue_repository as issue_repo
 from backend.app.repositories import weather_repository as weather_repo
 from backend.app.services.extraction import article_body
 from backend.app.services.reports.report_draft import ExchangeContext, build_exchange_context
@@ -52,25 +53,25 @@ def refresh_selected_bodies(report_date: str, connection_factory) -> None:
     connection = connection_factory()
     try:
         context = build_exchange_context(connection, report_date)
+        selected = list(context.articles)
         pending = [item for item in context.articles if not item.get("bodyText")]
     finally:
         connection.close()
-    if not pending:
-        return
     results: dict[str, article_body.BodyFetchResult] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(pending))) as executor:
-        futures = {
-            executor.submit(article_body.fetch_article_body, item.get("url") or ""): item
-            for item in pending
-        }
-        for future in as_completed(futures):
-            item = futures[future]
-            try:
-                results[item["id"]] = future.result()
-            except Exception as exc:
-                results[item["id"]] = article_body.BodyFetchResult(
-                    "", "missing", f"기사 전문 수집 실패: {exc}"
-                )
+    if pending:
+        with ThreadPoolExecutor(max_workers=min(8, len(pending))) as executor:
+            futures = {
+                executor.submit(article_body.fetch_article_body, item.get("url") or ""): item
+                for item in pending
+            }
+            for future in as_completed(futures):
+                item = futures[future]
+                try:
+                    results[item["id"]] = future.result()
+                except Exception as exc:
+                    results[item["id"]] = article_body.BodyFetchResult(
+                        "", "missing", f"기사 전문 수집 실패: {exc}"
+                    )
     connection = connection_factory()
     try:
         with connection:
@@ -86,6 +87,9 @@ def refresh_selected_bodies(report_date: str, connection_factory) -> None:
                     body_status=status,
                     body_error=result.error,
                 )
+            # 본문이 이미 확보된 경우에도 과거 추출 시점에 비어 있던 자동 대표를 복구한다.
+            for item in selected:
+                issue_repo.refresh_auto_representatives_for_article(connection, item["id"])
     finally:
         connection.close()
 

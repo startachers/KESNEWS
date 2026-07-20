@@ -5,6 +5,7 @@ from backend.app.services.analysis_markdown.eligibility import evaluate
 from backend.app.services.analysis_markdown.quality import publisher_statistics
 from backend.app.services.analysis_markdown.replacement_finder import find_replacement
 from backend.app.services.extraction.cleaner import clean_article_text
+from backend.app.services.extraction.evidence_quality import assess
 
 
 CONFIG = {
@@ -51,6 +52,69 @@ def test_eligibility_rejects_navigation_and_short_text_but_accepts_factual_rss()
     assert evaluate(short, status="success_full", url="https://example.com/a", config=CONFIG).reason == "body_too_short"
     summary = clean_article_text("7월 20일 정부는 전기요금 시간 차등제를 검토한다고 밝혔으며 구체적 적용 대상과 시범사업 계획, 향후 일정과 소비자 영향 등을 관계기관과 논의하고 있다고 설명했다. " * 2)
     assert evaluate(summary, status="success_summary", url="https://news1.kr/a", config=CONFIG).eligible
+
+
+def test_clean_full_text_remains_eligible_after_page_extras_are_removed():
+    text = "정부는 전력계통 기술기준 개편 방향과 후속 일정을 발표했다. " * 15
+    cleaning = clean_article_text(text + " 추천기사 많이 본 뉴스")
+    result = assess(
+        {
+            "source": "한국경제",
+            "pubDate": "2026-07-20T12:01:00Z",
+            "url": "https://hankyung.com/example",
+            "rawText": text,
+        },
+        cleaning,
+        status="success_full",
+        method="original",
+        config=CONFIG,
+    )
+    assert cleaning.noise_detected is True
+    assert result["analysisEligible"] is True
+    assert "페이지 부가 콘텐츠 제거" in result["qualityReasons"]
+
+
+def test_article_facts_remain_eligible_after_publisher_ai_section_is_removed():
+    facts = "소방당국은 화재 조사 결과와 피해 수치, 후속 점검 계획을 발표했다. " * 15
+    cleaning = clean_article_text(
+        facts + " 핵심요약 쏙 AI 요약입니다. AI 해설 Key Points 시나리오별 전망"
+    )
+    result = assess(
+        {
+            "source": "매일경제",
+            "pubDate": "2026-07-20T12:01:00Z",
+            "url": "https://mk.co.kr/example",
+            "rawText": facts,
+        },
+        cleaning,
+        status="success_full",
+        method="stored_body",
+        config=CONFIG,
+    )
+    assert cleaning.ai_content_detected is True
+    assert result["analysisEligible"] is True
+    assert "언론사 AI 콘텐츠 감지" in result["qualityReasons"]
+
+
+def test_long_article_with_trailing_page_fragment_remains_eligible():
+    text = (
+        "기상청은 집중호우 피해 현황과 대피 인원, 후속 안전조치 계획을 발표했다. " * 12
+    ) + "인기 키워드 취재플러스"
+    result = assess(
+        {
+            "source": "MBC",
+            "pubDate": "2026-07-20T12:01:00Z",
+            "url": "https://imnews.imbc.com/example",
+            "rawText": text,
+        },
+        clean_article_text(text),
+        status="success_full",
+        method="stored_body",
+        config=CONFIG,
+    )
+    assert result["completeSentenceCount"] >= 2
+    assert "문장 종료 불완전" in result["qualityReasons"]
+    assert result["analysisEligible"] is True
 
 
 def test_budget_stops_at_complete_sentence():

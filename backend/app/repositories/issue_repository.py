@@ -698,6 +698,18 @@ def list_evidence_articles(connection: sqlite3.Connection, issue_id: str) -> dic
     return {**issue, "articles": articles}
 
 
+def list_articles_for_extraction(
+    connection: sqlite3.Connection, issue_id: str
+) -> list[dict[str, Any]] | None:
+    if get(connection, issue_id) is None:
+        return None
+    return [
+        article
+        for article_id in _effective_article_ids(connection, issue_id)
+        if (article := _article_for_quality(connection, article_id)) is not None
+    ]
+
+
 def update_evidence_selection(
     connection: sqlite3.Connection,
     issue_id: str,

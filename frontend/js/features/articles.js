@@ -14,6 +14,9 @@ import { getTopIssueEntries, MAX_TOP_ISSUES } from "./issues.js?v=20260720-2";
 
 const expandedIssueIds = new Set();
 const expandedPreviewKeys = new Set();
+const collapsedRepresentativePreviewKeys = new Set();
+const qualitySortedIssueIds = new Set();
+const reextractingIssueIds = new Set();
 const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
 let manualGroupPickerEntries = new Map();
@@ -108,11 +111,30 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     ? `<button class="article-direct-toggle ${issue.directCoverage ? "active" : ""}" data-action="direct-coverage" title="${issue.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!issue.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${issue.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`
     : `<button class="article-direct-toggle ${a.directCoverage ? "active" : ""}" data-action="article-direct-coverage" title="${a.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!a.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${a.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`;
   const effectiveDirectCoverage = !!(issue?.directCoverage || (!issue && a.directCoverage));
+  const qualityById = new Map((issue?.evidenceArticles || []).map(item => [item.articleId, item]));
+  const orderedRelatedMembers = issue && qualitySortedIssueIds.has(issue.id)
+    ? [...relatedMembers].sort((left, right) => {
+      const leftQuality = qualityById.get(left.article.id) || {};
+      const rightQuality = qualityById.get(right.article.id) || {};
+      return Number(rightQuality.contentQualityScore || 0) - Number(leftQuality.contentQualityScore || 0)
+        || Number(rightQuality.cleanedCharacterCount || 0) - Number(leftQuality.cleanedCharacterCount || 0)
+        || dateValue(right.article.pubDate) - dateValue(left.article.pubDate);
+    })
+    : [...relatedMembers].sort((left, right) => {
+      const leftRepresentative = left.article.id === issue?.representativeArticleId ? 1 : 0;
+      const rightRepresentative = right.article.id === issue?.representativeArticleId ? 1 : 0;
+      return rightRepresentative - leftRepresentative;
+    });
+  const reextractingAll = issue && reextractingIssueIds.has(issue.id);
   const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
     <summary>관련기사·분석 근거 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
+    <div class="related-article-toolbar no-print">
+      <button type="button" data-action="sort-related-quality" aria-pressed="${String(qualitySortedIssueIds.has(issue.id))}" class="${qualitySortedIssueIds.has(issue.id) ? "active" : ""}">본문 충실도순</button>
+      <button type="button" data-action="reextract-all-bodies" aria-busy="${String(!!reextractingAll)}" ${state.status === "final" || reextractingAll ? "disabled" : ""}>${reextractingAll ? `전체 본문 추출 중… (${relatedMembers.length}건)` : "전체 본문 다시 추출"}</button>
+    </div>
     ${issue.representativeEvidenceMissing ? '<div class="representative-missing"><strong>대표 근거 기사 미확보</strong><span>이 이슈에서 AI 분석에 사용할 수 있는 기사 본문을 확보하지 못했습니다. 본문을 다시 추출하거나 다른 기사를 추가해 주세요.</span></div>' : ""}
     ${issue.manualRepresentativeMissing ? '<div class="representative-missing"><strong>수동 대표기사 확인 필요</strong><span>기존 수동 대표기사를 현재 이슈에서 찾을 수 없습니다.</span></div>' : ""}
-    <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article, issue)).join("")}</ul>
+    <ul class="related-article-list">${orderedRelatedMembers.map(member => renderRelatedArticle(member.article, issue)).join("")}</ul>
   </details>` : "";
   const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="군집 검토별점" ${state.status === "final" ? "disabled" : ""}>
     <option value="auto" ${issue.editorReviewStars == null ? "selected" : ""}>자동 ${starsText(issue.autoReviewStars)}</option>
@@ -147,9 +169,11 @@ function renderRelatedArticle(a, issue) {
   const directCoverage = !!(issue.directCoverage || a.directCoverage);
   const roleLabel = { representative: "현재 대표", supplemental: "보조근거", excluded: "분석 제외", related: "관련기사" }[quality.role] || "관련기사";
   const statusLabel = { success_full: "전문 확보", success_summary: "유효 요약", failed: "본문 추출 실패", not_attempted: "추출 전" }[quality.extractionStatus] || "추출 전";
-  const gradeLabel = { excellent: "분석 적합도 우수", good: "분석 적합도 양호", limited: "분석 제한", unavailable: "분석 불가" }[quality.qualityGrade] || "분석 불가";
+  const gradeLabel = { excellent: "본문 충실도 우수", good: "본문 충실도 양호", limited: "본문 충실도 제한", unavailable: "본문 충실도 부족" }[quality.qualityGrade] || "본문 충실도 부족";
   const previewKey = `${issue.id}:${a.id}`;
-  const previewOpen = expandedPreviewKeys.has(previewKey);
+  const previewOpen = quality.role === "representative"
+    ? !collapsedRepresentativePreviewKeys.has(previewKey)
+    : expandedPreviewKeys.has(previewKey);
   const disabledReason = quality.analysisEligible ? "" : (quality.qualityReasons || ["유효한 기사 본문을 확보하지 못했습니다."]).join(" · ");
   return `<li class="related-article-row related-role-${escapeAttr(quality.role || "related")}" data-id="${escapeAttr(a.id)}" data-issue-id="${escapeAttr(issue.id)}">
     <input class="include-check related-include-check" type="checkbox" data-action="include" aria-label="브리핑 선정" title="${directCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
@@ -187,7 +211,9 @@ function renderMediaGroups(items) {
       : general;
   }
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
+  const articleById = new Map(state.articles.map(article => [article.id, article]));
   const issueByArticle = primaryIssueByArticle(state.issues);
+  const keepManagementArticles = filters.selection === "selected";
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
     const members = issue.articleIds
@@ -196,13 +222,19 @@ function renderMediaGroups(items) {
       .filter(Boolean)
       .sort((left, right) => left.index - right.index);
     members.forEach(member => groupedIds.add(member.article.id));
-    return { issue, members, position: members[0]?.index };
+    const managementMembers = keepManagementArticles
+      ? issue.articleIds
+        .filter(articleId => issueByArticle.get(articleId)?.id === issue.id)
+        .map(articleId => articleById.get(articleId))
+        .filter(Boolean)
+        .map(article => ({ article }))
+      : members;
+    return { issue, members, managementMembers, position: members[0]?.index };
   }).filter(group => group.members.length);
-  const entries = groups.map(({ issue, members, position }) => {
-    if (members.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
+  const entries = groups.map(({ issue, members, managementMembers, position }) => {
+    if (managementMembers.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
     const representative = members.find(member => member.article.id === issue.representativeArticleId) || members[0];
-    const related = members;
-    return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
+    return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, managementMembers) };
   });
   items.forEach((article, index) => {
     if (!groupedIds.has(article.id)) entries.push({ position: index, press: isKescoPressArticle(article), html: renderArticleCard(article) });
@@ -477,9 +509,26 @@ export function handleArticleClick(e) {
   const evidenceRow = e.target.closest("[data-issue-id][data-id]");
   if (action === "preview-body" && evidenceRow) {
     const key = `${evidenceRow.dataset.issueId}:${evidenceRow.dataset.id}`;
-    if (expandedPreviewKeys.has(key)) expandedPreviewKeys.delete(key);
+    const issue = state.issues.find(item => item.id === evidenceRow.dataset.issueId);
+    const quality = issue?.evidenceArticles?.find(item => item.articleId === evidenceRow.dataset.id);
+    if (quality?.role === "representative") {
+      if (collapsedRepresentativePreviewKeys.has(key)) collapsedRepresentativePreviewKeys.delete(key);
+      else collapsedRepresentativePreviewKeys.add(key);
+    } else if (expandedPreviewKeys.has(key)) expandedPreviewKeys.delete(key);
     else expandedPreviewKeys.add(key);
     renderArticles();
+    return;
+  }
+  const relatedDetails = e.target.closest(".related-articles[data-issue-id]");
+  if (action === "sort-related-quality" && relatedDetails) {
+    const issueId = relatedDetails.dataset.issueId;
+    if (qualitySortedIssueIds.has(issueId)) qualitySortedIssueIds.delete(issueId);
+    else qualitySortedIssueIds.add(issueId);
+    renderArticles();
+    return;
+  }
+  if (action === "reextract-all-bodies" && relatedDetails) {
+    if (state.status !== "final") reextractAllIssueBodies(relatedDetails.dataset.issueId);
     return;
   }
   if (state.status === "final") return;
@@ -529,6 +578,32 @@ export function handleArticleClick(e) {
     afterArticleMutation();
     trackArticlePatch(article.id, { dismissed: true });
     showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
+  }
+}
+
+async function reextractAllIssueBodies(issueId) {
+  if (reextractingIssueIds.has(issueId)) return;
+  const issue = state.issues.find(item => item.id === issueId);
+  if (!issue) return;
+  reextractingIssueIds.add(issueId);
+  renderArticles();
+  showToast(`관련기사 ${issue.articleIds?.length || 0}건의 본문을 동시에 다시 추출하고 충실도를 평가합니다.`);
+  try {
+    const result = await api.reextractIssueArticles(issueId);
+    const issuesResult = await api.listIssues(state.date);
+    state.issues = issuesResult.data.issues || [];
+    const failedCount = Number(result.data.failedCount || 0);
+    showToast(
+      failedCount
+        ? `전체 본문 추출 완료 · 성공 ${result.data.succeededCount}건 · 실패 ${failedCount}건`
+        : `전체 본문 추출과 충실도 평가 ${result.data.succeededCount}건을 완료했습니다.`,
+      failedCount ? "" : "success",
+    );
+  } catch (error) {
+    showToast(`전체 본문 재추출 실패: ${friendlyError(error)}`, "error");
+  } finally {
+    reextractingIssueIds.delete(issueId);
+    renderAll();
   }
 }
 

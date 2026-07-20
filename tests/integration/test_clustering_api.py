@@ -55,6 +55,8 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     articles_feature = client.get("/js/features/articles.js")
     assert articles_feature.status_code == 200
     assert "renderMediaGroups" in articles_feature.text
+    assert 'const keepManagementArticles = filters.selection === "selected"' in articles_feature.text
+    assert "renderArticleCard(representative.article, issue, managementMembers)" in articles_feature.text
     assert "function relatedArticleCounts()" in articles_feature.text
     assert "(relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)" in articles_feature.text
     assert "entries.sort((left, right) => left.position - right.position)" in articles_feature.text
@@ -62,6 +64,18 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "member.article.id === issue.representativeArticleId" in articles_feature.text
     assert 'data-action="set-representative"' in articles_feature.text
     assert 'data-action="toggle-supplemental"' in articles_feature.text
+    assert 'data-action="reextract-all-bodies"' in articles_feature.text
+    assert 'data-action="sort-related-quality"' in articles_feature.text
+    assert "collapsedRepresentativePreviewKeys" in articles_feature.text
+    assert "rightRepresentative - leftRepresentative" in articles_feature.text
+
+    report_draft_feature = client.get("/js/features/report-draft.js")
+    assert "const issuesResult = await api.listIssues(state.date)" in report_draft_feature.text
+    assert "renderArticles();" in report_draft_feature.text
+    assert 'quality.role === "representative"' in articles_feature.text
+    assert "본문 충실도순" in articles_feature.text
+    assert "전체 본문 다시 추출" in articles_feature.text
+    assert "reextractIssueArticles(issueId)" in articles_feature.text
     assert "Math.random()" not in articles_feature.text
     assert "관련기사·분석 근거 ${relatedMembers.length}건" in articles_feature.text
     assert '<details class="related-articles"' in articles_feature.text

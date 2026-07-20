@@ -4,7 +4,7 @@ import { downloadBlob } from "../utils/dom.js";
 import { friendlyError } from "../utils/strings.js";
 import { openOverlay, closeOverlay } from "../ui/dialogs.js";
 import { showToast } from "../ui/notifications.js?v=20260716-1";
-import { flushArticleChanges } from "./articles.js?v=20260720-3";
+import { flushArticleChanges, renderArticles } from "./articles.js?v=20260720-6";
 
 let currentSignature = "";
 let currentSourceType = "manual";
@@ -66,6 +66,9 @@ export async function downloadAnalysisMarkdown() {
     await syncPendingChanges();
     showToast("선정 기사 전문을 확인해 Markdown을 만들고 있습니다.");
     const markdown = await api.getAnalysisMarkdown(state.date);
+    const issuesResult = await api.listIssues(state.date);
+    state.issues = issuesResult.data.issues || [];
+    renderArticles();
     downloadBlob(markdown, `KESCO_AI분석자료_${state.date}.md`, "text/markdown;charset=utf-8");
     showToast("고성능 AI 분석용 Markdown을 저장했습니다.", "success");
   } catch (error) {

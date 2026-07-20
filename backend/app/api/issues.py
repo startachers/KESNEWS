@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -18,6 +19,7 @@ from backend.app.services.clustering.service import (
     build_proposal,
     input_signature,
 )
+from backend.app.services.analysis_markdown.service import reextract_articles
 
 router = APIRouter()
 
@@ -102,6 +104,43 @@ async def list_issue_articles(issue_id: str) -> Any:
         result = issues_repo.list_evidence_articles(connection, issue_id)
     finally:
         connection.close()
+    if result is None:
+        return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
+    return ok_envelope(result)
+
+
+def _reextract_issue_articles(issue_id: str) -> dict[str, Any] | None:
+    connection = get_connection()
+    try:
+        articles = issues_repo.list_articles_for_extraction(connection, issue_id)
+        if articles is None:
+            return None
+        with connection:
+            prepared, failures = reextract_articles(connection, articles)
+            changed_issue_ids: set[str] = set()
+            for article in prepared:
+                changed_issue_ids.update(
+                    issues_repo.refresh_auto_representatives_for_article(
+                        connection, article["id"]
+                    )
+                )
+        evidence = issues_repo.list_evidence_articles(connection, issue_id)
+        return {
+            "issueId": issue_id,
+            "requestedCount": len(articles),
+            "succeededCount": len(prepared),
+            "failedCount": len(failures),
+            "failures": failures,
+            "changedIssueIds": sorted(changed_issue_ids),
+            "articles": evidence["articles"] if evidence else [],
+        }
+    finally:
+        connection.close()
+
+
+@router.post("/api/issues/{issue_id}/articles/reextract")
+async def reextract_issue_articles(issue_id: str) -> Any:
+    result = await asyncio.to_thread(_reextract_issue_articles, issue_id)
     if result is None:
         return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
     return ok_envelope(result)

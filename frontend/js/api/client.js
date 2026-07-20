@@ -153,6 +153,12 @@ export function reextractArticle(articleId) {
   }, 120000);
 }
 
+export function reextractIssueArticles(issueId) {
+  return request(`/issues/${encodeURIComponent(issueId)}/articles/reextract`, {
+    method: "POST",
+  }, 300000);
+}
+
 export function createManualArticle(payload) {
   return request(`/articles`, { method: "POST", body: JSON.stringify(payload) });
 }

@@ -68,10 +68,8 @@ def assess(
     if method in {"json_ld", "publisher_selector", "stored_body", "article_page"}:
         score += 5
     if cleaning.noise_detected:
-        score -= 12
         reasons.append("페이지 부가 콘텐츠 제거")
     if cleaning.ai_content_detected:
-        score -= 35
         reasons.append("언론사 AI 콘텐츠 감지")
     if incomplete:
         score -= 15
@@ -87,9 +85,7 @@ def assess(
     base = evaluate(cleaning, status=status, url=article.get("url") or "", config=config)
     eligible = bool(
         base.eligible
-        and score >= 75
-        and not incomplete
-        and not cleaning.ai_content_detected
+        and (not incomplete or sentences >= 2)
         and article.get("source")
         and (article.get("pubDate") or article.get("publishedAt"))
         and article.get("publisherAllowed") is not False
@@ -138,7 +134,25 @@ def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[
 def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any]) -> dict[str, Any]:
     latest = latest_for_article(connection, article["id"])
     if latest and latest.get("contentQualityScore") is not None:
-        return _apply_publisher_status(connection, article, latest)
+        # 추출 이력은 당시 판정을 보존하되, 화면과 대표 선정은 현재 정책으로 다시 평가한다.
+        # 정제 완료된 부가 콘텐츠 때문에 과거 점수가 낮았던 기사도 실제 정제 본문으로 판정한다.
+        cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
+        current = assess(
+            {**article, "rawText": latest.get("cleanedText") or ""}, cleaning,
+            status=latest["extractionStatus"], method=latest.get("extractionMethod") or "legacy",
+        )
+        current["rawCharacterCount"] = latest["rawCharacterCount"]
+        current["contaminationFlags"] = list(dict.fromkeys([
+            *(latest.get("contaminationFlags") or []),
+            *(current.get("contaminationFlags") or []),
+        ]))
+        current["qualityReasons"] = list(dict.fromkeys([
+            *(current.get("qualityReasons") or []),
+            *(latest.get("qualityReasons") or []),
+        ]))
+        return _apply_publisher_status(
+            connection, article, {**latest, **current, "cleanedText": cleaning.text}
+        )
     if latest:
         cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
         derived = assess(
