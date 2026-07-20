@@ -10,7 +10,7 @@ import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis
 import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
-import { MAX_TOP_ISSUES } from "./issues.js?v=20260717-1";
+import { MAX_TOP_ISSUES } from "./issues.js?v=20260720-1";
 
 const expandedIssueIds = new Set();
 const manualGroupSelection = new Set();
@@ -109,14 +109,14 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const effectiveDirectCoverage = !!(issue?.directCoverage || (!issue && a.directCoverage));
   const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
     <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
-    <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article)).join("")}</ul>
+    <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article, issue)).join("")}</ul>
   </details>` : "";
   const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="군집 검토별점" ${state.status === "final" ? "disabled" : ""}>
     <option value="auto" ${issue.editorReviewStars == null ? "selected" : ""}>자동 ${starsText(issue.autoReviewStars)}</option>
     ${[5,4,3,2,1].map(stars => `<option value="${stars}" ${issue.editorReviewStars === stars ? "selected" : ""}>${starsText(stars)}</option>`).join("")}
   </select>` : "";
   return `<article class="article-card ${issue ? "grouped-article-card" : ""} ${a.included ? "included" : ""} ${issue?.selected ? "top-tagged" : ""}" data-id="${escapeAttr(a.id)}" ${issue ? `data-issue-id="${escapeAttr(issue.id)}"` : ""}>
-    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="${effectiveDirectCoverage ? "공사 직접 보도는 CEO 일반 브리핑에서 제외됩니다" : "브리핑 선정"}" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" || effectiveDirectCoverage ? "disabled" : ""}>
+    <input class="include-check" type="checkbox" aria-label="브리핑 선정" title="${effectiveDirectCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" data-action="include" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
     <div class="article-main">
       <div class="article-badges"><span class="category-label" style="color:${CATEGORY_COLORS[a.category] || "#326c9c"}">${escapeHtml(category)}</span>${badges.join("")}</div>
       ${titleEl}
@@ -135,12 +135,17 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   </article>`;
 }
 
-function renderRelatedArticle(a) {
+function renderRelatedArticle(a, issue) {
   const href = safeUrl(a.url);
   const titleEl = href
     ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
     : `<span class="related-article-title">${escapeHtml(a.title)}</span>`;
-  return `<li class="related-article-row">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></li>`;
+  const directCoverage = !!(issue.directCoverage || a.directCoverage);
+  return `<li class="related-article-row" data-id="${escapeAttr(a.id)}" data-issue-id="${escapeAttr(issue.id)}">
+    <input class="include-check related-include-check" type="checkbox" data-action="include" aria-label="브리핑 선정" title="${directCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
+    <div class="related-article-content">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></div>
+    <button class="related-remove-btn no-print" data-action="remove-related" title="이 기사를 현재 관련기사 묶음에서 제거" ${state.status === "final" ? "disabled" : ""}>묶음에서 제거</button>
+  </li>`;
 }
 
 function rememberExpandedIssues() {
@@ -244,7 +249,7 @@ export function renderArticles() {
   updateManualGroupControls();
 }
 
-export function handleArticleChange(e) {
+export async function handleArticleChange(e) {
   if (state.status === "final") return;
   if (e.target.dataset.action === "review-stars") {
     const issue = state.issues.find(candidate => candidate.id === e.target.dataset.issueId);
@@ -255,15 +260,34 @@ export function handleArticleChange(e) {
   const article = state.articles.find(a => a.id === item.dataset.id); if (!article) return;
   if (e.target.dataset.action === "include") {
     const issue = primaryIssueByArticle(state.issues).get(article.id);
-    if (issue?.directCoverage || (!issue && article.directCoverage)) {
-      e.target.checked = false;
-      showToast("공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다.", "error");
+    const selecting = e.target.checked;
+    const directCoverage = !!(issue?.directCoverage || (!issue && article.directCoverage));
+    article.included = selecting;
+    const patch = { selected: selecting };
+    if (selecting && directCoverage) {
+      patch.directCoverage = false;
+      article.directCoverage = false;
+      article.editorDirectCoverage = false;
+      if (issue) {
+        issue.directCoverage = false;
+        issue.editorDirectCoverage = false;
+      }
+    }
+    afterArticleMutation();
+    const saved = await patchArticle(article.id, patch);
+    if (!saved) {
+      setState(await loadDailyState(state.date));
+      renderAll();
       return;
     }
-    article.included = e.target.checked;
-    afterArticleMutation();
-    trackArticlePatch(article.id, { selected: article.included });
-    showToast(article.included ? "브리핑 기사로 선정했습니다." : "브리핑 선정을 해제했습니다.", article.included ? "success" : "");
+    showToast(
+      selecting
+        ? directCoverage
+          ? "공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 선정했습니다."
+          : "브리핑 기사로 선정했습니다."
+        : "브리핑 선정을 해제했습니다.",
+      selecting ? "success" : "",
+    );
   }
 }
 
@@ -447,6 +471,11 @@ export function handleArticleClick(e) {
     if (issue) toggleDirectCoverage(issue);
     return;
   }
+  if (action === "remove-related") {
+    const row = e.target.closest("[data-issue-id][data-id]");
+    if (row) removeRelatedArticle(row.dataset.issueId, row.dataset.id);
+    return;
+  }
   const item = e.target.closest("[data-id]");
   const article = state.articles.find(a => a.id === item?.dataset.id); if (!article) return;
   if (action === "article-direct-coverage") {
@@ -467,6 +496,36 @@ export function handleArticleClick(e) {
     afterArticleMutation();
     trackArticlePatch(article.id, { dismissed: true });
     showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
+  }
+}
+
+export function handleTopIssuesClick(e) {
+  if (e.target.closest("[data-action]")?.dataset.action !== "remove-top-issue" || state.status === "final") return;
+  const button = e.target.closest("[data-action='remove-top-issue']");
+  const issue = state.issues.find(item => item.id === button?.dataset.issueId);
+  if (issue) {
+    toggleTopIssue(issue);
+    return;
+  }
+  const article = state.articles.find(item => item.id === button?.dataset.articleId);
+  if (article?.topIssue) toggleArticleTopIssue(article);
+}
+
+async function removeRelatedArticle(issueId, articleId) {
+  const issue = state.issues.find(item => item.id === issueId);
+  const article = state.articles.find(item => item.id === articleId);
+  if (!issue || !article || !issue.articleIds.includes(articleId)) return;
+  try {
+    await flushArticleChanges();
+    const result = await api.removeIssueArticle(state.date, issueId, articleId, state.revision);
+    state.revision = result.data.revision;
+    setState(await loadDailyState(state.date));
+    renderAll();
+    showToast("기사를 현재 관련기사 묶음에서 제거했습니다. 기사 자체와 선정·메모 상태는 유지됩니다.", "success");
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") setState(await loadDailyState(state.date));
+    showToast(`관련기사 제거 실패: ${friendlyError(error)}`, "error");
+    renderAll();
   }
 }
 

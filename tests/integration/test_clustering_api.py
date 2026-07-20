@@ -62,7 +62,11 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text
     assert 'data-action="direct-coverage"' in articles_feature.text
-    assert "공사 직접 보도는 CEO 일반 브리핑에 선정할 수 없습니다" in articles_feature.text
+    assert 'data-action="remove-related"' in articles_feature.text
+    assert "removeIssueArticle" in articles_feature.text
+    assert "related-include-check" in articles_feature.text
+    assert "handleTopIssuesClick" in articles_feature.text
+    assert "공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" in articles_feature.text
     assert "topIssueTagCount() >= MAX_TOP_ISSUES" in articles_feature.text
     assert 'issue?.effectiveTitle || ""' in articles_feature.text
     assert 'data-action="group-picker-select"' in articles_feature.text
@@ -74,6 +78,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "기존 묶음을 선택하면 그 안의 기사 전체가 함께 합쳐집니다" in page.text
     assert "buildManualGroupPickerEntries" in articles_feature.text
     assert "issue.articleIds" in articles_feature.text
+    assert 'data-action="remove-top-issue"' in issues_feature.text
 
 
 def _create_briefing(report_date: str) -> None:
@@ -215,6 +220,47 @@ def test_recluster_preserves_editor_fields_and_membership_remove_override():
     assert preserved["effectivePriority"] == "required"
     assert preserved["articleIds"] == [first]
     assert preserved["membershipOverrides"] == [{"article_id": second, "action": "remove"}]
+
+
+def test_briefing_scoped_related_article_remove_bumps_revision_and_preserves_article_state():
+    report_date = "2026-08-12"
+    _create_briefing(report_date)
+    first = _create_article(
+        report_date, "manual-remove-1", "전주 아파트 대규모 정전 발생 500세대 불편", "연합뉴스",
+        "2026-08-12T05:00:00Z",
+    )
+    second = _create_article(
+        report_date, "manual-remove-2", "전주 완산구 아파트 정전…500가구 전력 끊겨", "KBS",
+        "2026-08-12T08:00:00Z",
+    )
+    run_id = client.post(
+        "/api/cluster-runs", json={"reportDate": report_date, "asOf": "2026-08-12T12:00:00Z"}
+    ).json()["data"]["id"]
+    client.post(f"/api/cluster-runs/{run_id}/apply")
+    issue = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"][0]
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    selected = client.patch(
+        f"/api/briefings/{report_date}/articles/{second}",
+        json={"expectedRevision": revision, "selected": True, "note": "선정 상태 유지"},
+    )
+    revision = selected.json()["data"]["revision"]
+
+    removed = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={
+            "expectedRevision": revision,
+            "articleId": second,
+            "membershipAction": "remove",
+        },
+    )
+    assert removed.status_code == 200
+    assert removed.json()["data"]["revision"] == revision + 1
+    remaining = client.get("/api/issues", params={"report_date": report_date}).json()["data"]["issues"][0]
+    assert remaining["articleIds"] == [first]
+    articles = client.get("/api/articles", params={"report_date": report_date}).json()["data"]["articles"]
+    saved = next(item for item in articles if item["id"] == second)
+    assert saved["included"] is True
+    assert saved["note"] == "선정 상태 유지"
 
 
 def test_cluster_apply_rejects_stale_proposal_and_final_briefing():
@@ -374,6 +420,46 @@ def test_direct_coverage_is_auto_tagged_excluded_and_manual_override_is_preserve
     assert client.get(
         "/api/articles", params={"report_date": report_date}
     ).json()["data"]["articles"][0]["included"] is False
+
+
+def test_article_selection_can_clear_auto_direct_coverage_in_same_mutation():
+    report_date = "2026-08-29"
+    _create_briefing(report_date)
+    article_id = _create_article(
+        report_date,
+        "direct-select",
+        "한국전기안전공사 현안 보도 담당자 브리핑 선정",
+        "전기신문",
+        "2026-08-29T05:00:00Z",
+        category="kesco_direct",
+    )
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-29T12:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{run['id']}/apply").status_code == 200
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+
+    selected = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={
+            "expectedRevision": revision,
+            "selected": True,
+            "directCoverage": False,
+        },
+    )
+    assert selected.status_code == 200
+    article = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"][0]
+    assert article["included"] is True
+    assert article["editorDirectCoverage"] is False
+    assert article["directCoverage"] is False
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert issue["editorDirectCoverage"] is False
+    assert issue["directCoverage"] is False
 
 
 def test_ungrouped_direct_coverage_manual_override_survives_first_clustering():

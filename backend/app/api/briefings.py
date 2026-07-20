@@ -59,6 +59,7 @@ class IssueStatePatchRequest(BaseModel):
     editorReviewReason: str | None = Field(default=None, max_length=500)
     directCoverage: bool | None = None
     articleId: str | None = None
+    membershipAction: Literal["add", "remove"] | None = None
 
 
 class DailyWorkResetRequest(BaseModel):
@@ -265,10 +266,27 @@ async def patch_briefing_issue(
     try:
         if issues_repo.get(connection, issue_id) is None:
             return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
+        if issues_repo.report_date_for_issue(connection, issue_id) != report_date:
+            return error_response("ISSUE_NOT_FOUND", "현재 보고일의 이슈를 찾을 수 없습니다.")
+        if request.membershipAction is not None:
+            if not request.articleId:
+                return error_response(
+                    "ISSUE_MEMBERSHIP_INVALID", "articleId와 membershipAction을 함께 지정해야 합니다."
+                )
+            issue = issues_repo.serialize_one(connection, issue_id)
+            if request.membershipAction == "remove" and request.articleId not in (issue or {}).get("articleIds", []):
+                return error_response(
+                    "ISSUE_MEMBERSHIP_INVALID", "현재 관련기사 묶음에 포함된 기사만 제거할 수 있습니다."
+                )
         with connection:
             row = repo.patch_issue_state(
                 connection, report_date, issue_id, request.expectedRevision, fields
             )
+            if request.membershipAction is not None and request.articleId:
+                issues_repo.set_membership_override(
+                    connection, issue_id, request.articleId, request.membershipAction
+                )
+                issues_repo.recalculate_review_assessments(connection, report_date)
     except repo.BriefingNotFound:
         return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
     except repo.BriefingFinalized:

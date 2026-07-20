@@ -192,6 +192,9 @@ Top Issues는 담당자가 직접 태그하거나 Gemma 추천을 검토·적용
 개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 6개로 제한한다.
 군집 Top 태그를 활성화하면 사용자가 누른 대표 카드 기사(미지정 시 이슈 대표 기사)를
 `briefing_articles.selected=true`로 함께 저장한다. 군집 Top 태그를 해제해도 기사 선정은 유지한다.
+Media Coverage에서 펼친 관련기사의 선정 여부도 기사별 PATCH로 자유롭게 바꿀 수 있다. 잘못 묶인
+기사는 브리핑 이슈 PATCH에 `articleId`, `membershipAction="remove"`, `expectedRevision`을 보내
+수동 remove override로 제외하며, 기사 원본과 선정·중요·메모 상태는 유지한다.
 7번째 항목을 선택하는 mutation은 `TOP_ISSUE_LIMIT_EXCEEDED`(409)로 거부한다.
 재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
 재군집화 이력 때문에 기사 하나가 여러 군집 기록과 겹치더라도 기사 `top_issue` 하나를 여러
@@ -207,6 +210,8 @@ Top Issues는 담당자가 직접 태그하거나 Gemma 추천을 검토·적용
 수동 해제·재태그는 이후 자동 수집·재분석·재군집화로 덮어쓰지 않는다. 유효 태그가 켜지면
 기사에는 `selected=false`, `top_issue=false`, 군집에는 `selected=false`를 강제한다.
 이 상태에서 기사 또는 Top Issues 선정을 요청하면 `DIRECT_COVERAGE_NOT_SELECTABLE`(409)로 거부한다.
+단, 담당자가 기사 선정 체크와 함께 `directCoverage=false`를 명시한 경우에는 자동 태그를 수동
+해제하는 판단으로 기록하고 같은 mutation에서 `selected=true`를 허용한다.
 태그를 해제해도 이전 선정 상태를 자동 복원하지 않는다.
 
 ### 2.6 정렬 변경

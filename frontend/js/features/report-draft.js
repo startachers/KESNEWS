@@ -4,7 +4,7 @@ import { downloadBlob } from "../utils/dom.js";
 import { friendlyError } from "../utils/strings.js";
 import { openOverlay, closeOverlay } from "../ui/dialogs.js";
 import { showToast } from "../ui/notifications.js?v=20260716-1";
-import { flushArticleChanges } from "./articles.js?v=20260717-18";
+import { flushArticleChanges } from "./articles.js?v=20260720-2";
 
 let currentSignature = "";
 let currentSourceType = "manual";

@@ -32,7 +32,7 @@ export function renderTopIssues() {
     if (tagged.kind === "article") {
       const article = tagged.item;
       return `<article class="issue-card">
-        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="badge badge-neutral">기사</span></div>
+        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions"><span class="badge badge-neutral">기사</span><button class="issue-remove-btn no-print" data-action="remove-top-issue" data-article-id="${escapeHtml(article.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
         <h3>${escapeHtml(article.title)}</h3>
         <div class="issue-meta">${escapeHtml(article.source || "출처 미상")} · ${formatRelative(article.pubDate)}</div>
         <div class="issue-reason">담당자 태그 또는 확인·적용한 Gemma 핵심 추천 기사입니다.</div>
@@ -54,7 +54,7 @@ export function renderTopIssues() {
         ? `같은 사건 기사 ${issue.articleIds.length}건이 묶인 이슈입니다.`
         : "단일 기사 이슈입니다.";
     return `<article class="issue-card">
-      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><span class="review-stars">${starsText(issue.effectiveReviewStars)}</span></div>
+      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions"><span class="review-stars">${starsText(issue.effectiveReviewStars)}</span><button class="issue-remove-btn no-print" data-action="remove-top-issue" data-issue-id="${escapeHtml(issue.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
       <h3>${escapeHtml(displayTitle)}</h3>
       <div class="issue-meta">자동 ${issue.autoReviewRank || "-"}위 · 점수 ${issue.autoReviewScore ?? "-"} · ${escapeHtml(status)} · 기사 ${issue.articleIds.length}건 · 매체 ${sourceCount}개 · ${formatRelative(issue.lastSeenAt)}</div>
       <div class="issue-reason">${escapeHtml(reason)}</div>

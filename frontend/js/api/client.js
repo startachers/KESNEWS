@@ -232,6 +232,13 @@ export function patchBriefingIssue(reportDate, issueId, expectedRevision, fields
   });
 }
 
+export function removeIssueArticle(reportDate, issueId, articleId, expectedRevision) {
+  return patchBriefingIssue(reportDate, issueId, expectedRevision, {
+    articleId,
+    membershipAction: "remove",
+  });
+}
+
 export function createManualIssueGroup(reportDate, articleIds, expectedRevision) {
   return request("/issues/manual-group", {
     method: "POST",

@@ -244,7 +244,7 @@ def test_apply_activates_top_tag_on_recommended_article_cluster():
 
 def test_recommendation_selects_twelve_and_fills_six_top_issue_cards():
     report_date = "2025-04-04"
-    _, revision = setup_candidates(report_date, 14)
+    article_ids, revision = setup_candidates(report_date, 14)
     app.state.ollama_client = FakeSelectionOllama(recommendations(12))
 
     proposed = client.post(
@@ -270,6 +270,17 @@ def test_recommendation_selects_twelve_and_fills_six_top_issue_cards():
     ).json()["data"]["articles"]
     assert sum(item["included"] for item in articles) == 12
     assert sum(item["topIssue"] for item in articles) == 6
+
+    manually_added_id = next(article_id for article_id in article_ids if article_id not in applied_ids)
+    manually_added = client.patch(
+        f"/api/briefings/{report_date}/articles/{manually_added_id}",
+        json={"expectedRevision": applied.json()["data"]["revision"], "selected": True},
+    )
+    assert manually_added.status_code == 200
+    articles = client.get(
+        f"/api/articles?report_date={report_date}"
+    ).json()["data"]["articles"]
+    assert sum(item["included"] for item in articles) == 13
 
 
 def test_unknown_or_duplicate_candidate_ids_are_rejected_after_retry():

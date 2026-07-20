@@ -626,8 +626,12 @@ def patch_article_state(
         patch["topIssue"] = False
     if patch.get("topIssue") is True:
         patch["selected"] = True
-    if patch.get("selected") is True and _effective_direct_coverage_for_article(
-        connection, briefing["id"], report_date, article_id
+    if (
+        patch.get("selected") is True
+        and patch.get("directCoverage") is not False
+        and _effective_direct_coverage_for_article(
+            connection, briefing["id"], report_date, article_id
+        )
     ):
         raise DirectCoverageNotSelectable()
     if patch.get("topIssue") is True:
