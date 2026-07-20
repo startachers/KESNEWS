@@ -1,0 +1,23 @@
+{
+  "version": "analysis-md-v2",
+  "cleaning_rule_version": "article-clean-v2.1",
+  "minimum_full_text_characters": 500,
+  "minimum_rss_summary_characters": 120,
+  "official_document_minimum_characters": 180,
+  "article_character_limits": {
+    "required": 4000,
+    "review": 2500,
+    "reference": 1200
+  },
+  "document_budget": {
+    "warning_characters": 35000,
+    "max_characters": 45000
+  },
+  "publisher_quality": {
+    "evaluation_window": 20,
+    "warning_success_rate": 0.80,
+    "quarantine_success_rate": 0.60,
+    "minimum_attempts_for_quarantine": 10
+  },
+  "disabled_publishers": []
+}

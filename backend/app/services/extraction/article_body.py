@@ -11,9 +11,10 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, Callable
 
 from backend.app.services.extraction.cleaner import clean_text
+from backend.app.services.extraction.publisher_extractors import alternate_urls, publisher_hints
 
 MAX_RESPONSE_BYTES = 3 * 1024 * 1024
 MIN_BODY_LENGTH = 200
@@ -34,10 +35,12 @@ class BodyFetchResult:
     body_text: str
     status: str
     error: str = ""
+    resolved_url: str = ""
+    attempts: tuple[dict[str, str], ...] = ()
 
 
 class _ArticleParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, content_hints: tuple[str, ...] = ()) -> None:
         super().__init__(convert_charrefs=True)
         self._stack: list[tuple[bool, bool]] = []
         self._paragraph_depths: list[int] = []
@@ -46,6 +49,11 @@ class _ArticleParser(HTMLParser):
         self.candidate_chunks: list[str] = []
         self.paragraphs: list[str] = []
         self.json_ld: list[str] = []
+        self.meta_descriptions: list[str] = []
+        self.canonical_url = ""
+        self._publisher_hint = re.compile(
+            "|".join(re.escape(item) for item in content_hints), re.I
+        ) if content_hints else None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = " ".join(value or "" for key, value in attrs if key in {"id", "class", "itemprop"})
@@ -58,6 +66,7 @@ class _ArticleParser(HTMLParser):
         )
         candidate = not excluded and (
             parent_candidate or tag in {"article", "main"} or bool(_CONTENT_HINT.search(attr))
+            or bool(self._publisher_hint and self._publisher_hint.search(attr))
         )
         self._stack.append((candidate, excluded))
         if tag == "p" and not excluded:
@@ -67,6 +76,13 @@ class _ArticleParser(HTMLParser):
             attrs_dict = dict(attrs)
             self._script_type = (attrs_dict.get("type") or "").lower()
             self._script_chunks = []
+        attrs_dict = dict(attrs)
+        if tag == "meta":
+            key = (attrs_dict.get("property") or attrs_dict.get("name") or "").lower()
+            if key in {"og:description", "description"} and attrs_dict.get("content"):
+                self.meta_descriptions.append(attrs_dict["content"] or "")
+        if tag == "link" and (attrs_dict.get("rel") or "").lower() == "canonical":
+            self.canonical_url = attrs_dict.get("href") or ""
         if tag in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}:
             self._stack.pop()
 
@@ -120,8 +136,8 @@ def _article_body_from_json(value: Any) -> str:
     return ""
 
 
-def extract_article_body(html: str) -> str:
-    parser = _ArticleParser()
+def extract_article_body(html: str, *, url: str = "") -> str:
+    parser = _ArticleParser(publisher_hints(url))
     parser.feed(html)
     parser.close()
 
@@ -140,6 +156,14 @@ def extract_article_body(html: str) -> str:
     paragraphs = [clean_text(item) for item in parser.paragraphs]
     fallback = " ".join(item for item in paragraphs if len(item) >= 20)
     return clean_text(fallback) if len(clean_text(fallback)) >= MIN_BODY_LENGTH else ""
+
+
+def extract_page_metadata(html: str, *, url: str = "") -> tuple[str, str]:
+    parser = _ArticleParser(publisher_hints(url))
+    parser.feed(html)
+    parser.close()
+    description = max((clean_text(item) for item in parser.meta_descriptions), key=len, default="")
+    return parser.canonical_url, description
 
 
 def decode_html(raw: bytes, declared_charset: str | None) -> str:
@@ -264,33 +288,95 @@ def decode_google_news_url(url: str, timeout_seconds: float = 8) -> str:
     raise ValueError("Google 뉴스 원문 주소를 찾지 못함")
 
 
+def _fetch_page(url: str, timeout_seconds: float) -> tuple[str, str, str]:
+    _validate_public_url(url)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+        },
+    )
+    opener = urllib.request.build_opener(_SafeRedirectHandler())
+    with opener.open(request, timeout=timeout_seconds) as response:  # noqa: S310
+        content_type = response.headers.get_content_type()
+        if content_type not in {"text/html", "application/xhtml+xml"}:
+            raise ValueError(f"HTML 문서가 아님 ({content_type})")
+        raw = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(raw) > MAX_RESPONSE_BYTES:
+            raise ValueError("기사 문서가 허용 크기를 초과함")
+        html = decode_html(raw, response.headers.get_content_charset())
+        final_url = response.geturl()
+    canonical, description = extract_page_metadata(html, url=final_url)
+    resolved = urllib.parse.urljoin(final_url, canonical) if canonical else final_url
+    return html, resolved, description
+
+
+def _failure_reason(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        if exc.code in {401, 403, 406, 429, 451}:
+            return "access_blocked"
+        return "network_error"
+    message = str(exc).lower()
+    if "paywall" in message or "유료" in message:
+        return "paywall"
+    if isinstance(exc, ValueError) and "google 뉴스" in message:
+        return "redirect_failed"
+    return "network_error"
+
+
+def fetch_article_body_with_retries(
+    url: str,
+    timeout_seconds: float = 8,
+    body_validator: Callable[[str, str], bool] | None = None,
+) -> BodyFetchResult:
+    if not url:
+        return BodyFetchResult("", "failed", "기사 URL 없음", attempts=())
+    attempts: list[dict[str, str]] = []
+    try:
+        resolved_source = decode_google_news_url(url, timeout_seconds)
+    except (ValueError, urllib.error.URLError, TimeoutError, OSError) as exc:
+        return BodyFetchResult(
+            "", "failed", _failure_reason(exc), attempts=({"stage": "resolve", "error": str(exc)},)
+        )
+    candidates = [("original", resolved_source), *alternate_urls(resolved_source)]
+    summary = ""
+    final_url = resolved_source
+    for stage, candidate_url in candidates:
+        try:
+            html, final_url, description = _fetch_page(candidate_url, timeout_seconds)
+            summary = max(summary, description, key=len)
+            body = extract_article_body(html, url=final_url)
+            if body and (body_validator is None or body_validator(body, final_url)):
+                attempts.append({"stage": stage, "url": candidate_url, "status": "success"})
+                return BodyFetchResult(
+                    body, "success_full", "", final_url, tuple(attempts)
+                )
+            attempts.append({
+                "stage": stage, "url": candidate_url,
+                "status": "quality_failed" if body else "selector_failed",
+            })
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError, LookupError) as exc:
+            attempts.append(
+                {"stage": stage, "url": candidate_url, "status": _failure_reason(exc), "error": str(exc)}
+            )
+    if len(summary) >= 120:
+        return BodyFetchResult(summary, "success_summary", "", final_url, tuple(attempts))
+    reason = attempts[-1]["status"] if attempts else "network_error"
+    return BodyFetchResult("", "failed", reason, final_url, tuple(attempts))
+
+
 def fetch_article_body(url: str, timeout_seconds: float = 8) -> BodyFetchResult:
     if not url:
         return BodyFetchResult("", "missing", "기사 URL 없음")
     try:
         url = decode_google_news_url(url, timeout_seconds)
-        _validate_public_url(url)
-        request = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml",
-                "Accept-Language": "ko-KR,ko;q=0.9",
-            },
-        )
-        opener = urllib.request.build_opener(_SafeRedirectHandler())
-        with opener.open(request, timeout=timeout_seconds) as response:  # noqa: S310
-            content_type = response.headers.get_content_type()
-            if content_type not in {"text/html", "application/xhtml+xml"}:
-                return BodyFetchResult("", "missing", f"HTML 문서가 아님 ({content_type})")
-            raw = response.read(MAX_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_RESPONSE_BYTES:
-                return BodyFetchResult("", "missing", "기사 문서가 허용 크기를 초과함")
-            html = decode_html(raw, response.headers.get_content_charset())
-        body = extract_article_body(html)
+        html, resolved_url, _ = _fetch_page(url, timeout_seconds)
+        body = extract_article_body(html, url=resolved_url)
         if not body:
             return BodyFetchResult("", "missing", "기사 본문 영역을 찾지 못함")
-        return BodyFetchResult(body, "full_text")
+        return BodyFetchResult(body, "full_text", resolved_url=resolved_url)
     except urllib.error.HTTPError as exc:
         return BodyFetchResult("", "missing", f"언론사 응답 HTTP {exc.code}")
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, LookupError) as exc:

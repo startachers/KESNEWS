@@ -288,13 +288,7 @@ async def apply_selection_recommendations(report_date: str, body: ApplyRequest) 
         serialized = selection_repo.serialize(run)
         article_ids = [item["articleId"] for item in serialized["response"]["recommendations"]]
         with connection:
-            (
-                updated,
-                applied_ids,
-                top_issue_issue_ids,
-                top_issue_article_ids,
-                top_issue_count,
-            ) = briefings_repo.apply_ai_recommendations(
+            updated, applied_ids = briefings_repo.apply_ai_recommendations(
                 connection, report_date, body.expectedRevision, article_ids
             )
             selection_repo.mark_applied(connection, body.runId)
@@ -308,10 +302,6 @@ async def apply_selection_recommendations(report_date: str, body: ApplyRequest) 
         {
             "runId": body.runId,
             "appliedArticleIds": applied_ids,
-            "topIssueIssueIds": top_issue_issue_ids,
-            "topIssueArticleIds": top_issue_article_ids,
-            "activatedTopIssueCount": len(top_issue_issue_ids) + len(top_issue_article_ids),
-            "topIssueCount": top_issue_count,
             "selectedCount": min(
                 MAX_SELECTED_ARTICLES,
                 len(applied_ids) + len(serialized["request"]["selectedArticleIds"]),

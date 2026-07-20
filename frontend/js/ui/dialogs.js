@@ -95,10 +95,18 @@ export async function restartServerFromSettings() {
     button.textContent = "재시작 중…";
     setStatus("busy", "로컬 서버를 재시작하고 있습니다…");
     forcedReload = window.setTimeout(() => window.location.reload(), 50000);
-    const result = await api.restartServer();
+    const previousProcessId = await api.getServerProcessId();
+    let result = null;
+    try {
+      result = await api.restartServer();
+    } catch (error) {
+      // 명령 처리 직후 기존 서버 연결이 먼저 닫히면 POST 응답만 끊길 수 있다.
+      // 이 경우 새 인스턴스 확인 결과로 실제 성공 여부를 판정한다.
+      console.info("재시작 POST 연결이 종료되어 새 인스턴스를 직접 확인합니다.", error);
+    }
     closeOverlay("settingsOverlay");
     showToast("서버 재시작을 요청했습니다. 연결을 확인하고 있습니다.");
-    await api.waitForRestart(result.data.processId);
+    await api.waitForRestart(result?.data?.processId || previousProcessId);
     window.clearTimeout(forcedReload);
     window.location.reload();
   } catch (error) {

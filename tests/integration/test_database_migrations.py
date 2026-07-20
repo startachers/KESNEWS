@@ -33,6 +33,9 @@ EXPECTED_TABLES = {
     "weather_risk_signals",
     "briefing_weather",
     "briefing_weather_signals",
+    "article_extractions",
+    "publisher_extraction_events",
+    "briefing_analysis_markdown",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -58,6 +61,9 @@ EXPECTED_MIGRATIONS = [
     "0020_top_issue_implies_briefing_selection.sql",
     "0021_weather_briefing.sql",
     "0022_rules_v12_category_reclassification.sql",
+    "0023_analysis_markdown_pipeline.sql",
+    "0024_publisher_quality_rule_version.sql",
+    "0025_analysis_markdown_manifest.sql",
 ]
 
 
@@ -560,6 +566,9 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
             "0020_top_issue_implies_briefing_selection.sql",
             "0021_weather_briefing.sql",
             "0022_rules_v12_category_reclassification.sql",
+            "0023_analysis_markdown_pipeline.sql",
+            "0024_publisher_quality_rule_version.sql",
+            "0025_analysis_markdown_manifest.sql",
         ]
     upgraded = get_connection(db_path)
     try:

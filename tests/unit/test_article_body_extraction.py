@@ -7,6 +7,7 @@ from backend.app.services.extraction.article_body import (
     decode_html,
     extract_article_body,
     parse_google_news_batch_response,
+    fetch_article_body_with_retries,
 )
 
 
@@ -74,3 +75,53 @@ def test_decode_html_recovers_cp949_when_header_claims_utf8():
 def test_google_batch_response_unescapes_query_delimiters():
     raw = r'[["wrb.fr","Fbv4je","[\"garturlres\",\"https://example.com/a?x\\u003d1\\u0026y\\u003d2\",1]"]]'
     assert parse_google_news_batch_response(raw) == "https://example.com/a?x=1&y=2"
+
+
+def test_multistage_fetch_retries_mobile_and_records_attempts(monkeypatch):
+    monkeypatch.setattr(article_body, "decode_google_news_url", lambda url, timeout: url)
+    monkeypatch.setattr(
+        article_body,
+        "alternate_urls",
+        lambda url: [("mobile", "https://m.example.com/story")],
+    )
+
+    def fake_fetch(url, timeout):
+        if "m.example" not in url:
+            raise ValueError("첫 페이지 실패")
+        return f"<article><p>{BODY * 3}</p></article>", url, ""
+
+    monkeypatch.setattr(article_body, "_fetch_page", fake_fetch)
+    result = fetch_article_body_with_retries("https://example.com/story")
+    assert result.status == "success_full"
+    assert result.resolved_url == "https://m.example.com/story"
+    assert [attempt["stage"] for attempt in result.attempts] == ["original", "mobile"]
+
+
+def test_multistage_fetch_uses_meta_description_only_as_summary(monkeypatch):
+    summary = "7월 20일 공사는 전기설비 안전점검 계획과 대상, 현장 일정 및 관계기관 협력 방안을 발표했다고 밝혔다. " * 2
+    monkeypatch.setattr(article_body, "decode_google_news_url", lambda url, timeout: url)
+    monkeypatch.setattr(article_body, "alternate_urls", lambda url: [])
+    monkeypatch.setattr(article_body, "_fetch_page", lambda url, timeout: ("<html></html>", url, summary))
+    result = fetch_article_body_with_retries("https://example.com/story")
+    assert result.status == "success_summary"
+    assert result.body_text == summary
+
+
+def test_multistage_fetch_continues_when_first_body_fails_quality(monkeypatch):
+    short_body = "메뉴와 추천 기사뿐인 본문 " * 20
+    full_body = BODY * 4
+    monkeypatch.setattr(article_body, "decode_google_news_url", lambda url, timeout: url)
+    monkeypatch.setattr(article_body, "alternate_urls", lambda url: [("amp", f"{url}/amp")])
+    monkeypatch.setattr(
+        article_body,
+        "_fetch_page",
+        lambda url, timeout: (
+            f"<article><p>{full_body if url.endswith('/amp') else short_body}</p></article>", url, ""
+        ),
+    )
+    result = fetch_article_body_with_retries(
+        "https://example.com/story", body_validator=lambda body, url: len(body) >= 500
+    )
+    assert result.status == "success_full"
+    assert result.body_text == full_body.strip()
+    assert [attempt["status"] for attempt in result.attempts] == ["quality_failed", "success"]

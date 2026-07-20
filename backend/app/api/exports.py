@@ -11,6 +11,8 @@ from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.exports import csv_export, json_export, markdown_export
+from backend.app.services.analysis_markdown import GenerationError
+from backend.app.services.analysis_markdown.service import generate as generate_analysis_markdown
 
 router = APIRouter()
 
@@ -24,24 +26,35 @@ async def export_markdown(report_date: str) -> Any:
             return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
     finally:
         connection.close()
-    await asyncio.to_thread(markdown_export.refresh_selected_bodies, report_date, get_connection)
-    connection = get_connection()
     try:
-        briefing = briefing_repo.get_by_date(connection, report_date)
-        context = markdown_export.build_exchange_context(connection, report_date)
-        if not context.articles:
-            return error_response("REPORT_DRAFT_INVALID", "Markdown으로 내보낼 선정 기사가 없습니다.")
-        weather_context = markdown_export.weather_context_for_briefing(connection, briefing["id"])
-        content = markdown_export.build_markdown(
-            report_date, briefing["prepared_by"] or "", context, weather_context
+        # 기존 수동 내보내기의 전문 refresh도 유지하되, 최종 판정·정제·서명·저장은
+        # 테스트/향후 분석 버튼과 동일한 공통 생성 서비스를 사용한다.
+        await asyncio.to_thread(markdown_export.refresh_selected_bodies, report_date, get_connection)
+        output = await asyncio.to_thread(
+            generate_analysis_markdown, get_connection, report_date, save=True
         )
-    finally:
-        connection.close()
+    except GenerationError as exc:
+        return error_response(exc.code, exc.message, {"failedArticles": exc.details})
     return Response(
-        content=content.encode("utf-8"),
+        content=output.content.encode("utf-8"),
         media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="KESCO_AI_{report_date}.md"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="KESCO_AI_{report_date}.md"',
+            "X-KESCO-Input-Signature": output.result["inputSignature"],
+            "X-KESCO-File-Hash": output.result["fileHash"],
+        },
     )
+
+
+@router.post("/api/briefings/{report_date}/analysis-markdown")
+async def generate_markdown_result(report_date: str) -> Any:
+    try:
+        output = await asyncio.to_thread(
+            generate_analysis_markdown, get_connection, report_date, save=True
+        )
+    except GenerationError as exc:
+        return error_response(exc.code, exc.message, {"failedArticles": exc.details})
+    return ok_envelope(output.result)
 
 
 @router.get("/api/exports/{report_date}.json")

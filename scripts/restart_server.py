@@ -46,7 +46,8 @@ def process_exists(pid: int) -> bool:
 
 def restart(parent_pid: int) -> int:
     # API 응답이 브라우저까지 전달될 시간을 확보한다.
-    time.sleep(0.75)
+    # 브라우저가 JSON 응답을 읽고 연결을 정리할 시간을 충분히 준다.
+    time.sleep(2.0)
     target = f"gui/{os.getuid()}/{LAUNCHD_LABEL}"
     if launchd_server_pid() == parent_pid:
         log("브라우저 요청으로 launchd 서버를 재시작합니다.")

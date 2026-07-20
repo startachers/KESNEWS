@@ -71,7 +71,7 @@ export async function applyAutoSelectionProposal() {
     setState(await loadDailyState(state.date));
     renderAll();
     els.autoSelectionOverlay.classList.remove("open");
-    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 추가하고 빈 Top Issues ${result.data.activatedTopIssueCount || 0}개를 군집 우선으로 채웠습니다.`, "success");
+    showToast(`Gemma 추천 기사 ${result.data.appliedArticleIds.length}건을 브리핑에 추가했습니다. Top Issues는 수동으로 선택해 주세요.`, "success");
     recommendationRun = null;
   } catch (error) {
     if (["BRIEFING_REVISION_CONFLICT", "AI_INPUT_STALE"].includes(error.code)) {

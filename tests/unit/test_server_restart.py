@@ -27,7 +27,8 @@ def test_schedule_restart_starts_detached_local_helper(monkeypatch):
 
 def test_helper_uses_launchd_kickstart_for_managed_parent(monkeypatch):
     commands = []
-    monkeypatch.setattr(restart_server.time, "sleep", lambda _seconds: None)
+    sleeps = []
+    monkeypatch.setattr(restart_server.time, "sleep", sleeps.append)
     monkeypatch.setattr(restart_server, "launchd_server_pid", lambda: 1234)
     monkeypatch.setattr(restart_server, "log", lambda _message: None)
     monkeypatch.setattr(
@@ -37,6 +38,7 @@ def test_helper_uses_launchd_kickstart_for_managed_parent(monkeypatch):
     )
 
     assert restart_server.restart(1234) == 0
+    assert sleeps == [2.0]
     assert commands == [
         [
             "launchctl",

@@ -188,7 +188,7 @@ DELETE /api/articles/{article_id}
 - `include_dismissed=false`면 `dismissed=true` 기사를 제외한다.
 - `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환하며 `briefing_issues`의 수동 상태를 합쳐 반환한다.
 
-Top Issues는 담당자가 직접 태그하거나 Gemma 추천을 검토·적용한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
+Top Issues는 담당자가 직접 태그한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
 개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 6개로 제한한다.
 카드에는 자동 순위·점수·기사/매체 수 대신 구성 기사의 유효 분류를 우선 표시한다. 담당자가
 배치 순서를 바꾸면 군집과 개별 기사의 `sort_order`를 하나의 0부터 시작하는 표시 순서로 정규화하며,
@@ -199,6 +199,8 @@ Media Coverage에서 펼친 관련기사의 선정 여부도 기사별 PATCH로 
 기사는 브리핑 이슈 PATCH에 `articleId`, `membershipAction="remove"`, `expectedRevision`을 보내
 수동 remove override로 제외하며, 기사 원본과 선정·중요·메모 상태는 유지한다.
 7번째 항목을 선택하는 mutation은 `TOP_ISSUE_LIMIT_EXCEEDED`(409)로 거부한다.
+현재 후보 기사와 유효 구성 관계가 하나도 없는 과거 군집은 수동 선택 상태를 보존하되,
+화면에 표시되지 않으므로 최대 6개 제한의 개수에서도 제외한다.
 재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
 재군집화 이력 때문에 기사 하나가 여러 군집 기록과 겹치더라도 기사 `top_issue` 하나를 여러
 군집 Top 태그로 확장하지 않는다. 해당 보고일에 이미 수동 선택된 군집, 수동 군집, 최신 군집
@@ -277,15 +279,12 @@ POST /api/briefings/{date}/selection-recommendations/apply
   정상 추천과 실제 기사 선정 상태를 변경하지 않는다.
 - apply는 `expectedRevision`, `runId`를 받고 입력 서명을 다시 검증한다. 성공한 미적용 실행만
   적용할 수 있다.
-- apply는 추천 기사에 `selected=true`를 설정하는 같은 transaction에서 기존 수동 Top 태그를
-  보존하고, 비어 있는 Top Issues 자리만 실제 적용된 핵심 추천 순위 1~6위 순서로 채운다.
-  추천 기사가 유효 군집에 속하면 `briefing_issues.selected=true`로 군집 Top 태그를 활성화하고,
-  군집이 없는 단독 기사만 `briefing_articles.top_issue=true`로 설정한다. 같은 군집은 Top Issue
-  하나로 취급한다. 기존 기사 선정 상태와 `starred`, `note`, `dismissed`, 수동 분류는 변경하지
-  않는다. `dismissed=true`는 적용 대상에서 제외한다.
-- apply 응답은 새로 활성화한 군집을 `topIssueIssueIds`, 단독 기사를 `topIssueArticleIds`, 두
-  종류의 합계를 `activatedTopIssueCount`로 반환한다. 보존된 수동 Top 태그까지 포함한 적용 후
-  전체 개수는 `topIssueCount`로 반환한다.
+- apply는 추천 기사에 `selected=true`만 설정한다. 기존 수동 Top 태그를 보존하며
+  `briefing_issues.selected`와 `briefing_articles.top_issue`는 활성화하거나 해제하지 않는다.
+  기존 기사 선정 상태와 `starred`, `note`, `dismissed`, 수동 분류도 변경하지 않으며,
+  `dismissed=true`는 적용 대상에서 제외한다.
+- apply 응답은 `appliedArticleIds`, 적용 후 `selectedCount`, `revision`을 반환한다.
+  Top Issues는 이 응답과 독립적으로 담당자가 Media Coverage에서 수동 관리한다.
 - Top Issues 상한은 화면에 표시되는 고유 군집과 군집이 없는 단독 기사를 합산해 계산한다.
   군집 구성 기사에 남은 구버전 개별 Top 태그는 같은 군집의 중복 항목으로 세지 않는다.
 - migration `0016_promote_grouped_article_top_tags.sql`은 기존 DB의 군집 구성 기사
@@ -1034,3 +1033,33 @@ PUT  /api/briefings/{date}/weather
 - 이후 기상 갱신은 과거 최종 snapshot과 생성된 HTML을 변경하지 않는다.
 - 기사 근거 `Axx`와 기상 근거 `Wxx`는 별도 index로 관리한다. 기상 ID를 기존
   `articleIds`에 넣지 않는다.
+
+---
+
+## 10. AI 분석용 Markdown 계약
+
+```text
+POST /api/exports/{date}.md
+POST /api/briefings/{date}/analysis-markdown
+```
+
+- 두 route는 동일한 결정론적 생성 서비스를 사용한다. 첫 route는 UTF-8 Markdown을 내려주고
+  표준 경로에도 원자적으로 저장하며, 둘째 route는 저장 경로·입력 서명·파일 해시·기사별
+  판정 결과를 API envelope로 반환한다.
+- 원문 또는 적격 RSS 요약을 확보하지 못한 기사는 본문 섹션에 넣지 않는다.
+- `required` 기사의 원문과 확정 가능한 동일 사건 대체기사가 모두 없으면
+  `REQUIRED_ARTICLE_EVIDENCE_MISSING`으로 중단한다. `review`와 `reference`는 제외 내역에 남긴다.
+- `article_extractions.raw_text`와 `cleaned_text`는 원본 `articles.body_text`를 덮어쓰지 않는
+  실행 이력이다. 대체기사는 기존/신규 `articles.id`를 유지하고 양방향 연결 필드로 추적한다.
+- 입력 서명은 문서·정제 버전, 보고일, 담당자, 선정 순서와 원/대체 기사, 원문/요약,
+  담당자 메모·최종 판정, 검토 완료 기상정보, 길이·언론사 품질 설정을 고정 키 JSON으로
+  직렬화해 SHA-256으로 계산한다. 실행 시각은 서명과 MD에 포함하지 않는다.
+- 저장 성공 시 `briefing_analysis_markdown`에 입력 서명, 실제 포함 기사 기준 `Axx` 근거표,
+  파일 해시와 생성 입력 snapshot 서명을 함께 기록한다. 외부 AI 결과 검증은 이 manifest가
+  현재 작업본 입력과 일치할 때 같은 서명·근거표를 사용하고, manifest가 없거나 오래됐으면
+  기존 CEO 보고 편집본 입력 계약으로 되돌아간다.
+- 저장 경로는 `reports/ai_inputs/YYYY-MM-DD/KESCO_AI분석자료_YYYY-MM-DD.md`이며 임시 파일을
+  같은 디렉터리에 fsync한 뒤 `os.replace`한다. `KESCO_REPORTS_DIR`가 설정되면 해당 경로를
+  보고서 루트로 사용한다.
+- 신규 오류 코드는 `NO_ELIGIBLE_ARTICLES`, `DOCUMENT_BUDGET_EXCEEDED`, `INPUT_CHANGED`,
+  `MD_STORAGE_FAILED`다.

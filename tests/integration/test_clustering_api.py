@@ -797,6 +797,103 @@ def test_top_issues_allow_six_and_promote_article_tags_after_clustering():
     assert retagged_issue.status_code == 200
 
 
+def test_hidden_selected_issue_does_not_consume_visible_top_issue_slot():
+    report_date = "2026-08-16"
+    _create_briefing(report_date)
+    first = _create_article(
+        report_date,
+        "hidden-top-issue-1",
+        "전주 완산구 아파트 정전 500세대 불편",
+        "연합뉴스",
+        "2026-08-16T01:00:00Z",
+    )
+    second = _create_article(
+        report_date,
+        "hidden-top-issue-2",
+        "전주 아파트 대규모 정전 500가구 전력 중단",
+        "KBS",
+        "2026-08-16T02:00:00Z",
+    )
+    run = client.post(
+        "/api/cluster-runs",
+        json={"reportDate": report_date, "asOf": "2026-08-16T03:00:00Z"},
+    ).json()["data"]
+    assert client.post(f"/api/cluster-runs/{run['id']}/apply").status_code == 200
+    issue = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"][0]
+    assert set(issue["articleIds"]) == {first, second}
+
+    revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
+    selected_issue = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue['id']}",
+        json={
+            "expectedRevision": revision,
+            "selected": True,
+            "articleId": first,
+        },
+    )
+    assert selected_issue.status_code == 200
+    revision = selected_issue.json()["data"]["revision"]
+
+    standalone_ids = [
+        _create_article(
+            report_date,
+            f"visible-top-{index}",
+            f"서로 다른 지역 전기안전 현안 {index}",
+            f"지역일보{index}",
+            f"2026-08-16T{index + 4:02d}:00:00Z",
+        )
+        for index in range(6)
+    ]
+    for article_id in standalone_ids[:5]:
+        tagged = client.patch(
+            f"/api/briefings/{report_date}/articles/{article_id}",
+            json={"expectedRevision": revision, "topIssue": True},
+        )
+        assert tagged.status_code == 200
+        revision = tagged.json()["data"]["revision"]
+
+    for article_id in (first, second):
+        removed = client.patch(
+            f"/api/briefings/{report_date}/issues/{issue['id']}",
+            json={
+                "expectedRevision": revision,
+                "articleId": article_id,
+                "membershipAction": "remove",
+            },
+        )
+        assert removed.status_code == 200
+        revision = removed.json()["data"]["revision"]
+
+    visible_issues = client.get(
+        "/api/issues", params={"report_date": report_date}
+    ).json()["data"]["issues"]
+    assert issue["id"] not in {item["id"] for item in visible_issues}
+
+    replacement = client.patch(
+        f"/api/briefings/{report_date}/articles/{standalone_ids[5]}",
+        json={"expectedRevision": revision, "topIssue": True},
+    )
+    assert replacement.status_code == 200
+
+    connection = get_connection()
+    try:
+        stale_state = connection.execute(
+            """
+            SELECT bi.selected
+            FROM briefing_issues bi
+            JOIN briefings b ON b.id = bi.briefing_id
+            WHERE b.report_date = ? AND bi.issue_id = ?
+            """,
+            (report_date, issue["id"]),
+        ).fetchone()
+        assert stale_state is not None
+        assert bool(stale_state["selected"]) is True
+    finally:
+        connection.close()
+
+
 def test_manual_group_moves_articles_and_survives_reclustering():
     report_date = "2026-08-07"
     _create_briefing(report_date)

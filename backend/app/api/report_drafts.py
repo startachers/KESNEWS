@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import APIRouter, Request
@@ -7,8 +8,11 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import briefing_repository as briefing_repo
+from backend.app.repositories import analysis_markdown_repository as markdown_repo
 from backend.app.repositories import report_draft_repository as draft_repo
 from backend.app.repositories.database import get_connection
+from backend.app.services.analysis_markdown.config import load_config
+from backend.app.services.analysis_markdown.source import build_source_context
 from backend.app.services.reports.report_draft import (
     ReportDraftInvalid,
     build_exchange_context,
@@ -29,6 +33,24 @@ class ReportDraftPutRequest(BaseModel):
     basedOnAiRunId: str | None = None
 
 
+@dataclass(frozen=True)
+class DraftInputContext:
+    signature: str
+    evidence: dict[str, str]
+    selected_count: int
+
+
+def _draft_input_context(connection, report_date: str, briefing) -> DraftInputContext:
+    legacy = build_exchange_context(connection, report_date)
+    manifest = markdown_repo.get(connection, briefing["id"])
+    if manifest is not None:
+        source = build_source_context(connection, report_date, load_config())
+        if source is not None and manifest["source_signature"] == source.signature:
+            evidence = markdown_repo.evidence(manifest)
+            return DraftInputContext(manifest["input_signature"], evidence, len(evidence))
+    return DraftInputContext(legacy.signature, legacy.evidence, len(legacy.articles))
+
+
 def _briefing_or_error(connection, report_date: str):
     briefing = briefing_repo.get_by_date(connection, report_date)
     if briefing is None:
@@ -43,7 +65,7 @@ async def get_report_draft(report_date: str) -> Any:
         briefing, error = _briefing_or_error(connection, report_date)
         if error:
             return error
-        context = build_exchange_context(connection, report_date)
+        context = _draft_input_context(connection, report_date, briefing)
         row = draft_repo.get(connection, briefing["id"])
         data = draft_repo.serialize(
             row, stale=bool(row is not None and row["input_signature"] != context.signature)
@@ -55,7 +77,7 @@ async def get_report_draft(report_date: str) -> Any:
             "draft": data,
             "inputSignature": context.signature,
             "evidence": context.evidence,
-            "selectedCount": len(context.articles),
+            "selectedCount": context.selected_count,
         }
     )
 
@@ -70,7 +92,7 @@ async def validate_report_draft(report_date: str, request: Request) -> Any:
             return error
         if briefing["status"] == "final":
             return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 수정할 수 없습니다.")
-        context = build_exchange_context(connection, report_date)
+        context = _draft_input_context(connection, report_date, briefing)
         supplied_signature = str(payload.get("inputSignature") or "") or None
         if isinstance(payload.get("text"), str):
             content = content_from_plain_text(payload["text"], list(context.evidence))
@@ -116,7 +138,7 @@ async def put_report_draft(report_date: str, request: ReportDraftPutRequest) -> 
             return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 수정할 수 없습니다.")
         if briefing["revision"] != request.expectedRevision:
             return error_response("BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다.")
-        context = build_exchange_context(connection, report_date)
+        context = _draft_input_context(connection, report_date, briefing)
         if request.inputSignature != context.signature:
             return error_response(
                 "REPORT_DRAFT_STALE",

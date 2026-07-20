@@ -90,7 +90,7 @@ def test_new_plain_text_no_reference_phrase_does_not_create_reference_issue():
 def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypatch):
     report_date = "2098-07-20"
     _selected_article(report_date)
-    full_text = "외부 고성능 AI에 전달할 기사 전문입니다. " * 20
+    full_text = "외부 고성능 AI에 전달할 기사 전문입니다. " * 30
     monkeypatch.setattr(
         "backend.app.services.extraction.article_body.fetch_article_body",
         lambda url: BodyFetchResult(full_text, "full_text"),
@@ -101,16 +101,16 @@ def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypat
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/markdown")
     assert "[A01] 전기안전 특별점검 확대" in response.text
-    assert full_text in response.text
+    assert full_text.strip() in response.text
     assert "중요 표시: 예" in response.text
     assert "Top Issue: 예" in response.text
     assert "담당자 메모: CEO 확인 필요" in response.text
-    assert "JSON이나 코드 블록으로 출력하지 마십시오." in response.text
+    assert "이 문서는 AI 분석의 근거 데이터다." in response.text
     assert "입력 서명:" in response.text
-    assert "① 오늘의 핵심" in response.text
-    assert "② 경영 시사점" in response.text
-    assert "③ 참고 동향" in response.text
-    assert "한국전기안전공사를 송전망 건설" in response.text
+    assert "분석 적격 기사: 1건" in response.text
+    assert "정제된 기사 본문 또는 유효 RSS 요약" in response.text
+    assert response.headers["x-kesco-input-signature"]
+    assert response.headers["x-kesco-file-hash"]
 
 
 def test_external_analysis_is_validated_saved_and_used_by_preview():
@@ -195,3 +195,52 @@ def test_external_analysis_rejects_unknown_evidence_id():
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "REPORT_DRAFT_INVALID"
+
+
+def test_generated_markdown_signature_and_evidence_drive_external_draft(monkeypatch):
+    report_date = "2098-07-24"
+    article_id = _selected_article(report_date)
+    full_text = "공사는 전기설비 현장 안전점검 결과와 후속 조치 일정을 공식 발표했다. " * 30
+    monkeypatch.setattr(
+        "backend.app.services.extraction.article_body.fetch_article_body",
+        lambda url: BodyFetchResult(full_text, "full_text"),
+    )
+
+    markdown = client.post(f"/api/exports/{report_date}.md")
+    assert markdown.status_code == 200
+    signature = markdown.headers["x-kesco-input-signature"]
+    exchange = client.get(f"/api/briefings/{report_date}/report-draft").json()["data"]
+    assert exchange["inputSignature"] == signature
+    assert exchange["evidence"] == {"A01": article_id}
+
+    validated = client.post(
+        f"/api/briefings/{report_date}/report-draft/validate",
+        json={
+            "reportDate": report_date,
+            "inputSignature": signature,
+            "text": "① 오늘의 핵심\n현장 안전점검 결과를 확인했습니다.",
+        },
+    )
+    assert validated.status_code == 200
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+    saved = client.put(
+        f"/api/briefings/{report_date}/report-draft",
+        json={
+            "expectedRevision": briefing["revision"],
+            "sourceType": "external",
+            "sourceLabel": "외부 AI",
+            "inputSignature": signature,
+            "content": validated.json()["data"]["content"],
+        },
+    )
+    assert saved.status_code == 200
+
+    current = client.get(f"/api/briefings/{report_date}").json()["data"]
+    changed = client.patch(
+        f"/api/briefings/{report_date}/articles/{article_id}",
+        json={"expectedRevision": current["revision"], "note": "Markdown 생성 후 변경"},
+    )
+    assert changed.status_code == 200
+    stale = client.get(f"/api/briefings/{report_date}/report-draft").json()["data"]
+    assert stale["inputSignature"] != signature
+    assert stale["draft"]["stale"] is True

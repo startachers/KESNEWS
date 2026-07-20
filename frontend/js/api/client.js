@@ -199,6 +199,19 @@ export function restartServer() {
   });
 }
 
+export async function getServerProcessId() {
+  const response = await fetchWithTimeout(
+    `${AI_API_BASE}/health`,
+    { headers: { Accept: "application/json" } },
+    3000
+  );
+  const body = await response.json();
+  if (!response.ok || body.service !== "kesco-media-briefing") {
+    throw new Error("현재 서버 정보를 확인하지 못했습니다.");
+  }
+  return String(body.instanceId || "").split("-", 1)[0];
+}
+
 export async function waitForRestart(previousProcessId, timeoutMs = 45000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -211,7 +224,7 @@ export async function waitForRestart(previousProcessId, timeoutMs = 45000) {
       // 기존 서버 종료 중의 연결 실패는 정상적인 재시작 과정이다.
     }
   }
-  throw new Error("서버가 10초 안에 다시 시작되지 않았습니다. 로그를 확인해 주세요.");
+  throw new Error("서버가 45초 안에 다시 시작되지 않았습니다. 로그를 확인해 주세요.");
 }
 
 export function createClusterRun(reportDate, similarityThreshold = 0.40) {

@@ -34,14 +34,25 @@
     button.textContent = "재시작 중…";
     updateStatus("로컬 서버를 재시작하고 있습니다…");
     try {
-      const response = await fetch("/api/operations/restart", {
-        method: "POST",
-        cache: "no-store",
-        headers: { Accept: "application/json", "X-KESCO-Restart": "confirmed" },
+      const currentResponse = await fetch(`/api/health?beforeRestart=${Date.now()}`, {
+        cache: "no-store", headers: { Accept: "application/json" },
       });
-      const body = await response.json();
-      if (!response.ok || !body.ok) throw new Error(body?.error?.message || "재시작 요청 실패");
-      await waitForRestart(body.data.processId);
+      const current = await currentResponse.json();
+      let previousProcessId = String(current.instanceId || "").split("-", 1)[0];
+      try {
+        const response = await fetch("/api/operations/restart", {
+          method: "POST",
+          cache: "no-store",
+          headers: { Accept: "application/json", "X-KESCO-Restart": "confirmed" },
+        });
+        const body = await response.json();
+        if (!response.ok || !body.ok) throw new Error(body?.error?.message || "재시작 요청 실패");
+        previousProcessId = String(body.data.processId || previousProcessId);
+      } catch (error) {
+        console.info("재시작 POST 연결이 종료되어 새 인스턴스를 직접 확인합니다.", error);
+      }
+      if (!previousProcessId) throw new Error("기존 서버 인스턴스를 확인하지 못했습니다.");
+      await waitForRestart(previousProcessId);
       const url = new URL(window.location.href);
       url.searchParams.set("v", String(Date.now()));
       window.location.replace(url.toString());

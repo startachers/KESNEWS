@@ -4,6 +4,7 @@ import sqlite3
 from typing import Any
 
 from backend.app.core.clock import now_iso
+from backend.app.repositories.article_repository import list_candidate_article_ids
 from backend.app.services.ids import make_id
 
 _PATCH_COLUMNS = {
@@ -49,13 +50,20 @@ def _top_issue_count(connection: sqlite3.Connection, briefing_id: str) -> int:
     briefing = get_by_id(connection, briefing_id)
     if briefing is None:
         return 0
-    units = {
-        f"issue:{row['issue_id']}"
-        for row in connection.execute(
-            "SELECT issue_id FROM briefing_issues WHERE briefing_id = ? AND selected = 1",
-            (briefing_id,),
+    candidate_article_ids = list_candidate_article_ids(
+        connection, briefing["report_date"]
+    )
+    units: set[str] = set()
+    selected_issues = connection.execute(
+        "SELECT issue_id FROM briefing_issues WHERE briefing_id = ? AND selected = 1",
+        (briefing_id,),
+    ).fetchall()
+    for row in selected_issues:
+        effective_article_ids = _effective_article_ids_for_issue(
+            connection, row["issue_id"]
         )
-    }
+        if candidate_article_ids.intersection(effective_article_ids):
+            units.add(f"issue:{row['issue_id']}")
     top_articles = connection.execute(
         "SELECT article_id FROM briefing_articles WHERE briefing_id = ? AND top_issue = 1",
         (briefing_id,),
@@ -704,9 +712,8 @@ def apply_ai_recommendations(
     article_ids: list[str],
     *,
     selection_limit: int = 12,
-    top_issue_limit: int = MAX_TOP_ISSUES,
-) -> tuple[sqlite3.Row, list[str], list[str], list[str], int]:
-    """추천 기사를 추가하고 빈 Top 자리를 추천 군집 또는 단독 기사로 채운다."""
+) -> tuple[sqlite3.Row, list[str]]:
+    """추천 기사를 브리핑에 추가한다. Top Issues는 담당자가 수동 관리한다."""
     briefing = get_by_date(connection, report_date)
     if briefing is None:
         raise BriefingNotFound()
@@ -755,52 +762,7 @@ def apply_ai_recommendations(
         applied.append(article_id)
         selected_count += 1
 
-    available_top_slots = max(
-        0,
-        top_issue_limit - _top_issue_count(connection, briefing["id"]),
-    )
-    top_issue_issue_ids: list[str] = []
-    top_issue_article_ids: list[str] = []
-    for article_id in applied[:top_issue_limit]:
-        if available_top_slots <= 0:
-            break
-        issue_id = _effective_issue_id_for_article(connection, report_date, article_id)
-        if issue_id is not None:
-            current = connection.execute(
-                "SELECT selected FROM briefing_issues WHERE briefing_id = ? AND issue_id = ?",
-                (briefing["id"], issue_id),
-            ).fetchone()
-            if current is not None and bool(current["selected"]):
-                continue
-            _ensure_briefing_issue_row(connection, briefing["id"], issue_id)
-            connection.execute(
-                "UPDATE briefing_issues SET selected = 1, updated_at = ? "
-                "WHERE briefing_id = ? AND issue_id = ?",
-                (now_iso(), briefing["id"], issue_id),
-            )
-            top_issue_issue_ids.append(issue_id)
-        else:
-            current = connection.execute(
-                "SELECT top_issue FROM briefing_articles WHERE briefing_id = ? AND article_id = ?",
-                (briefing["id"], article_id),
-            ).fetchone()
-            if current is not None and bool(current["top_issue"]):
-                continue
-            connection.execute(
-                "UPDATE briefing_articles SET top_issue = 1, updated_at = ? "
-                "WHERE briefing_id = ? AND article_id = ?",
-                (now_iso(), briefing["id"], article_id),
-            )
-            top_issue_article_ids.append(article_id)
-        available_top_slots -= 1
-
-    return (
-        bump_revision(connection, briefing["id"], expected_revision),
-        applied,
-        top_issue_issue_ids,
-        top_issue_article_ids,
-        _top_issue_count(connection, briefing["id"]),
-    )
+    return bump_revision(connection, briefing["id"], expected_revision), applied
 
 
 def set_article_state(

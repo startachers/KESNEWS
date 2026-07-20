@@ -41,8 +41,8 @@ def test_index_html_is_served_at_root():
     assert "text/html" in response.headers["content-type"]
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
-    assert "js/restart-guard.js?v=20260716-1" in response.text
-    assert "js/app.js?v=20260720-3" in response.text
+    assert "js/restart-guard.js?v=20260720-1" in response.text
+    assert "js/app.js?v=20260720-4" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
@@ -51,7 +51,7 @@ def test_index_html_is_served_at_root():
     assert response.text.index('value="gemma4:31b"') < response.text.index('value="gemma4:26b"')
 
     app_script = client.get("/js/app.js")
-    assert 'dialogs.js?v=20260717-20' in app_script.text
+    assert 'dialogs.js?v=20260720-1' in app_script.text
     assert 'articles.js?v=20260720-3' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
@@ -67,12 +67,19 @@ def test_index_html_is_served_at_root():
     assert 'button.dataset.restartHandler === "module"' in restart_guard.text
     assert '"X-KESCO-Restart": "confirmed"' in restart_guard.text
     assert 'cache: "no-store"' in restart_guard.text
+    assert "beforeRestart=" in restart_guard.text
+    assert "새 인스턴스를 직접 확인합니다" in restart_guard.text
 
     assert '<option value="collection">관련기사 수집순</option>' in response.text
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
     assert 'articles.js?v=20260720-3' in dialogs_script.text
+    assert "await api.getServerProcessId()" in dialogs_script.text
+
+    client_script = client.get("/js/api/client.js")
+    assert "export async function getServerProcessId()" in client_script.text
+    assert "서버가 45초 안에 다시 시작되지 않았습니다" in client_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
     assert 'articles.js?v=20260720-3' in renderers_script.text
@@ -82,6 +89,8 @@ def test_index_html_is_served_at_root():
     assert "<b>기사 사실</b>" in auto_selection_script.text
     assert "<b>공사 연관성</b>" not in auto_selection_script.text
     assert "<b>선정 이유</b>" not in auto_selection_script.text
+    assert "Top Issues는 수동으로 선택해 주세요" in auto_selection_script.text
+    assert "activatedTopIssueCount" not in auto_selection_script.text
 
     data_io_script = client.get("/js/features/data-io.js")
     assert "오늘 수집한 기사, 선정·메모·Top Issues" in data_io_script.text
