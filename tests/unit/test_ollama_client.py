@@ -45,6 +45,7 @@ def test_generate_sends_structured_bounded_request(monkeypatch):
     monkeypatch.setattr("backend.app.services.ai.ollama_client.http.client.HTTPConnection", fake_connection)
     schema = {"type": "object"}
     assert client.generate(model="gemma4:26b", prompt="test", format_schema=schema) == "{}"
+    assert captured["timeout"] == 1_200.0
     assert captured["payload"]["stream"] is True
     assert captured["payload"]["think"] is False
     assert captured["payload"]["format"] == schema

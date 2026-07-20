@@ -13,8 +13,8 @@ from backend.app.services.extraction.article_body import BodyFetchResult
 client = TestClient(app)
 
 
-def test_management_analysis_timeout_is_ten_minutes_and_selection_stays_five():
-    assert DEFAULT_ANALYSIS_TIMEOUT_SECONDS == 600
+def test_management_analysis_timeout_is_twenty_minutes_and_selection_stays_five():
+    assert DEFAULT_ANALYSIS_TIMEOUT_SECONDS == 1_200
     assert SELECTION_TIMEOUT_SECONDS == 300
 
 

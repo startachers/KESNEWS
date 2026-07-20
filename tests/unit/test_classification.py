@@ -32,8 +32,8 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v11():
-    assert CLASSIFIER_VERSION == "rules-v11"
+def test_classifier_version_is_rules_v12():
+    assert CLASSIFIER_VERSION == "rules-v12"
 
 
 @pytest.mark.parametrize(
@@ -153,6 +153,43 @@ def test_infer_category_matches_safety_keyword():
 
 def test_infer_category_defaults_to_other():
     assert infer_category({"title": "관계없는 제목", "description": "무관한 내용"}) == "other"
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        '인천 당하동서 변압기 고장으로 한때 정전…한전 "복구 완료"',
+        '인천 을왕리해수욕장 일대 한때 정전…"낙뢰 추정"',
+        "인천 호우·강풍 피해 신고 92건…주민 대피·일시 정전",
+        "이 폭염에 2만 5천 세대 정전…또 끊길 수도",
+    ],
+)
+def test_actual_outage_phrases_are_power_outage(title):
+    article = {"title": title, "description": ""}
+    assert infer_category(article) == "power_outage"
+    assert get_relevance(article)["rank"] == 3
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "서울 전역 호우주의보…저지대 침수·하천 범람 유의",
+        "주말 내내 장맛비…송곳호우 가능성",
+        "폭우·강풍 장마철 극한 날씨 때 행동 요령은?",
+        "전국 폭염특보 확대…온열질환 주의",
+    ],
+)
+def test_weather_news_has_weather_category(title):
+    assert infer_category({"title": title, "description": ""}) == "weather"
+
+
+def test_explicit_incident_takes_priority_over_weather_category():
+    assert infer_category(
+        {"title": "폭염 속 냉방기기 전기화재 발생", "description": ""}
+    ) == "electrical_accident"
+    assert infer_category(
+        {"title": "집중호우로 곳곳 정전…복구 작업", "description": ""}
+    ) == "power_outage"
 
 
 @pytest.mark.parametrize(

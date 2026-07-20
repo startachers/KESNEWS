@@ -4,7 +4,7 @@ import { friendlyError } from "../utils/strings.js";
 import * as api from "../api/client.js";
 
 export const DEFAULT_SETTINGS = {
-  settingsVersion: 7,
+  settingsVersion: 8,
   autoRun: true,
   enableYonhap: true,
   enableOpmPress: true,
@@ -30,7 +30,8 @@ export const DEFAULT_SETTINGS = {
     { id: "kesco_governance", label: "공사 경영·거버넌스", enabled: true, query: '("한국전기안전공사" OR "전기안전공사" OR "KESCO") (경영평가 OR 경영공시 OR 국정감사 OR 감사원 OR 이사회 OR 기관장 OR 사장 OR 상임감사 OR 임원 OR 인사 OR 노사 OR 노조 OR 파업 OR 예산 OR 총인건비 OR 직무급 OR 성과급)', naverQueries: ["전기안전공사 경영평가", "전기안전공사 국정감사", "전기안전공사 인사"] },
     { id: "assembly_law", label: "국회·국정감사·법안", enabled: true, query: '(국회 OR 국정감사 OR 국정조사 OR 법안 OR 개정안 OR 입법예고 OR 현안질의) (전기안전 OR 전기화재 OR 감전 OR 정전 OR 전력망 OR 전기설비 OR "한국전기안전공사")', naverQueries: ["국회 전기안전", "국정감사 전력망", "법안 전기설비"] },
     { id: "electrical_accident", label: "전기화재·감전 사고", enabled: true, query: '("전기화재" OR "전기 화재" OR "누전 화재" OR "전기적 요인" OR "감전사고" OR "감전 사고" OR "감전 사망" OR "배전반 화재" OR "변압기 화재")', naverQueries: ["전기화재", "감전 사고", "변압기 화재"] },
-    { id: "power_outage", label: "정전·전력공급 장애", enabled: true, query: '("대규모 정전" OR "광역 정전" OR "일대 정전" OR "전력 공급 중단" OR "전력망 장애" OR "계통 장애" OR 블랙아웃 OR "변전소 고장" OR "송전선로 고장" OR "배전선로 고장")', naverQueries: ["대규모 정전", "변전소 고장", "전력 공급 중단"] },
+    { id: "power_outage", label: "정전·전력공급 장애", enabled: true, query: '("대규모 정전" OR "광역 정전" OR "일대 정전" OR "한때 정전" OR "일시 정전" OR "전력 공급 중단" OR "전력망 장애" OR "계통 장애" OR 블랙아웃 OR "변압기 고장" OR "변전소 고장" OR "송전선로 고장" OR "배전선로 고장")', naverQueries: ["정전 복구", "변압기 고장", "전력 공급 중단"] },
+    { id: "weather", label: "기상", enabled: true, query: '(기상특보 OR 호우 OR 폭우 OR 태풍 OR 폭염 OR 한파 OR 대설 OR 강풍 OR 낙뢰) (정전 OR 전기안전 OR 전력 OR 전기설비 OR 침수 OR 산사태 OR 피해 OR 대피 OR 특보 OR 경보 OR 주의보)', naverQueries: ["기상특보 정전", "호우 전기안전", "폭염 전력수급"] },
     { id: "major_fire_breaking", label: "중대화재·원인 미상 속보", enabled: true, query: '(화재 OR 폭발 OR 큰불) (사망 OR 숨져 OR 사상 OR 중상 OR 심정지 OR 실종 OR 전소 OR 대피 OR "대응 1단계" OR "대응 2단계" OR "대응 3단계")', naverQueries: ["화재 사망", "큰불 대피", "폭발 사상"] },
     { id: "new_industry_safety", label: "ESS·배터리·충전시설 등 신산업 설비안전", enabled: true, query: '(ESS OR "에너지저장장치" OR 배터리 OR "전기차 충전") (화재 OR 감전 OR 폭발 OR 사고 OR 안전점검 OR 결함 OR 리콜)', naverQueries: ["ESS 화재", "배터리 안전점검", "전기차 충전 화재"] },
     { id: "law_standard_plan", label: "법령·기준·기본계획", enabled: true, query: '("전기안전관리법" OR "전기사업법" OR "한국전기설비규정" OR KEC OR "전기설비기술기준" OR "전기안전관리 기본계획" OR "전력수급기본계획") (개정 OR 시행 OR 입법예고 OR 행정예고 OR 고시 OR 확정 OR 발표)', naverQueries: ["전기안전관리법 개정", "전기설비기술기준 고시", "전력수급기본계획 발표"] },
@@ -47,7 +48,7 @@ export const CATEGORY_COLORS = {
   kesco_direct: "#326c9c", kesco_reputation: "#9f3434", presidential_message: "#6548a6",
   prime_minister_message: "#7654ad", climate_minister_message: "#087f76", government_meeting: "#536b92",
   public_evaluation: "#b46a12", public_operations: "#9a7218", kesco_governance: "#8b5a2b",
-  assembly_law: "#596481", electrical_accident: "#b64242", power_outage: "#b0533f",
+  assembly_law: "#596481", electrical_accident: "#b64242", power_outage: "#b0533f", weather: "#28708f",
   major_fire_breaking: "#8f3030", new_industry_safety: "#b05c75", law_standard_plan: "#70539b",
   kesco_achievement: "#087f76", strategic_trend: "#397b62", renewable_ess_industry: "#247a73",
   ev_industry: "#2f6fa3", macro_economy: "#9a6a20", ai_trend: "#5364a8"

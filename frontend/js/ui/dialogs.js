@@ -4,7 +4,7 @@ import { parseDate } from "../utils/dates.js";
 import { refreshArticles } from "../features/collection.js?v=20260716-19";
 import * as api from "../api/client.js?v=20260716-15";
 import { refreshRuleSummaryIfNeeded } from "../features/ai-analysis.js";
-import { persistAndRender } from "../features/articles.js?v=20260720-2";
+import { persistAndRender } from "../features/articles.js?v=20260720-3";
 import { renderAll } from "./renderers.js";
 import { setStatus, showToast } from "./notifications.js?v=20260716-1";
 
@@ -40,7 +40,7 @@ export function renderQuerySettings(queries) {
     ["기관·평판", ["kesco_direct", "kesco_reputation"]],
     ["정부 메시지", ["presidential_message", "prime_minister_message", "climate_minister_message", "government_meeting"]],
     ["공공기관 경영", ["public_evaluation", "public_operations", "kesco_governance", "assembly_law"]],
-    ["사고·안전", ["electrical_accident", "power_outage", "major_fire_breaking", "new_industry_safety"]],
+    ["사고·안전", ["electrical_accident", "power_outage", "weather", "major_fire_breaking", "new_industry_safety"]],
     ["제도·성과·전략", ["law_standard_plan", "kesco_achievement", "strategic_trend"]],
     ["산업·거시환경", ["renewable_ess_industry", "ev_industry", "macro_economy", "ai_trend"]]
   ];

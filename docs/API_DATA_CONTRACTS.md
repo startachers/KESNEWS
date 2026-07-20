@@ -190,6 +190,9 @@ DELETE /api/articles/{article_id}
 
 Top Issues는 담당자가 직접 태그하거나 Gemma 추천을 검토·적용한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
 개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 6개로 제한한다.
+카드에는 자동 순위·점수·기사/매체 수 대신 구성 기사의 유효 분류를 우선 표시한다. 담당자가
+배치 순서를 바꾸면 군집과 개별 기사의 `sort_order`를 하나의 0부터 시작하는 표시 순서로 정규화하며,
+조회 화면은 이 값을 우선하고 값이 같거나 없을 때만 최신 보도 시각을 보조 기준으로 사용한다.
 군집 Top 태그를 활성화하면 사용자가 누른 대표 카드 기사(미지정 시 이슈 대표 기사)를
 `briefing_articles.selected=true`로 함께 저장한다. 군집 Top 태그를 해제해도 기사 선정은 유지한다.
 Media Coverage에서 펼친 관련기사의 선정 여부도 기사별 PATCH로 자유롭게 바꿀 수 있다. 잘못 묶인
@@ -412,6 +415,12 @@ provider 일부만 성공한 실행의 status는 `partial`이다.
 - 검색 기간 안에 있는 기존 기사는 `stale=true`, `staleReason=provider_failed`로 반환할 수 있다.
 - 화면에는 마지막 정상 observation 시각과 실패 provider를 함께 표시한다.
 - 전체 후보 목록을 “이번 실행에서 성공한 provider 결과만”으로 교체하지 않는다.
+
+언론기사 자동 분류에서 실제 정전 표현(`한때/일시/곳곳 정전`, `정전 복구`, `변압기 고장`)은
+`power_outage`를 사용한다. 호우·태풍·폭염·한파·대설 등 기상 보도는 `weather`를 사용하되,
+제목에 화재·감전·정전 등 실제 사건이 함께 있으면 사건 분류가 우선한다. 이 `weather`는 언론기사
+분류값이며 9장의 기상청 observation/context와 합치지 않는다. 자동 재분류는 `auto_*`만 갱신하고
+담당자의 `final_*`와 최종 snapshot은 변경하지 않는다.
 
 ### 3.5 수집 실행 요청과 보고일 귀속
 
@@ -656,7 +665,7 @@ floor·cap은 4.2절을 따른다.
 - `POST /api/briefings/{date}/analyze`는 앱 전체에서 동시에 1건만 실행한다.
 - 실행 중 새 분석 요청은 `AI_ALREADY_RUNNING`으로 거부한다.
 - `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
-- 브라우저 연결이 끊기거나 경영메시지 총 실행시간 10분을 넘으면 분석을 중단한다.
+- 브라우저 연결이 끊기거나 경영메시지 총 실행시간 20분을 넘으면 분석을 중단한다.
 - 기사 추천 총 실행시간은 기존 5분 제한을 유지한다.
 - 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
 - 경영메시지와 기사 추천의 기본 선택 모델은 `gemma4:31b`다. 설치 모델 목록에 31B가 있으면

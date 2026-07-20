@@ -46,7 +46,11 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "visibleRepresentative" in issues_feature.text
     assert "issue.editorTitle || visibleRepresentative?.title" in issues_feature.text
     assert "MAX_TOP_ISSUES = 6" in issues_feature.text
-    assert "같은 사건 기사" in issues_feature.text
+    assert "categoryChips" in issues_feature.text
+    assert "getTopIssueEntries" in issues_feature.text
+    assert 'data-action="move-top-issue"' in issues_feature.text
+    assert "autoReviewScore" not in issues_feature.text
+    assert "sourceCount" not in issues_feature.text
 
     articles_feature = client.get("/js/features/articles.js")
     assert articles_feature.status_code == 200
@@ -66,6 +70,8 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "removeIssueArticle" in articles_feature.text
     assert "related-include-check" in articles_feature.text
     assert "handleTopIssuesClick" in articles_feature.text
+    assert "moveTopIssue" in articles_feature.text
+    assert "탑이슈 배치 순서를 저장했습니다" in articles_feature.text
     assert "공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" in articles_feature.text
     assert "topIssueTagCount() >= MAX_TOP_ISSUES" in articles_feature.text
     assert 'issue?.effectiveTitle || ""' in articles_feature.text

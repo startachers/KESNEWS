@@ -23,6 +23,7 @@ QUERY_IDS = [
     "assembly_law",
     "electrical_accident",
     "power_outage",
+    "weather",
     "major_fire_breaking",
     "new_industry_safety",
     "law_standard_plan",
@@ -35,7 +36,7 @@ QUERY_IDS = [
 ]
 
 
-def test_automated_and_frontend_defaults_contain_same_21_query_groups():
+def test_automated_and_frontend_defaults_contain_same_22_query_groups():
     config_paths = [ROOT / "config/automated_collection.json.example"]
     local_config = ROOT / "config/automated_collection.json"
     if local_config.exists():
@@ -45,14 +46,14 @@ def test_automated_and_frontend_defaults_contain_same_21_query_groups():
         assert [query["id"] for query in config["queries"]] == QUERY_IDS
         by_id = {query["id"]: query for query in config["queries"]}
         assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
-        assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 63
+        assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 66
         assert by_id["macro_economy"]["maxRecords"] == 20
         assert by_id["ai_trend"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
     assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 7" in default_block
+    assert "settingsVersion: 8" in default_block
     assert 'aiModel: "gemma4:31b"' in default_block
     assert "lookback: 24" in default_block
     assert default_block.count("naverQueries:") == len(QUERY_IDS)

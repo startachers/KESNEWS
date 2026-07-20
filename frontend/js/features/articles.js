@@ -10,7 +10,7 @@ import { refreshRuleSummaryIfNeeded, renderAiSummaryStatus } from "./ai-analysis
 import { showToast } from "../ui/notifications.js?v=20260716-1";
 import { runSearch } from "./collection.js";
 import { loadSample } from "./data-io.js";
-import { MAX_TOP_ISSUES } from "./issues.js?v=20260720-1";
+import { getTopIssueEntries, MAX_TOP_ISSUES } from "./issues.js?v=20260720-2";
 
 const expandedIssueIds = new Set();
 const manualGroupSelection = new Set();
@@ -500,7 +500,13 @@ export function handleArticleClick(e) {
 }
 
 export function handleTopIssuesClick(e) {
-  if (e.target.closest("[data-action]")?.dataset.action !== "remove-top-issue" || state.status === "final") return;
+  const action = e.target.closest("[data-action]")?.dataset.action;
+  if (state.status === "final") return;
+  if (action === "move-top-issue") {
+    moveTopIssue(e.target.closest("[data-action='move-top-issue']"));
+    return;
+  }
+  if (action !== "remove-top-issue") return;
   const button = e.target.closest("[data-action='remove-top-issue']");
   const issue = state.issues.find(item => item.id === button?.dataset.issueId);
   if (issue) {
@@ -509,6 +515,37 @@ export function handleTopIssuesClick(e) {
   }
   const article = state.articles.find(item => item.id === button?.dataset.articleId);
   if (article?.topIssue) toggleArticleTopIssue(article);
+}
+
+async function moveTopIssue(button) {
+  const entries = getTopIssueEntries();
+  const currentIndex = entries.findIndex(entry =>
+    entry.kind === button?.dataset.topKind && entry.item.id === button?.dataset.topId,
+  );
+  const offset = button?.dataset.direction === "up" ? -1 : 1;
+  const targetIndex = currentIndex + offset;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= entries.length) return;
+  [entries[currentIndex], entries[targetIndex]] = [entries[targetIndex], entries[currentIndex]];
+  entries.forEach((entry, index) => { entry.item.sortOrder = index; });
+  renderAll();
+  try {
+    await flushArticleChanges();
+    for (const [sortOrder, entry] of entries.entries()) {
+      const result = entry.kind === "issue"
+        ? await api.patchBriefingIssue(state.date, entry.item.id, state.revision, { sortOrder })
+        : await api.patchBriefingArticle(state.date, entry.item.id, state.revision, { sortOrder });
+      state.revision = result.data.revision;
+    }
+    showToast("탑이슈 배치 순서를 저장했습니다.", "success");
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      showToast("다른 화면에서 변경 사항이 있어 최신 내용을 다시 불러옵니다.", "error");
+    } else {
+      showToast(`탑이슈 순서 저장 실패: ${friendlyError(error)}`, "error");
+    }
+    setState(await loadDailyState(state.date));
+    renderAll();
+  }
 }
 
 async function removeRelatedArticle(issueId, articleId) {

@@ -40,7 +40,7 @@ from backend.app.services.extraction import article_body
 from backend.app.services.weather.ai_context import build_weather_ai_context
 
 router = APIRouter()
-DEFAULT_ANALYSIS_TIMEOUT_SECONDS = 600
+DEFAULT_ANALYSIS_TIMEOUT_SECONDS = 1_200
 ANALYSIS_TIMEOUT_SECONDS = max(
     30,
     int(os.environ.get("KESCO_AI_TIMEOUT_SECONDS", str(DEFAULT_ANALYSIS_TIMEOUT_SECONDS))),

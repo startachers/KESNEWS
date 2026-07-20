@@ -47,7 +47,11 @@ groups:
   - id: power_outage
     label: "정전·전력공급 장애"
     enabled: true
-    query: '("대규모 정전" OR "광역 정전" OR "일대 정전" OR "전력 공급 중단" OR "전력망 장애" OR "계통 장애" OR 블랙아웃 OR "변전소 고장" OR "송전선로 고장" OR "배전선로 고장")'
+    query: '("대규모 정전" OR "광역 정전" OR "일대 정전" OR "한때 정전" OR "일시 정전" OR "전력 공급 중단" OR "전력망 장애" OR "계통 장애" OR 블랙아웃 OR "변압기 고장" OR "변전소 고장" OR "송전선로 고장" OR "배전선로 고장")'
+  - id: weather
+    label: "기상"
+    enabled: true
+    query: '(기상특보 OR 호우 OR 폭우 OR 태풍 OR 폭염 OR 한파 OR 대설 OR 강풍 OR 낙뢰) (정전 OR 전기안전 OR 전력 OR 전기설비 OR 침수 OR 산사태 OR 피해 OR 대피 OR 특보 OR 경보 OR 주의보)'
   - id: major_fire_breaking
     label: "중대화재·원인 미상 속보"
     enabled: true

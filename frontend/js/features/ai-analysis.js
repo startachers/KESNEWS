@@ -136,7 +136,7 @@ export function renderAiSummaryStatus() {
     els.aiSummaryStatus.textContent = `${settings.aiModel} 분석 취소를 요청했습니다. Ollama 작업을 정리하는 중입니다.`;
   } else if (analyzing) {
     els.aiSummaryStatus.classList.add("busy");
-    const safeMode = settings.aiModel.toLowerCase().includes(":31b") ? " · 31B 심층 분석(context 64K·최대 10분)" : " · 최대 10분";
+    const safeMode = settings.aiModel.toLowerCase().includes(":31b") ? " · 31B 심층 분석(context 64K·최대 20분)" : " · 최대 20분";
     els.aiSummaryStatus.textContent = `${settings.aiModel}이 선정 기사 ${Math.min(selected.length, 20)}건의 본문을 수집하고 경영메시지를 분석 중입니다${safeMode}. 이 버튼으로 즉시 취소할 수 있으며 창을 닫으면 실행도 자동 중단됩니다.`;
   } else if (state.summaryError) {
     els.aiSummaryStatus.classList.add("error");

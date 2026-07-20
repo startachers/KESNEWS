@@ -1,41 +1,84 @@
-import { state, els } from "../state/store.js";
-import { escapeHtml } from "../utils/strings.js";
+import { state, settings, els, CATEGORY_COLORS } from "../state/store.js";
+import { escapeHtml, escapeAttr } from "../utils/strings.js";
 import { formatRelative } from "../utils/dates.js";
 
-const ISSUE_STATUS_LABELS = { new: "신규", expanding: "확산", ongoing: "지속", cooling: "진정", closed: "종료" };
 export const MAX_TOP_ISSUES = 6;
-function starsText(value) {
-  const stars = Math.max(1, Math.min(5, Number(value) || 1));
-  return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
+
+function categoryDetails(article) {
+  if (!article?.category) return null;
+  const label = settings.queries.find(query => query.id === article.category)?.label || "기타";
+  return { id: article.category, label, color: CATEGORY_COLORS[article.category] || "#326c9c" };
 }
 
-export function renderTopIssues() {
-  const articleById = new Map(state.articles.map(article => [article.id, article]));
+function categoryChips(articles) {
+  const categories = [];
+  const seen = new Set();
+  articles.forEach(article => {
+    const category = categoryDetails(article);
+    if (!category || seen.has(category.id)) return;
+    seen.add(category.id);
+    categories.push(category);
+  });
+  const visible = categories.slice(0, 2).map(category =>
+    `<span class="issue-category" style="--issue-category-color:${escapeAttr(category.color)}">${escapeHtml(category.label)}</span>`,
+  );
+  if (categories.length > 2) visible.push(`<span class="issue-category-more">+${categories.length - 2}</span>`);
+  return visible.join("") || '<span class="issue-category muted">분류 미확정</span>';
+}
+
+function entryDate(entry) {
+  return entry.kind === "issue" ? entry.item.lastSeenAt : entry.item.pubDate;
+}
+
+function sourceAndTime(source, date) {
+  return `${source || "출처 미상"} · ${date ? formatRelative(date) : "일시 미상"}`;
+}
+
+export function getTopIssueEntries() {
   const groupedArticleIds = new Set(state.issues.flatMap(issue => issue.articleIds || []));
   const taggedIssues = state.issues.filter(issue => issue.selected).map(issue => ({
     kind: "issue",
     item: issue,
-    date: issue.lastSeenAt || "",
   }));
   const taggedArticles = state.articles.filter(article => article.topIssue && !groupedArticleIds.has(article.id)).map(article => ({
     kind: "article",
     item: article,
-    date: article.pubDate || "",
   }));
-  const top = taggedIssues.concat(taggedArticles)
-    .sort((left, right) => String(right.date).localeCompare(String(left.date)))
+  return taggedIssues.concat(taggedArticles)
+    .sort((left, right) => {
+      const leftOrder = Number.isFinite(left.item.sortOrder) ? left.item.sortOrder : Number.MAX_SAFE_INTEGER;
+      const rightOrder = Number.isFinite(right.item.sortOrder) ? right.item.sortOrder : Number.MAX_SAFE_INTEGER;
+      return leftOrder - rightOrder
+        || String(entryDate(right) || "").localeCompare(String(entryDate(left) || ""))
+        || String(left.item.id).localeCompare(String(right.item.id));
+    })
     .slice(0, MAX_TOP_ISSUES);
+}
+
+function orderControls(tagged, index, length) {
+  const disabled = state.status === "final";
+  const identity = `data-top-kind="${tagged.kind}" data-top-id="${escapeAttr(tagged.item.id)}"`;
+  return `<div class="issue-order-controls no-print" aria-label="탑이슈 순서 변경">
+    <button data-action="move-top-issue" data-direction="up" ${identity} title="한 칸 앞으로" aria-label="탑이슈를 한 칸 앞으로" ${disabled || index === 0 ? "disabled" : ""}>↑</button>
+    <button data-action="move-top-issue" data-direction="down" ${identity} title="한 칸 뒤로" aria-label="탑이슈를 한 칸 뒤로" ${disabled || index === length - 1 ? "disabled" : ""}>↓</button>
+  </div>`;
+}
+
+export function renderTopIssues() {
+  const articleById = new Map(state.articles.map(article => [article.id, article]));
+  const top = getTopIssueEntries();
 
   els.topIssues.innerHTML = Array.from({ length: MAX_TOP_ISSUES }, (_, index) => {
     const tagged = top[index];
     if (!tagged) return `<div class="issue-card empty"><div>ISSUE ${String(index + 1).padStart(2, "0")}</div><strong>Media Coverage에서 군집 또는 기사를 태그하세요</strong></div>`;
     if (tagged.kind === "article") {
       const article = tagged.item;
+      const context = article.note || sourceAndTime(article.source, article.pubDate);
       return `<article class="issue-card">
-        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions"><span class="badge badge-neutral">기사</span><button class="issue-remove-btn no-print" data-action="remove-top-issue" data-article-id="${escapeHtml(article.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
+        <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions">${orderControls(tagged, index, top.length)}<button class="issue-remove-btn no-print" data-action="remove-top-issue" data-article-id="${escapeAttr(article.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
+        <div class="issue-categories">${categoryChips([article])}</div>
         <h3>${escapeHtml(article.title)}</h3>
-        <div class="issue-meta">${escapeHtml(article.source || "출처 미상")} · ${formatRelative(article.pubDate)}</div>
-        <div class="issue-reason">담당자 태그 또는 확인·적용한 Gemma 핵심 추천 기사입니다.</div>
+        <div class="issue-context">${escapeHtml(context)}</div>
       </article>`;
     }
     const issue = tagged.item;
@@ -45,19 +88,17 @@ export function renderTopIssues() {
       || articles.find(article => article.included)
       || articles[0];
     const displayTitle = issue.editorTitle || visibleRepresentative?.title || issue.effectiveTitle;
-    const sourceCount = new Set(articles.map(article => article.source).filter(Boolean)).size;
-    const status = ISSUE_STATUS_LABELS[issue.effectiveStatus] || issue.effectiveStatus || "상태 없음";
-    const pressCoverage = issue.autoReasons?.origin?.type === "kesco_press_release";
-    const reason = pressCoverage
-      ? `공사 보도자료에서 파생된 보도 ${issue.articleIds.length}건의 확산 묶음입니다.`
-      : issue.articleIds.length > 1
-        ? `같은 사건 기사 ${issue.articleIds.length}건이 묶인 이슈입니다.`
-        : "단일 기사 이슈입니다.";
+    const orderedForCategories = visibleRepresentative
+      ? [visibleRepresentative, ...articles.filter(article => article.id !== visibleRepresentative.id)]
+      : articles;
+    const context = issue.note
+      || issue.editorReviewReason
+      || sourceAndTime(visibleRepresentative?.source, visibleRepresentative?.pubDate || issue.lastSeenAt);
     return `<article class="issue-card">
-      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions"><span class="review-stars">${starsText(issue.effectiveReviewStars)}</span><button class="issue-remove-btn no-print" data-action="remove-top-issue" data-issue-id="${escapeHtml(issue.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
+      <div class="issue-head"><span class="rank">ISSUE ${String(index + 1).padStart(2, "0")}</span><div class="issue-head-actions">${orderControls(tagged, index, top.length)}<button class="issue-remove-btn no-print" data-action="remove-top-issue" data-issue-id="${escapeAttr(issue.id)}" ${state.status === "final" ? "disabled" : ""}>탑이슈 제거</button></div></div>
+      <div class="issue-categories">${categoryChips(orderedForCategories)}</div>
       <h3>${escapeHtml(displayTitle)}</h3>
-      <div class="issue-meta">자동 ${issue.autoReviewRank || "-"}위 · 점수 ${issue.autoReviewScore ?? "-"} · ${escapeHtml(status)} · 기사 ${issue.articleIds.length}건 · 매체 ${sourceCount}개 · ${formatRelative(issue.lastSeenAt)}</div>
-      <div class="issue-reason">${escapeHtml(reason)}</div>
+      <div class="issue-context">${escapeHtml(context)}</div>
     </article>`;
   }).join("");
 }

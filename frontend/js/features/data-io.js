@@ -11,7 +11,7 @@ import { formatDateTime, localDateKey } from "../utils/dates.js";
 import { showToast, setStatus } from "../ui/notifications.js?v=20260716-1";
 import { renderAll } from "../ui/renderers.js";
 import { setRuleSummary, refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
-import { flushArticleChanges } from "./articles.js?v=20260720-2";
+import { flushArticleChanges } from "./articles.js?v=20260720-3";
 
 /** 실제 검색 전 화면 시연용 샘플이다. 운영 데이터(articles/briefings)와 분리된 순수 프런트엔드 픽스처이며 서버에 저장되지 않는다. */
 export function loadSample() {

@@ -2,11 +2,11 @@ import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDail
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
-import { renderAll } from "./ui/renderers.js?v=20260720-2";
+import { renderAll } from "./ui/renderers.js?v=20260720-3";
 import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, openOverlay, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260717-20";
 import { runSearch } from "./features/collection.js?v=20260716-19";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js";
-import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, handleTopIssuesClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260720-2";
+import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, handleTopIssuesClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260720-3";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport, resetTodayWork } from "./features/data-io.js";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";

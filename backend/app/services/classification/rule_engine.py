@@ -65,6 +65,17 @@ _FOREIGN_PRESIDENT = re.compile(
 _FOREIGN_GENERAL_TOPIC = re.compile(
     r"^(?:美|中|미국|중국|일본|러시아|유럽|뉴욕|워싱턴|월가|EU|G7|G20)(?:\s|전력|증시|경제|시장)"
 )
+_ACTUAL_OUTAGE_TITLE = re.compile(
+    r"(?:한때|일시|곳곳|일대|대규모|광역)\s*정전|"
+    r"정전\s*(?:발생|피해|복구|됐다|돼|까지)|"
+    r"(?:세대|가구)[^.!?。！？]{0,12}정전|"
+    r"(?:변압기|변전소|송전선로|배전선로)\s*고장"
+)
+_WEATHER_TITLE_TERMS = (
+    "기상특보", "날씨", "호우", "폭우", "집중호우", "장맛비", "장마",
+    "태풍", "폭염", "한파", "대설", "폭설", "강풍", "낙뢰",
+)
+_EXPLICIT_INCIDENT_TITLE_TERMS = ("화재", "감전", "정전", "폭발", "산불", "붕괴")
 
 _CATEGORY_RULES: list[tuple[str, tuple[tuple[str, ...], ...]]] = [
     (
@@ -232,6 +243,13 @@ _CATEGORY_RULES: list[tuple[str, tuple[tuple[str, ...], ...]]] = [
                 "변전소 고장",
                 "송전선로 고장",
                 "배전선로 고장",
+                "변압기 고장",
+                "한때 정전",
+                "일시 정전",
+                "곳곳 정전",
+                "정전 발생",
+                "정전 피해",
+                "정전 복구",
             ),
         ),
     ),
@@ -492,6 +510,10 @@ def infer_category(article: dict[str, Any]) -> str:
         if message_context_terms(suppressed, message_category):
             return message_category
 
+    # 실제 정전은 원인이 기상이더라도 결과 사건인 정전 분류를 우선한다.
+    if _ACTUAL_OUTAGE_TITLE.search(title):
+        return "power_outage"
+
     ambiguous_authority = matched_terms(
         suppressed,
         (
@@ -509,6 +531,13 @@ def infer_category(article: dict[str, Any]) -> str:
     )
     if ambiguous_authority and matched_terms(suppressed, MESSAGE_ENERGY_TERMS):
         return "other"
+
+    # 언론 기상 보도는 별도 KMA 관측 데이터와 섞지 않고 기사 분류값만 weather로 둔다.
+    # 제목에 화재·감전·정전 등 실제 사건이 있으면 아래의 사건 분류가 우선한다.
+    if matched_terms(title, _WEATHER_TITLE_TERMS) and not matched_terms(
+        title, _EXPLICIT_INCIDENT_TITLE_TERMS
+    ):
+        return "weather"
 
     for category, required_groups in _CATEGORY_RULES:
         if category in message_categories:

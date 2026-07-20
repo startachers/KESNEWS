@@ -57,6 +57,7 @@ EXPECTED_MIGRATIONS = [
     "0019_article_direct_coverage_override.sql",
     "0020_top_issue_implies_briefing_selection.sql",
     "0021_weather_briefing.sql",
+    "0022_rules_v12_category_reclassification.sql",
 ]
 
 
@@ -558,6 +559,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         "0019_article_direct_coverage_override.sql",
             "0020_top_issue_implies_briefing_selection.sql",
             "0021_weather_briefing.sql",
+            "0022_rules_v12_category_reclassification.sql",
         ]
     upgraded = get_connection(db_path)
     try:
@@ -566,7 +568,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         ).fetchone()
         assert row["auto_priority"] == "review"
         assert row["auto_relevance_score"] == 100
-        assert row["classifier_version"] == "rules-v11"
+        assert row["classifier_version"] == "rules-v12"
         assert row["manual_override"] == 0
     finally:
         upgraded.close()

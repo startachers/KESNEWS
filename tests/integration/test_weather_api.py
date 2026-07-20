@@ -146,6 +146,9 @@ def test_weather_refresh_review_and_final_snapshot(monkeypatch):
     assert "긴급" not in preview.text
     assert "영향 권역" not in preview.text
     assert "우선 확인" not in preview.text
+    assert "일부 기상정보 상태" not in preview.text
+    assert "midForecast" not in preview.text
+    assert "partial" not in preview.text
     assert 'class="weather-day' not in preview.text
     assert 'class="weather-forecast' in preview.text
     assert preview.text.index("참고 동향") < preview.text.index("기상 특이사항")

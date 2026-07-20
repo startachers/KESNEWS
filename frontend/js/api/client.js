@@ -2,7 +2,7 @@ import { AI_API_BASE } from "../state/store.js";
 import { fetchWithTimeout } from "../utils/net.js";
 
 const CLUSTER_RUN_TIMEOUT_MS = 120000;
-const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 630000;
+const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 1230000;
 
 async function request(path, options = {}, timeoutMs = 15000) {
   const response = await fetchWithTimeout(

@@ -26,7 +26,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v11"
+CLASSIFIER_VERSION = "rules-v12"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -81,7 +81,7 @@ def get_relevance(article: Article) -> dict[str, Any]:
                 return [*authorities, *energy]
         return []
 
-    def industry_strategy_or_macro(text: str) -> list[str]:
+    def industry_strategy_macro_or_weather(text: str) -> list[str]:
         industry = matched_terms(text, ("ess", "에너지저장장치", "배터리", "전기차 충전"))
         safety = matched_terms(text, ("화재", "감전", "폭발", "사고", "안전점검", "결함", "리콜"))
         strategy = matched_terms(
@@ -126,6 +126,16 @@ def get_relevance(article: Article) -> dict[str, Any]:
         )
         if ai and ai_context:
             return [*ai, *ai_context]
+        weather = matched_terms(
+            text,
+            ("기상특보", "호우", "폭우", "집중호우", "장맛비", "장마", "태풍", "폭염", "한파", "대설", "폭설", "강풍", "낙뢰"),
+        )
+        weather_impact = matched_terms(
+            text,
+            ("정전", "전기안전", "전력", "전기설비", "침수", "산사태", "피해", "대피", "특보", "경보", "주의보"),
+        )
+        if weather and weather_impact:
+            return [*weather, *weather_impact]
         return []
 
     criteria = [
@@ -149,7 +159,7 @@ def get_relevance(article: Article) -> dict[str, Any]:
             "power_outage",
             "③ 정전·전력공급 장애",
             lambda text: (["정전 Sentinel"] if sentinel_incident_type == "outage" else []) + re.findall(
-                r"대규모[\s·ㆍ-]*정전|광역[\s·ㆍ-]*정전|일대[\s·ㆍ-]*정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
+                r"(?:한때|일시|곳곳|대규모|광역|일대)[\s·ㆍ-]*정전|정전[\s·ㆍ-]*(?:발생|피해|복구|됐다|돼|까지)|(?:세대|가구)[^.!?。！？]{0,12}정전|전력[\s·ㆍ-]*공급[\s·ㆍ-]*중단|전력망[\s·ㆍ-]*장애|계통[\s·ㆍ-]*장애|블랙아웃|변압기[\s·ㆍ-]*고장|변전소[\s·ㆍ-]*고장|송전선로[\s·ㆍ-]*고장|배전선로[\s·ㆍ-]*고장",
                 text,
             ),
         ),
@@ -174,9 +184,9 @@ def get_relevance(article: Article) -> dict[str, Any]:
         ),
         (
             7,
-            "industry_strategy_or_macro",
-            "⑦ 신산업·전략·거시환경 동향",
-            industry_strategy_or_macro,
+            "industry_strategy_macro_or_weather",
+            "⑦ 신산업·전략·거시·기상 동향",
+            industry_strategy_macro_or_weather,
         ),
     ]
     matches = [

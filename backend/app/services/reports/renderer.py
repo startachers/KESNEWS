@@ -22,6 +22,7 @@ CATEGORY_LABELS = {
     "assembly_law": "국회·국정감사·법안",
     "electrical_accident": "전기화재·감전 사고",
     "power_outage": "정전·전력공급 장애",
+    "weather": "기상",
     "major_fire_breaking": "중대화재·속보",
     "new_industry_safety": "신산업 설비안전",
     "law_standard_plan": "법령·기준·기본계획",
@@ -430,21 +431,11 @@ def _render_weather(snapshot: dict[str, Any]) -> str:
     attachment = weather.get("attachment") or {}
     if not context or not attachment.get("includeInReport"):
         return ""
-    source_warnings = [
-        f"{name}: {item.get('status')}"
-        for name, item in (context.get("sourceStatus") or {}).items()
-        if item.get("status") != "success"
-    ]
-    warning = (
-        f'<p class="warning">일부 기상정보 상태: {_text(", ".join(source_warnings))}</p>'
-        if source_warnings
-        else ""
-    )
     return (
         '<section class="section weather-section"><div class="weather-heading"><h2>'
         '기상 특이사항</h2>'
         f'<small>기상청 {_text(_datetime_label(context.get("issuedAt"), "시각 미상"))} 발표</small></div>'
-        f'{warning}<div class="weather-forecasts">{_render_weather_forecasts(context)}</div>'
+        f'<div class="weather-forecasts">{_render_weather_forecasts(context)}</div>'
         '</section>'
     )
 
@@ -646,9 +637,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
     .article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
     .empty{color:#7c8991}
-    .warning{padding:10px 14px;border-left:3px solid #c97a16;background:#fff4df;color:#72501f;font-size:12.5px}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
-    .weather-section .warning{margin:4px 0 0;padding:4px 8px;font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
     .footer{margin-top:16px;padding-top:9px;border-top:1px solid var(--line);color:#77858e;font-size:9.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.decision-grid{grid-template-columns:1fr}.weather-forecast{grid-template-columns:1fr;gap:2px}}

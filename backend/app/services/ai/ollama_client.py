@@ -39,7 +39,7 @@ class OllamaClient:
     def __init__(
         self,
         base_url: str = "http://127.0.0.1:11434",
-        timeout: float = 600.0,
+        timeout: float = 1_200.0,
         context_length: int = DEFAULT_CONTEXT_LENGTH,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     ):
