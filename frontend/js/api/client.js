@@ -136,6 +136,23 @@ export function listArticles(date, includeDismissed = false) {
   return request(`/articles?report_date=${encodeURIComponent(date)}&include_dismissed=${includeDismissed}`);
 }
 
+export function listIssueArticles(issueId) {
+  return request(`/issues/${encodeURIComponent(issueId)}/articles`);
+}
+
+export function patchIssueEvidence(issueId, payload) {
+  return request(`/issues/${encodeURIComponent(issueId)}/evidence`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function reextractArticle(articleId) {
+  return request(`/articles/${encodeURIComponent(articleId)}/reextract`, {
+    method: "POST",
+  }, 120000);
+}
+
 export function createManualArticle(payload) {
   return request(`/articles`, { method: "POST", body: JSON.stringify(payload) });
 }

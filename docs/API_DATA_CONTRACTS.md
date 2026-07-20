@@ -294,7 +294,35 @@ POST /api/briefings/{date}/selection-recommendations/apply
 - 추천 생성은 AI 결과의 자동 확정이 아니다. 담당자가 화면에서 추천 목록과 이유를 확인하고
   명시적으로 apply해야 실제 선정 상태가 바뀐다.
 
-### 2.8 오늘 작업 초기화
+### 2.8 이슈별 AI 분석 근거 확정
+
+관련기사 품질 조회와 담당자 근거 확정은 자동 군집 구성과 별도 상태로 저장한다.
+
+```text
+GET   /api/issues/{issue_id}/articles
+PATCH /api/issues/{issue_id}/evidence
+POST  /api/articles/{article_id}/reextract
+```
+
+- 품질 조회는 최신 `article_extractions` 이력의 추출 상태, 결정론적 품질 점수·등급,
+  정제 전후 길이, 완전 문장 수, 오염 플래그, 추출 방식·시각과 정제 본문을 반환한다.
+- evidence PATCH는 `expectedRevision`과 대표기사 최대 1건, 보조근거 최대 2건,
+  분석 제외 기사 목록을 받는다. 현재 유효 membership에 없는 ID는 거부한다.
+- 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 군집과
+  기사 원본을 삭제하지 않으며 이후 자동 추출·군집화가 수동 제외를 해제하지 않는다.
+- `issues.evidence_revision` 불일치는 `ISSUE_EVIDENCE_REVISION_CONFLICT`(409)로 반환하고
+  저장된 수동 상태를 덮어쓰지 않는다.
+- 자동 재군집화는 동일 이슈가 유지되는 동안 `manual_representative_article_id`,
+  `manual_supplemental_article_ids_json`, `manual_excluded_article_ids_json`을 보존한다.
+  수동 대표 ID가 현재 membership에서 사라지면 자동 대표를 임시 표시하되
+  `manualRepresentativeMissing=true`로 손실을 알린다.
+- AI 분석용 MD는 선정된 군집의 확정 대표와 수동 보조근거만 포함한다. 일반 관련기사,
+  분석 제외 및 부적격 기사는 제외한다. `required` 이슈에 대표 근거가 없으면
+  `REQUIRED_ARTICLE_EVIDENCE_MISSING`으로 생성을 중단한다.
+- 단건 재추출은 원 기사 원문을 삭제하지 않고 새 `article_extractions` 이력을 추가한다.
+  성공 후 자동 대표 후보만 다시 계산하며 수동 역할은 조용히 해제하지 않는다.
+
+### 2.9 오늘 작업 초기화
 
 ```text
 POST /api/briefings/{date}/reset
@@ -665,7 +693,7 @@ floor·cap은 4.2절을 따른다.
 - 실행 중 새 분석 요청은 `AI_ALREADY_RUNNING`으로 거부한다.
 - `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
 - 브라우저 연결이 끊기거나 경영메시지 총 실행시간 20분을 넘으면 분석을 중단한다.
-- 기사 추천 총 실행시간은 기존 5분 제한을 유지한다.
+- 기사 추천 총 실행시간은 31B의 60건 후보·64K context 실행을 허용하도록 20분으로 제한한다.
 - 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
 - 경영메시지와 기사 추천의 기본 선택 모델은 `gemma4:31b`다. 설치 모델 목록에 31B가 있으면
   `/api/health.defaultModel`도 31B를 우선 반환한다.

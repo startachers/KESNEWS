@@ -59,9 +59,11 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "(relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)" in articles_feature.text
     assert "entries.sort((left, right) => left.position - right.position)" in articles_feature.text
     assert "renderRelatedArticle" in articles_feature.text
-    assert "members.find(member => member.article.included) || members[0]" in articles_feature.text
+    assert "member.article.id === issue.representativeArticleId" in articles_feature.text
+    assert 'data-action="set-representative"' in articles_feature.text
+    assert 'data-action="toggle-supplemental"' in articles_feature.text
     assert "Math.random()" not in articles_feature.text
-    assert "관련 기사 ${relatedMembers.length}건" in articles_feature.text
+    assert "관련기사·분석 근거 ${relatedMembers.length}건" in articles_feature.text
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text

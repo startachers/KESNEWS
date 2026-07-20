@@ -22,6 +22,7 @@ from backend.app.services.analysis_markdown.signature import content_hash, input
 from backend.app.services.analysis_markdown.source import build_source_context
 from backend.app.services.extraction.article_body import fetch_article_body_with_retries
 from backend.app.services.extraction.cleaner import clean_article_text
+from backend.app.services.extraction.evidence_quality import assess
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.url import canonical_article_url
 
@@ -77,16 +78,30 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
             status = "failed"
             eligibility = type(eligibility)(False, fetched.error or eligibility.reason, "none")
     result = dict(article)
+    method = (attempts[-1].get("stage") if attempts else None) or (
+        "stored_body" if status == "success_full" else "rss_summary" if status == "success_summary" else "none"
+    )
+    quality_result = assess(
+        {**article, "rawText": raw, "url": resolved_url}, cleaning,
+        status=status, method=method, config=config,
+    )
     result.update({
         "rawText": raw, "cleanedText": cleaning.text, "status": status,
         "failureReason": "" if eligibility.eligible else eligibility.reason,
-        "analysisEligible": eligibility.eligible,
+        "analysisEligible": quality_result["analysisEligible"],
         "rawCharacterCount": len(raw), "cleanedCharacterCount": len(cleaning.text),
         "attempts": list(attempts), "resolvedUrl": resolved_url,
         "noiseDetected": cleaning.noise_detected,
         "aiContentDetected": cleaning.ai_content_detected,
         "cleaningRuleVersion": config["cleaning_rule_version"],
+        **quality_result,
     })
+    result["status"] = quality_result["extractionStatus"]
+    if not result["analysisEligible"] and not result["failureReason"]:
+        result["failureReason"] = next(
+            (reason for reason in result["qualityReasons"] if reason not in {"전문 확보", "유효 RSS 요약"}),
+            "quality_below_threshold",
+        )
     return result
 
 
@@ -118,8 +133,10 @@ def _save_extraction(
                id, article_id, source_url, resolved_url, raw_text, cleaned_text,
                extraction_status, failure_reason, analysis_eligible, raw_character_count,
                cleaned_character_count, extraction_attempts_json, replacement_article_id,
-               replaces_article_id, same_issue_id, cleaning_rule_version, created_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               replaces_article_id, same_issue_id, cleaning_rule_version, created_at,
+               content_quality_score, quality_grade, quality_reasons_json,
+               complete_sentence_count, contamination_flags_json, extraction_method
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             make_id(), article["id"], article.get("url"), article.get("resolvedUrl"),
             article.get("rawText"), article.get("cleanedText"), article["status"],
@@ -127,9 +144,39 @@ def _save_extraction(
             article["rawCharacterCount"], article["cleanedCharacterCount"],
             json.dumps(article.get("attempts") or [], ensure_ascii=False, sort_keys=True),
             replacement_article_id, replaces_article_id, same_issue_id,
-            article["cleaningRuleVersion"], now_iso(),
+            article["cleaningRuleVersion"], now_iso(), article.get("contentQualityScore"),
+            article.get("qualityGrade"),
+            json.dumps(article.get("qualityReasons") or [], ensure_ascii=False),
+            article.get("completeSentenceCount", 0),
+            json.dumps(article.get("contaminationFlags") or [], ensure_ascii=False),
+            article.get("extractionMethod"),
         ),
     )
+
+
+def reextract_article(connection: sqlite3.Connection, article: dict[str, Any]) -> dict[str, Any]:
+    """기사 한 건을 다시 추출하고 원문과 불변 추출 이력을 함께 갱신한다."""
+    config = load_config()
+    prepared = _prepare(article, config, allow_network=True)
+    _save_extraction(connection, prepared)
+    quality.record_event(connection, prepared, prepared)
+    if prepared["status"] == "success_full" and prepared.get("rawText"):
+        article_repo.update_article_body(
+            connection,
+            article["id"],
+            body_text=prepared["rawText"],
+            body_status="full_text",
+            body_error="",
+        )
+    elif prepared["status"] == "failed":
+        article_repo.update_article_body(
+            connection,
+            article["id"],
+            body_text=article.get("bodyText") or "",
+            body_status=article.get("bodyStatus") or "missing",
+            body_error=prepared.get("failureReason") or "본문 추출 실패",
+        )
+    return prepared
 
 
 def _persist_searched_article(
@@ -259,10 +306,17 @@ def generate(
         prepared_by = briefing["prepared_by"] or ""
         candidates = article_repo.list_candidates(connection, report_date, include_dismissed=False)
         selected = source_context.exchange.articles
+        missing_required_issues = source_context.missing_required_issues
         issue_ids, issue_details = _issue_maps(connection, report_date)
         weather = source_context.weather
     finally:
         connection.close()
+    if missing_required_issues:
+        raise GenerationError(
+            "REQUIRED_ARTICLE_EVIDENCE_MISSING",
+            f"필수 보고 이슈 {len(missing_required_issues)}건의 대표 근거 기사를 확보하지 못했습니다.",
+            list(missing_required_issues),
+        )
     if not selected:
         raise GenerationError("NO_ELIGIBLE_ARTICLES", "분석할 선정 기사가 없습니다.")
 

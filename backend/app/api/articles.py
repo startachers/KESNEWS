@@ -14,6 +14,8 @@ from backend.app.repositories import run_repository as runs_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
+from backend.app.services.analysis_markdown.service import reextract_article
+from backend.app.repositories import issue_repository as issues_repo
 
 router = APIRouter()
 
@@ -52,6 +54,51 @@ class AssessmentPatchRequest(BaseModel):
     ] | None = None
     finalPriority: Literal["required", "review", "reference"] | None = None
     finalTone: Literal["positive", "neutral", "negative"] | None = None
+
+
+@router.post("/api/articles/{article_id}/reextract")
+async def reextract_one_article(article_id: str) -> Any:
+    connection = get_connection()
+    try:
+        row = articles_repo.get_article(connection, article_id)
+        if row is None:
+            return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
+        observation = connection.execute(
+            "SELECT raw_url FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
+            (article_id,),
+        ).fetchone()
+        article = {
+            "id": row["id"], "title": row["title"], "source": row["source"],
+            "url": (observation["raw_url"] if observation else None) or row["canonical_url"] or "",
+            "pubDate": row["published_at"], "description": row["description"] or "",
+            "bodyText": row["body_text"] or "", "bodyStatus": row["body_status"] or "missing",
+            "publisherId": row["publisher_id"],
+            "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
+        }
+        with connection:
+            prepared = reextract_article(connection, article)
+            changed_issue_ids = issues_repo.refresh_auto_representatives_for_article(
+                connection, article_id
+            )
+        result = {
+            "articleId": article_id,
+            "extractionStatus": prepared["status"],
+            "contentQualityScore": prepared["contentQualityScore"],
+            "qualityGrade": prepared["qualityGrade"],
+            "analysisEligible": prepared["analysisEligible"],
+            "qualityReasons": prepared["qualityReasons"],
+            "rawCharacterCount": prepared["rawCharacterCount"],
+            "cleanedCharacterCount": prepared["cleanedCharacterCount"],
+            "completeSentenceCount": prepared["completeSentenceCount"],
+            "contaminationFlags": prepared["contaminationFlags"],
+            "lastExtractedAt": now_iso(),
+            "extractionMethod": prepared["extractionMethod"],
+            "cleanedText": prepared["cleanedText"],
+            "changedIssueIds": changed_issue_ids,
+        }
+    finally:
+        connection.close()
+    return ok_envelope(result)
 
 
 @router.get("/api/articles")

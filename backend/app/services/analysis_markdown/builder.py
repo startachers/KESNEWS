@@ -92,9 +92,17 @@ def build(
     lines.extend(["", "## 선정 기사 데이터"])
     for index, article in enumerate(articles, start=1):
         issue_text = "; ".join(item.get("title") or "" for item in article.get("issues", []))
+        selection_label = {
+            "manual": "담당자 수동 선택",
+            "automatic": "자동 선택",
+            "individual": "개별 기사 선택",
+        }.get(article.get("evidenceSelectionMethod"), "자동 선택")
         lines.extend([
             "", f"### [A{index:02d}] {article.get('title') or '제목 없음'}", "",
             f"- 기사 ID: `{article['id']}`",
+            f"- 이슈 ID: {_value(article.get('issueId'))}",
+            f"- 근거 역할: {'대표기사' if article.get('evidenceRole') == 'representative' else '보조근거'}",
+            f"- 근거 선택: {selection_label}",
             f"- 원 기사 ID: `{article.get('originalArticleId') or article['id']}`",
             f"- 대체 기사 여부: {'예' if article.get('replacesArticleId') else '아니오'}",
             f"- 대체 대상 기사 ID: {_value(article.get('replacesArticleId'))}",
@@ -110,6 +118,7 @@ def build(
             f"- 관련도/심각도/우선도: {_value(article.get('relevanceScore'))} / {_value(article.get('severityScore'))} / {_value(article.get('priorityScore'))}",
             f"- 관련 이슈: {_value(issue_text)}", f"- 담당자 메모: {_value(article.get('note'))}",
             f"- 본문 확보 상태: {article['status']}", "- 분석 적격 여부: 예",
+            f"- AI 분석 적합도: {article.get('contentQualityScore', 0)}",
             f"- 정제 전 길이: {article['rawCharacterCount']}",
             f"- 정제 후 길이: {article['cleanedCharacterCount']}",
             f"- MD 반영 길이: {article['includedCharacterCount']}",

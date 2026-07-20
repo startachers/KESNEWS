@@ -11,7 +11,7 @@ from backend.app.repositories import briefing_repository as briefing_repo
 from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.exports import csv_export, json_export, markdown_export
-from backend.app.services.analysis_markdown import GenerationError
+from backend.app.services.analysis_markdown.service import GenerationError
 from backend.app.services.analysis_markdown.service import generate as generate_analysis_markdown
 
 router = APIRouter()

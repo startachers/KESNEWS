@@ -64,6 +64,7 @@ EXPECTED_MIGRATIONS = [
     "0023_analysis_markdown_pipeline.sql",
     "0024_publisher_quality_rule_version.sql",
     "0025_analysis_markdown_manifest.sql",
+    "0026_issue_evidence_quality.sql",
 ]
 
 
@@ -569,6 +570,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
             "0023_analysis_markdown_pipeline.sql",
             "0024_publisher_quality_rule_version.sql",
             "0025_analysis_markdown_manifest.sql",
+            "0026_issue_evidence_quality.sql",
         ]
     upgraded = get_connection(db_path)
     try:

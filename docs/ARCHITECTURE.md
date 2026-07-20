@@ -551,6 +551,29 @@ closed     종료
 
 기사 구성은 자동 membership과 담당자 add/remove override를 분리한다. 재군집화가 담당자 제목·상태·구성을 덮어쓰지 않는 상세 규칙은 `docs/API_DATA_CONTRACTS.md` 6장을 따른다.
 
+AI 분석 근거 역할도 자동 대표와 담당자 확정값을 분리한다.
+
+```text
+issues
+  representative_article_id                 자동 대표
+  manual_representative_article_id          담당자 대표
+  manual_supplemental_article_ids_json      담당자 보조근거(최대 2)
+  manual_excluded_article_ids_json          담당자 분석 제외
+  manual_selection_updated_at
+  evidence_revision                         근거 구성 낙관적 잠금
+
+article_extractions
+  extraction_status, analysis_eligible
+  content_quality_score, quality_grade
+  quality_reasons_json, contamination_flags_json
+  raw_character_count, cleaned_character_count
+  complete_sentence_count, extraction_method, created_at
+```
+
+품질 점수는 LLM이 아니라 정제 결과, 본문/요약 상태, 문장 완전성, 출처·시각,
+공식 도메인과 오염 플래그로 결정한다. MD 생성 경로에서만 확정 대표·보조근거 필터를
+적용하며 Gemma 프롬프트, Ollama 호출과 AI 분석 응답 schema는 변경하지 않는다.
+
 군집 검토순위는 동일 이슈라도 보고일 후보 집합에 따라 달라지므로 `issues`에 저장하지 않는다.
 
 ```text
@@ -1189,7 +1212,7 @@ AI는 담당자가 선정한 기사 또는 이슈만 분석한다. 기본 상한
 기존 RSS 요약으로 폴백한다. 전문 수집 실패가 전체 AI 분석 실패로 위장되거나 기존 요약을
 삭제해서는 안 된다. 내부망 URL은 수집하지 않으며 리다이렉트된 주소도 같은 검증을 적용한다.
 
-AI 분석은 단일 Mac의 GPU 과점유를 막기 위해 앱 전체에서 한 번에 하나만 실행한다. 프런트의 취소 버튼, 브라우저 연결 종료, 경영메시지 20분 총 제한은 모두 같은 취소 token으로 Ollama 스트리밍 연결을 닫는다. 기사 추천은 기존 5분 제한을 유지한다. 앱 시작 시 `running`으로 남은 고아 실행은 `AI_INTERRUPTED` 실패로 복구한다.
+AI 분석은 단일 Mac의 GPU 과점유를 막기 위해 앱 전체에서 한 번에 하나만 실행한다. 프런트의 취소 버튼, 브라우저 연결 종료, 경영메시지와 기사 추천의 20분 총 제한은 모두 같은 취소 token으로 Ollama 스트리밍 연결을 닫는다. 앱 시작 시 `running`으로 남은 고아 실행은 `AI_INTERRUPTED` 실패로 복구한다.
 
 `gemma4:31b`를 기본 선택 모델로 사용하며 기본 64K context, 최대 2,048 출력 token, thinking 비활성화, JSON schema structured output을 사용한다. 분석 종료 뒤 모델을 메모리에서 내려 다음 작업의 GPU·열 점유를 남기지 않는다. 환경변수 `KESCO_OLLAMA_NUM_CTX_31B`를 지정하면 메모리 여건에 맞춰 4K 이상 범위에서 context를 낮출 수 있다.
 

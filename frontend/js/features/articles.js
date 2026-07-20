@@ -13,6 +13,7 @@ import { loadSample } from "./data-io.js";
 import { getTopIssueEntries, MAX_TOP_ISSUES } from "./issues.js?v=20260720-2";
 
 const expandedIssueIds = new Set();
+const expandedPreviewKeys = new Set();
 const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
 let manualGroupPickerEntries = new Map();
@@ -108,7 +109,9 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     : `<button class="article-direct-toggle ${a.directCoverage ? "active" : ""}" data-action="article-direct-coverage" title="${a.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!a.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${a.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`;
   const effectiveDirectCoverage = !!(issue?.directCoverage || (!issue && a.directCoverage));
   const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
-    <summary>관련 기사 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
+    <summary>관련기사·분석 근거 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
+    ${issue.representativeEvidenceMissing ? '<div class="representative-missing"><strong>대표 근거 기사 미확보</strong><span>이 이슈에서 AI 분석에 사용할 수 있는 기사 본문을 확보하지 못했습니다. 본문을 다시 추출하거나 다른 기사를 추가해 주세요.</span></div>' : ""}
+    ${issue.manualRepresentativeMissing ? '<div class="representative-missing"><strong>수동 대표기사 확인 필요</strong><span>기존 수동 대표기사를 현재 이슈에서 찾을 수 없습니다.</span></div>' : ""}
     <ul class="related-article-list">${relatedMembers.map(member => renderRelatedArticle(member.article, issue)).join("")}</ul>
   </details>` : "";
   const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="군집 검토별점" ${state.status === "final" ? "disabled" : ""}>
@@ -136,15 +139,35 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
 }
 
 function renderRelatedArticle(a, issue) {
+  const quality = (issue.evidenceArticles || []).find(item => item.articleId === a.id) || {};
   const href = safeUrl(a.url);
   const titleEl = href
     ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
     : `<span class="related-article-title">${escapeHtml(a.title)}</span>`;
   const directCoverage = !!(issue.directCoverage || a.directCoverage);
-  return `<li class="related-article-row" data-id="${escapeAttr(a.id)}" data-issue-id="${escapeAttr(issue.id)}">
+  const roleLabel = { representative: "현재 대표", supplemental: "보조근거", excluded: "분석 제외", related: "관련기사" }[quality.role] || "관련기사";
+  const statusLabel = { success_full: "전문 확보", success_summary: "유효 요약", failed: "본문 추출 실패", not_attempted: "추출 전" }[quality.extractionStatus] || "추출 전";
+  const gradeLabel = { excellent: "분석 적합도 우수", good: "분석 적합도 양호", limited: "분석 제한", unavailable: "분석 불가" }[quality.qualityGrade] || "분석 불가";
+  const previewKey = `${issue.id}:${a.id}`;
+  const previewOpen = expandedPreviewKeys.has(previewKey);
+  const disabledReason = quality.analysisEligible ? "" : (quality.qualityReasons || ["유효한 기사 본문을 확보하지 못했습니다."]).join(" · ");
+  return `<li class="related-article-row related-role-${escapeAttr(quality.role || "related")}" data-id="${escapeAttr(a.id)}" data-issue-id="${escapeAttr(issue.id)}">
     <input class="include-check related-include-check" type="checkbox" data-action="include" aria-label="브리핑 선정" title="${directCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
-    <div class="related-article-content">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")}</span></div>
-    <button class="related-remove-btn no-print" data-action="remove-related" title="이 기사를 현재 관련기사 묶음에서 제거" ${state.status === "final" ? "disabled" : ""}>묶음에서 제거</button>
+    <div class="related-article-content">
+      <div class="related-article-heading">${titleEl}<span class="related-article-meta">${escapeHtml(a.source || "출처 미상")} · ${formatDateTime(a.pubDate)}</span></div>
+      <div class="related-quality-badges"><span class="evidence-role role-${escapeAttr(quality.role || "related")}">${roleLabel}</span><span class="quality-status status-${escapeAttr(quality.extractionStatus || "not_attempted")}">${statusLabel}</span><span class="quality-grade grade-${escapeAttr(quality.qualityGrade || "unavailable")}">${gradeLabel} ${Number(quality.contentQualityScore || 0)}</span></div>
+      <div class="related-quality-meta">정제 ${Number(quality.cleanedCharacterCount || 0).toLocaleString("ko-KR")}자 · ${escapeHtml(quality.extractionMethod || "미확인")} · ${escapeHtml((quality.qualityReasons || []).join(" · ") || "품질 평가 전")}</div>
+      ${previewOpen ? `<div class="article-body-preview"><dl><div><dt>정제 전</dt><dd>${Number(quality.rawCharacterCount || 0).toLocaleString("ko-KR")}자</dd></div><div><dt>정제 후</dt><dd>${Number(quality.cleanedCharacterCount || 0).toLocaleString("ko-KR")}자</dd></div><div><dt>추출 시각</dt><dd>${quality.lastExtractedAt ? formatDateTime(quality.lastExtractedAt) : "없음"}</dd></div></dl><p>${escapeHtml(quality.cleanedText || "확인할 정제 본문이 없습니다.")}</p></div>` : ""}
+    </div>
+    <div class="related-evidence-actions no-print">
+      <button data-action="preview-body">${previewOpen ? "미리보기 닫기" : "본문 미리보기"}</button>
+      ${href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">원문 열기</a>` : ""}
+      <button data-action="reextract-body" ${state.status === "final" ? "disabled" : ""}>본문 다시 추출</button>
+      <button data-action="set-representative" title="${escapeAttr(disabledReason)}" ${state.status === "final" || !quality.analysisEligible || quality.role === "representative" ? "disabled" : ""}>대표기사로 지정</button>
+      <button data-action="toggle-supplemental" title="${escapeAttr(disabledReason)}" ${state.status === "final" || (!quality.analysisEligible && quality.role !== "supplemental") || quality.role === "representative" ? "disabled" : ""}>${quality.role === "supplemental" ? "보조근거 해제" : "보조근거로 지정"}</button>
+      <button data-action="toggle-analysis-excluded" ${state.status === "final" ? "disabled" : ""}>${quality.role === "excluded" ? "분석 제외 해제" : "분석 제외"}</button>
+      <button class="related-remove-btn" data-action="remove-related" title="이 기사를 현재 관련기사 묶음에서 제거" ${state.status === "final" ? "disabled" : ""}>묶음에서 제거</button>
+    </div>
   </li>`;
 }
 
@@ -177,10 +200,8 @@ function renderMediaGroups(items) {
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, position }) => {
     if (members.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
-    const representative = issue.selected
-      ? members.find(member => member.article.included) || members[0]
-      : members[0];
-    const related = members.filter(member => member.article.id !== representative.article.id);
+    const representative = members.find(member => member.article.id === issue.representativeArticleId) || members[0];
+    const related = members;
     return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, related) };
   });
   items.forEach((article, index) => {
@@ -453,7 +474,19 @@ export function handleArticleClick(e) {
     els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderArticles(); return;
   }
   if (!action) return;
+  const evidenceRow = e.target.closest("[data-issue-id][data-id]");
+  if (action === "preview-body" && evidenceRow) {
+    const key = `${evidenceRow.dataset.issueId}:${evidenceRow.dataset.id}`;
+    if (expandedPreviewKeys.has(key)) expandedPreviewKeys.delete(key);
+    else expandedPreviewKeys.add(key);
+    renderArticles();
+    return;
+  }
   if (state.status === "final") return;
+  if (evidenceRow && ["reextract-body", "set-representative", "toggle-supplemental", "toggle-analysis-excluded"].includes(action)) {
+    handleEvidenceAction(action, evidenceRow.dataset.issueId, evidenceRow.dataset.id);
+    return;
+  }
   if (action === "top-issue") {
     const group = e.target.closest("[data-issue-id]");
     const issue = state.issues.find(item => item.id === group?.dataset.issueId);
@@ -496,6 +529,77 @@ export function handleArticleClick(e) {
     afterArticleMutation();
     trackArticlePatch(article.id, { dismissed: true });
     showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
+  }
+}
+
+async function handleEvidenceAction(action, issueId, articleId) {
+  const issue = state.issues.find(item => item.id === issueId);
+  if (!issue) return;
+  if (action === "reextract-body") {
+    showToast("기사 본문을 다시 추출하고 품질을 평가하고 있습니다.");
+    try {
+      const result = await api.reextractArticle(articleId);
+      const issuesResult = await api.listIssues(state.date);
+      state.issues = issuesResult.data.issues || [];
+      renderAll();
+      showToast(
+        result.data.analysisEligible
+          ? `본문 재추출 완료 · AI 분석 적합도 ${result.data.contentQualityScore}`
+          : `본문 재추출 완료 · 분석 제한 (${(result.data.qualityReasons || []).join(" · ")})`,
+        result.data.analysisEligible ? "success" : "",
+      );
+    } catch (error) {
+      showToast(`본문 재추출 실패: ${friendlyError(error)}`, "error");
+    }
+    return;
+  }
+  let representativeArticleId = issue.manualRepresentativeArticleId || null;
+  let supplementalArticleIds = [...(issue.manualSupplementalArticleIds || [])];
+  let excludedArticleIds = [...(issue.manualExcludedArticleIds || [])];
+  if (action === "set-representative") {
+    representativeArticleId = articleId;
+    supplementalArticleIds = supplementalArticleIds.filter(id => id !== articleId);
+    excludedArticleIds = excludedArticleIds.filter(id => id !== articleId);
+  } else if (action === "toggle-supplemental") {
+    if (supplementalArticleIds.includes(articleId)) {
+      supplementalArticleIds = supplementalArticleIds.filter(id => id !== articleId);
+    } else {
+      if (supplementalArticleIds.length >= 2) {
+        showToast("보조근거는 최대 2건입니다. 기존 보조근거를 먼저 해제해 주세요.", "error");
+        return;
+      }
+      supplementalArticleIds.push(articleId);
+      excludedArticleIds = excludedArticleIds.filter(id => id !== articleId);
+    }
+  } else if (action === "toggle-analysis-excluded") {
+    if (excludedArticleIds.includes(articleId)) {
+      excludedArticleIds = excludedArticleIds.filter(id => id !== articleId);
+    } else {
+      excludedArticleIds.push(articleId);
+      supplementalArticleIds = supplementalArticleIds.filter(id => id !== articleId);
+      if (representativeArticleId === articleId || issue.representativeArticleId === articleId) {
+        representativeArticleId = null;
+      }
+    }
+  }
+  try {
+    const result = await api.patchIssueEvidence(issueId, {
+      expectedRevision: issue.evidenceRevision || 0,
+      representativeArticleId,
+      supplementalArticleIds,
+      excludedArticleIds,
+    });
+    const updated = result.data;
+    Object.assign(issue, updated, { evidenceArticles: updated.articles || [] });
+    renderAll();
+    showToast("관련기사 분석 근거 구성을 저장했습니다.", "success");
+  } catch (error) {
+    if (error.code === "ISSUE_EVIDENCE_REVISION_CONFLICT") {
+      const issuesResult = await api.listIssues(state.date);
+      state.issues = issuesResult.data.issues || [];
+      renderAll();
+    }
+    showToast(`분석 근거 저장 실패: ${friendlyError(error)}`, "error");
   }
 }
 

@@ -30,7 +30,7 @@ from backend.app.services.ai.runtime import AnalysisCancelled, CancellationToken
 from backend.app.services.classification.origin import assess_kesco_origin
 
 router = APIRouter()
-SELECTION_TIMEOUT_SECONDS = 300
+SELECTION_TIMEOUT_SECONDS = 1_200
 
 
 class RecommendRequest(BaseModel):

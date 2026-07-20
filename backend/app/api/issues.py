@@ -42,6 +42,13 @@ class ManualGroupRequest(BaseModel):
     expectedRevision: int
 
 
+class IssueEvidencePatchRequest(BaseModel):
+    expectedRevision: int = Field(ge=0)
+    representativeArticleId: str | None = None
+    supplementalArticleIds: list[str] = Field(default_factory=list)
+    excludedArticleIds: list[str] = Field(default_factory=list)
+
+
 @router.get("/api/issues")
 async def list_issues(report_date: str = Query(...)) -> Any:
     connection = get_connection()
@@ -81,9 +88,62 @@ async def list_issues(report_date: str = Query(...)) -> Any:
                 and issue["id"] in canonical_article_top_issue_ids
             ):
                 issue["selected"] = True
+            evidence = issues_repo.list_evidence_articles(connection, issue["id"])
+            issue["evidenceArticles"] = evidence["articles"] if evidence else []
     finally:
         connection.close()
     return ok_envelope({"issues": issues})
+
+
+@router.get("/api/issues/{issue_id}/articles")
+async def list_issue_articles(issue_id: str) -> Any:
+    connection = get_connection()
+    try:
+        result = issues_repo.list_evidence_articles(connection, issue_id)
+    finally:
+        connection.close()
+    if result is None:
+        return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
+    return ok_envelope(result)
+
+
+@router.patch("/api/issues/{issue_id}/evidence")
+async def patch_issue_evidence(issue_id: str, request: IssueEvidencePatchRequest) -> Any:
+    connection = get_connection()
+    try:
+        try:
+            with connection:
+                result = issues_repo.update_evidence_selection(
+                    connection,
+                    issue_id,
+                    expected_revision=request.expectedRevision,
+                    representative_article_id=request.representativeArticleId,
+                    supplemental_article_ids=request.supplementalArticleIds,
+                    excluded_article_ids=request.excludedArticleIds,
+                )
+        except LookupError:
+            return error_response("ISSUE_NOT_FOUND", "이슈를 찾을 수 없습니다.")
+        except RuntimeError:
+            return error_response(
+                "ISSUE_EVIDENCE_REVISION_CONFLICT",
+                "다른 화면에서 관련기사 근거 구성이 변경됐습니다.",
+            )
+        except PermissionError as exc:
+            return error_response(
+                "ARTICLE_ANALYSIS_INELIGIBLE",
+                "AI 분석 부적격 기사는 대표기사나 보조근거로 지정할 수 없습니다.",
+                {"articleId": str(exc)},
+            )
+        except ValueError as exc:
+            if str(exc) == "supplemental_limit":
+                return error_response(
+                    "SUPPLEMENTAL_ARTICLE_LIMIT_EXCEEDED",
+                    "보조근거는 이슈당 최대 2건까지 지정할 수 있습니다.",
+                )
+            return error_response("ISSUE_EVIDENCE_INVALID", "관련기사 근거 구성이 올바르지 않습니다.")
+    finally:
+        connection.close()
+    return ok_envelope(result)
 
 
 @router.patch("/api/issues/{issue_id}")
