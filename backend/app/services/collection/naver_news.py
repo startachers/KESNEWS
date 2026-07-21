@@ -63,6 +63,8 @@ def fetch_naver_news(
     client_id: str,
     client_secret: str,
     within_lookback: Callable[[str | None], bool],
+    *,
+    max_pages: int = MAX_PAGES,
 ) -> list[dict[str, Any]]:
     headers = {
         "Accept": "application/json",
@@ -70,7 +72,7 @@ def fetch_naver_news(
         "X-Naver-Client-Secret": client_secret,
     }
     collected: list[dict[str, Any]] = []
-    for page in range(MAX_PAGES):
+    for page in range(max(1, min(MAX_PAGES, max_pages))):
         params = urlencode(
             {"query": query_text, "display": DISPLAY, "start": page * DISPLAY + 1, "sort": "date"}
         )

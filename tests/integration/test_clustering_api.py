@@ -55,7 +55,7 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     articles_feature = client.get("/js/features/articles.js")
     assert articles_feature.status_code == 200
     assert "renderMediaGroups" in articles_feature.text
-    assert 'const keepManagementArticles = filters.selection === "selected"' in articles_feature.text
+    assert "카드의 관련기사 수와 펼침 목록은 현재 화면 필터가 아니라 이슈 전체 membership을 따른다" in articles_feature.text
     assert "renderArticleCard(representative.article, issue, managementMembers)" in articles_feature.text
     assert "function relatedArticleCounts()" in articles_feature.text
     assert "(relatedCounts.get(b.id) || 0) - (relatedCounts.get(a.id) || 0)" in articles_feature.text
@@ -77,7 +77,8 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "전체 본문 다시 추출" in articles_feature.text
     assert "reextractIssueArticles(issueId)" in articles_feature.text
     assert "Math.random()" not in articles_feature.text
-    assert "관련기사·분석 근거 ${relatedMembers.length}건" in articles_feature.text
+    assert "관련기사 ${relatedCount}건" in articles_feature.text
+    assert "member.article.id !== a.id" in articles_feature.text
     assert "오류 사유" in report_draft_feature.text
     assert "언론사 ${escapeHtml(article.source" in report_draft_feature.text
     assert "제목을 확인할 수 없는 기사" in report_draft_feature.text

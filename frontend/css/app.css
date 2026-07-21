@@ -408,7 +408,10 @@ a { color: inherit; }
 .article-desc { margin: 7px 0 0; color: #687986; font-size: 10px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .article-note { margin-top: 8px; width: 100%; padding: 7px 9px; border: 1px dashed #ccd5d8; border-radius: 8px; background: #fbfcfb; color: var(--ink); font-size: 10px; outline: 0; }
 .article-note:focus { border-style: solid; border-color: var(--teal); background: #fff; }
-.article-actions { display: flex; justify-content: flex-end; align-items: flex-start; gap: 4px; }
+.article-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; gap: 4px; }
+.related-search-btn { min-width: 84px; height: 30px; padding: 0 8px; border: 1px solid #7eb1dc; border-radius: 8px; background: #edf6ff; color: #245d92; font-size: 9px; font-weight: 850; cursor: pointer; }
+.related-search-btn:hover:not(:disabled) { border-color: #2472b8; background: #dceeff; }
+.related-search-btn:disabled { cursor: not-allowed; opacity: .55; }
 .small-icon {
   width: 31px; height: 31px; padding: 0; border: 1px solid #dde2e4; border-radius: 8px; background: #fff; color: #798892; display: grid; place-items: center;
 }

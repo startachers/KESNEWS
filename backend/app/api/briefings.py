@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import sqlite3
 from typing import Any, Literal
 
@@ -12,8 +14,13 @@ from backend.app.core.clock import today_seoul
 from backend.app.repositories import briefing_repository as repo
 from backend.app.repositories import issue_repository as issues_repo
 from backend.app.repositories.database import backup_database, get_connection
+from backend.app.services.collection.related_search import (
+    RelatedSearchNotFound,
+    search_and_attach,
+)
 
 router = APIRouter()
+logger = logging.getLogger("kesco.briefings")
 
 
 class BriefingPatch(BaseModel):
@@ -65,6 +72,10 @@ class IssueStatePatchRequest(BaseModel):
 class DailyWorkResetRequest(BaseModel):
     expectedRevision: int
     confirmation: Literal["RESET_TODAY"]
+
+
+class RelatedArticleSearchRequest(BaseModel):
+    expectedRevision: int = Field(ge=0)
 
 
 def _serialize(row: sqlite3.Row) -> dict[str, Any]:
@@ -233,6 +244,33 @@ async def patch_briefing_article(
     finally:
         connection.close()
     return ok_envelope(_serialize(row), meta={"revision": row["revision"]})
+
+
+@router.post("/api/briefings/{report_date}/articles/{article_id}/related-search")
+async def search_related_articles(
+    report_date: str, article_id: str, request: RelatedArticleSearchRequest
+) -> Any:
+    try:
+        result = await asyncio.to_thread(
+            search_and_attach, report_date, article_id, request.expectedRevision
+        )
+    except repo.BriefingNotFound:
+        return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+    except repo.BriefingFinalized:
+        return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본은 수정할 수 없습니다.")
+    except repo.RevisionConflict:
+        return error_response(
+            "BRIEFING_REVISION_CONFLICT", "다른 화면에서 브리핑이 변경됐습니다."
+        )
+    except RelatedSearchNotFound:
+        return error_response("ARTICLE_NOT_FOUND", "현재 브리핑에서 기사를 찾을 수 없습니다.")
+    except Exception:
+        logger.exception("관련기사 검색 실패: report_date=%s article_id=%s", report_date, article_id)
+        return error_response(
+            "RELATED_ARTICLE_SEARCH_FAILED",
+            "관련기사 검색에 실패했습니다. 기존 기사와 편집 상태는 유지됩니다.",
+        )
+    return ok_envelope(result, meta={"revision": result["revision"]})
 
 
 @router.put("/api/briefings/{report_date}/article-order")

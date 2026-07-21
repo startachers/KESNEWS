@@ -34,7 +34,7 @@ def short_text(value: str | None, max_len: int = 100) -> str:
     return f"{text[: max_len - 1]}…" if len(text) > max_len else text
 
 
-CLEANING_RULE_VERSION = "article-clean-v2.2"
+CLEANING_RULE_VERSION = "article-clean-v2.3"
 
 _AI_SECTION_HEADING = re.compile(
     r"(?:핵심요약\s*쏙|쏙\s*AI\s*요약|AI\s*요약|기사\s*AI\s*해설|AI\s*해설|"
@@ -72,6 +72,16 @@ _INLINE_UI = re.compile(
     r"가\s*가\s*기사의\s*본문\s*내용은\s*이\s*글자크기로\s*변경됩니다)",
     re.I,
 )
+_PAGE_UI_TOKEN = (
+    r"(?:기사\s*스크랩|댓글|공유|글자\s*크기\s*조절|프린트|상태바|"
+    r"구독(?:중)?|이미지\s*확대)"
+)
+_PAGE_UI_LINE = re.compile(
+    rf"^{_PAGE_UI_TOKEN}(?:\s*(?:[·|/]\s*)?{_PAGE_UI_TOKEN})*$",
+    re.I,
+)
+_PHOTO_CAPTION_LINE = re.compile(r"^\s*(?:\[\s*)?사진\s*=\s*[^\]\n]+(?:\s*\])?\s*$", re.I)
+_RESALE_DB_TAIL = re.compile(r"(?:ⓒ\s*)?재판매\s*및\s*DB\s*금지", re.I)
 _SPACE = re.compile(r"[ \t\u00a0]+")
 
 
@@ -98,13 +108,16 @@ def clean_article_text(value: str | None, *, title: str = "") -> CleaningResult:
     legal_match = _LEGAL.search(raw)
     if legal_match:
         cuts.append(legal_match.start())
+    resale_db_match = _RESALE_DB_TAIL.search(raw)
+    if resale_db_match:
+        cuts.append(resale_db_match.start())
     working = raw[: min(cuts)] if cuts else raw
     removed: list[str] = []
     if ai_match:
         removed.append("publisher_ai_section")
     if tail_match:
         removed.append("recommendation_section")
-    if legal_match:
+    if legal_match or resale_db_match:
         removed.append("copyright_tail")
 
     paragraphs = _paragraphs(working)
@@ -112,6 +125,12 @@ def clean_article_text(value: str | None, *, title: str = "") -> CleaningResult:
     seen: set[str] = set()
     kept: list[str] = []
     for paragraph in paragraphs:
+        if _PAGE_UI_LINE.fullmatch(paragraph):
+            removed.append("page_ui")
+            continue
+        if _PHOTO_CAPTION_LINE.fullmatch(paragraph):
+            removed.append("photo_caption")
+            continue
         paragraph = _LEGAL.sub("", paragraph).strip(" ·|")
         paragraph = _INLINE_UI.sub("", paragraph).strip(" ·|")
         if not paragraph or _DROP_LINE.fullmatch(paragraph):
@@ -130,7 +149,14 @@ def clean_article_text(value: str | None, *, title: str = "") -> CleaningResult:
     text = "\n\n".join(kept).strip()
     return CleaningResult(
         text=text,
-        noise_detected=bool(tail_match or _LEGAL.search(raw) or _INLINE_UI.search(raw)),
+        noise_detected=bool(
+            tail_match
+            or _LEGAL.search(raw)
+            or resale_db_match
+            or _INLINE_UI.search(raw)
+            or "page_ui" in removed
+            or "photo_caption" in removed
+        ),
         ai_content_detected=bool(ai_match),
         removed_sections=tuple(dict.fromkeys(removed)),
     )

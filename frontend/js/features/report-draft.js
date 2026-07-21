@@ -4,7 +4,7 @@ import { downloadBlob } from "../utils/dom.js";
 import { escapeAttr, escapeHtml, friendlyError, safeUrl } from "../utils/strings.js";
 import { openOverlay, closeOverlay } from "../ui/dialogs.js";
 import { showToast } from "../ui/notifications.js?v=20260716-1";
-import { flushArticleChanges, focusRelatedEvidence, renderArticles, setEvidenceValidationFailures } from "./articles.js?v=20260721-2";
+import { flushArticleChanges, focusRelatedEvidence, renderArticles, setEvidenceValidationFailures } from "./articles.js?v=20260721-3";
 
 let currentSignature = "";
 let currentSourceType = "manual";

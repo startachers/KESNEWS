@@ -17,6 +17,7 @@ const expandedPreviewKeys = new Set();
 const collapsedRepresentativePreviewKeys = new Set();
 const qualitySortedIssueIds = new Set();
 const reextractingIssueIds = new Set();
+const searchingRelatedArticleIds = new Set();
 const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
 const evidenceFailureByArticleId = new Map();
@@ -168,8 +169,10 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
       return rightRepresentative - leftRepresentative;
     });
   const reextractingAll = issue && reextractingIssueIds.has(issue.id);
-  const relatedArticles = issue && relatedMembers.length ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
-    <summary>관련기사·분석 근거 ${relatedMembers.length}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
+  const searchingRelated = searchingRelatedArticleIds.has(a.id);
+  const relatedCount = relatedMembers.filter(member => member.article.id !== a.id).length;
+  const relatedArticles = issue && relatedCount ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
+    <summary>관련기사 ${relatedCount}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
     <div class="related-article-toolbar no-print">
       <button type="button" data-action="sort-related-quality" aria-pressed="${String(qualitySortedIssueIds.has(issue.id))}" class="${qualitySortedIssueIds.has(issue.id) ? "active" : ""}">본문 충실도순</button>
       <button type="button" data-action="reextract-all-bodies" aria-busy="${String(!!reextractingAll)}" ${state.status === "final" || reextractingAll ? "disabled" : ""}>${reextractingAll ? `전체 본문 추출 중… (${relatedMembers.length}건)` : "전체 본문 다시 추출"}</button>
@@ -193,6 +196,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     </div>
     <div class="article-actions">
       ${reviewControl}
+      <button class="related-search-btn" data-action="search-related" aria-busy="${String(searchingRelated)}" title="제목 핵심어를 여러 조합으로 Google·네이버에서 검색해 관련기사를 최대 10건 찾습니다" ${state.status === "final" || searchingRelated ? "disabled" : ""}>${searchingRelated ? "검색 중…" : "관련기사 검색"}</button>
       ${directCoverageButton}
       ${topIssueButton}
       <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
@@ -289,7 +293,6 @@ function renderMediaGroups(items) {
   const itemById = new Map(items.map((article, index) => [article.id, { article, index }]));
   const articleById = new Map(state.articles.map(article => [article.id, article]));
   const issueByArticle = primaryIssueByArticle(state.issues);
-  const keepManagementArticles = filters.selection === "selected";
   const groupedIds = new Set();
   const groups = state.issues.map(issue => {
     const members = issue.articleIds
@@ -298,17 +301,15 @@ function renderMediaGroups(items) {
       .filter(Boolean)
       .sort((left, right) => left.index - right.index);
     members.forEach(member => groupedIds.add(member.article.id));
-    const managementMembers = keepManagementArticles
-      ? issue.articleIds
-        .filter(articleId => issueByArticle.get(articleId)?.id === issue.id)
-        .map(articleId => articleById.get(articleId))
-        .filter(Boolean)
-        .map(article => ({ article }))
-      : members;
+    // 카드의 관련기사 수와 펼침 목록은 현재 화면 필터가 아니라 이슈 전체 membership을 따른다.
+    const managementMembers = issue.articleIds
+      .filter(articleId => issueByArticle.get(articleId)?.id === issue.id)
+      .map(articleId => articleById.get(articleId))
+      .filter(Boolean)
+      .map(article => ({ article }));
     return { issue, members, managementMembers, position: members[0]?.index };
   }).filter(group => group.members.length);
   const entries = groups.map(({ issue, members, managementMembers, position }) => {
-    if (managementMembers.length === 1) return { position, press: isKescoPressIssue(issue) || isKescoPressArticle(members[0].article), html: renderArticleCard(members[0].article, issue, []) };
     const representative = members.find(member => member.article.id === issue.representativeArticleId) || members[0];
     return { position, press: isKescoPressIssue(issue), html: renderArticleCard(representative.article, issue, managementMembers) };
   });
@@ -417,6 +418,36 @@ export async function handleArticleChange(e) {
         : "브리핑 선정을 해제했습니다.",
       selecting ? "success" : "",
     );
+  }
+}
+
+async function searchRelatedArticles(articleId) {
+  if (searchingRelatedArticleIds.has(articleId)) return;
+  searchingRelatedArticleIds.add(articleId);
+  renderArticles();
+  showToast("제목 핵심어를 여러 조합으로 Google·네이버에서 검색하고 있습니다.");
+  try {
+    await flushArticleChanges();
+    const result = await api.searchRelatedArticles(state.date, articleId, state.revision);
+    state.revision = result.data.revision;
+    setState(await loadDailyState(state.date));
+    const count = Number(result.data.foundCount || 0);
+    const added = Number(result.data.addedCount || 0);
+    if (result.data.issueId) expandedIssueIds.add(result.data.issueId);
+    showToast(
+      count
+        ? `관련기사 ${count}건을 찾고 ${added}건을 현재 묶음에 추가했습니다.`
+        : "출처 도메인이 확인되는 추가 관련기사를 찾지 못했습니다.",
+      count ? "success" : "",
+    );
+  } catch (error) {
+    if (error.code === "BRIEFING_REVISION_CONFLICT") {
+      setState(await loadDailyState(state.date));
+    }
+    showToast(`관련기사 검색 실패: ${friendlyError(error)}`, "error");
+  } finally {
+    searchingRelatedArticleIds.delete(articleId);
+    renderAll();
   }
 }
 
@@ -608,6 +639,11 @@ export function handleArticleClick(e) {
     return;
   }
   if (state.status === "final") return;
+  if (action === "search-related") {
+    const card = e.target.closest(".article-card[data-id]");
+    if (card) searchRelatedArticles(card.dataset.id);
+    return;
+  }
   if (evidenceRow && ["reextract-body", "set-representative", "toggle-supplemental", "toggle-analysis-excluded"].includes(action)) {
     handleEvidenceAction(action, evidenceRow.dataset.issueId, evidenceRow.dataset.id);
     return;

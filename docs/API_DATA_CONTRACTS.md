@@ -311,7 +311,10 @@ POST  /api/issues/{issue_id}/articles/reextract
   `body_unavailable`, `publisher_identity_mismatch`, `canonical_url_unresolved`,
   `ai_generated_content_remains` 절대 오류를 검사한다. 하나라도 있으면 점수와 관계없이
   `analysisEligible=false`, `qualityGrade=unavailable`이며 대표기사로 지정할 수 없다.
-- 추천·랭킹·언론사 AI·저작권 이후 구간을 결정론적 정제기가 완전히 제거한 경우에는 통과한다.
+- 추천·랭킹·언론사 AI·저작권 이후 구간과 독립된 페이지 UI 줄(`기사 스크랩`, `댓글`,
+  `공유`, `글자크기 조절`, `프린트`, `상태바`, `구독`, `구독중`, `이미지 확대`),
+  `사진=...`·`[사진=...]` 캡션, `재판매 및 DB 금지` 꼬리표를 결정론적 정제기가 완전히
+  제거한 경우에는 통과한다. 같은 단어가 일반 기사 문장 안에 쓰인 경우에는 제거하지 않는다.
   정제 후에도 해당 콘텐츠가 남거나, 완결 문장이 앞에 있더라도 마지막 문장이 잘렸으면 절대
   오류로 차단한다.
 - 발행사는 페이지 JSON-LD `publisher.name`, `og:site_name`, canonical 도메인, resolved 도메인,
@@ -339,7 +342,28 @@ POST  /api/issues/{issue_id}/articles/reextract
   각각 새 `article_extractions` 이력으로 남기며 일부 실패가 다른 기사 결과를 제거하지 않는다.
   응답은 요청·성공·실패 건수와 실패 기사 ID를 반환하고, 완료 후 자동 대표 후보만 재계산한다.
 
-### 2.9 오늘 작업 초기화
+### 2.9 사용자 요청 관련기사 보강 검색
+
+```text
+POST /api/briefings/{date}/articles/{article_id}/related-search
+{ "expectedRevision": 12 }
+```
+
+- 브리핑 기사 카드의 `관련기사 검색`은 원 기사 제목에서 앞·뒤·핵심 2~3단어 검색식을
+  여러 개 만들어 Google 뉴스 RSS와 설정된 경우 네이버 뉴스 API에서 관련 보도를
+  최대 10건까지 찾고, 기존 이슈가 있으면 수동 membership `add`로 연결한다. 기존 이슈가 없고
+  결과가 있으면 원 기사와 검색 결과로 수동 이슈를 만든다.
+- 일반 `오늘 기사 검색`의 검색그룹 관련도 gate, 제외어, 24시간 기간 제한과 신뢰 언론사
+  허용목록은 이 요청에만 적용하지 않고 90일 범위로 넓힌다. 검색 제공자가 반환한 원 발행사 도메인이
+  확인되는 보도는 허용하되 출처 미상은 제외하며, 이후 원문 URL·발행사 일치·본문 품질 검증은
+  완화하지 않는다. 이 완화는 일반 수집 정책을 변경하지 않는다.
+- 검색 결과는 별도 collection run과 provider observation으로 기록한다. 신규 기사와 기존 기사
+  모두 원래 `articles.id`와 observation을 유지하며, 담당자 선정·메모·중요·Top 태그를
+  덮어쓰지 않는다.
+- 결과를 membership에 반영하면 작업본 revision을 한 번 증가시킨다. 결과가 0건이면 기존
+  기사·이슈·revision을 변경하지 않는다. final 작업본과 오래된 `expectedRevision`은 거부한다.
+
+### 2.10 오늘 작업 초기화
 
 ```text
 POST /api/briefings/{date}/reset

@@ -52,7 +52,7 @@ def test_index_html_is_served_at_root():
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260720-1' in app_script.text
-    assert 'articles.js?v=20260721-2' in app_script.text
+    assert 'articles.js?v=20260721-3' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'report-draft.js?v=20260721-4' in app_script.text
@@ -76,15 +76,22 @@ def test_index_html_is_served_at_root():
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
-    assert 'articles.js?v=20260721-2' in dialogs_script.text
+    assert 'articles.js?v=20260721-3' in dialogs_script.text
     assert "await api.getServerProcessId()" in dialogs_script.text
 
     client_script = client.get("/js/api/client.js")
     assert "export async function getServerProcessId()" in client_script.text
     assert "서버가 45초 안에 다시 시작되지 않았습니다" in client_script.text
+    assert "export function searchRelatedArticles" in client_script.text
+
+    articles_script = client.get("/js/features/articles.js")
+    assert 'data-action="search-related"' in articles_script.text
+    assert "관련기사 검색" in articles_script.text
+    assert "여러 조합으로 Google·네이버" in articles_script.text
+    assert "최대 10건" in articles_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
-    assert 'articles.js?v=20260721-2' in renderers_script.text
+    assert 'articles.js?v=20260721-3' in renderers_script.text
 
     auto_selection_script = client.get("/js/features/auto-selection.js")
     assert 'setAttribute("aria-busy", String(value))' in auto_selection_script.text

@@ -3,7 +3,11 @@ import sqlite3
 from backend.app.services.analysis_markdown.budget import truncate_at_sentence
 from backend.app.services.analysis_markdown.eligibility import evaluate
 from backend.app.services.analysis_markdown.quality import publisher_statistics
-from backend.app.services.analysis_markdown.replacement_finder import find_replacement
+from backend.app.services.analysis_markdown.replacement_finder import (
+    find_replacement,
+    related_query_variants,
+    search_related_candidates,
+)
 from backend.app.services.extraction.cleaner import clean_article_text
 from backend.app.services.extraction.evidence_quality import assess
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
@@ -20,7 +24,7 @@ CONFIG = {
         "minimum_attempts_for_quarantine": 10,
     },
     "disabled_publishers": [],
-    "cleaning_rule_version": "article-clean-v2.2",
+    "cleaning_rule_version": "article-clean-v2.3",
 }
 
 
@@ -43,6 +47,31 @@ def test_cleaner_removes_publisher_ai_and_recommendations_without_rewriting_fact
 
 def test_cleaner_keeps_ai_word_when_it_is_an_ordinary_article_sentence():
     text = "정부는 산업 현장의 AI 분석 기술을 점검했다고 밝혔다. 후속 계획은 7월 발표한다."
+    assert clean_article_text(text).text == text
+
+
+def test_cleaner_removes_requested_page_ui_photo_labels_and_resale_tail():
+    facts = (
+        "한국전기안전공사는 여름철 전기설비 특별점검을 시작했다.\n"
+        "점검 결과와 후속 조치는 다음 달 공개할 예정이다."
+    )
+    page_extras = "\n".join([
+        "기사 스크랩", "댓글", "공유", "글자크기 조절", "프린트", "상태바",
+        "구독", "구독중", "이미지 확대", "사진=연합뉴스", "[사진=한국전기안전공사]",
+        "재판매 및 DB 금지",
+    ])
+
+    result = clean_article_text(f"{facts}\n{page_extras}")
+
+    assert result.text == facts.replace("\n", "\n\n")
+    assert result.noise_detected is True
+    assert "page_ui" in result.removed_sections
+    assert "photo_caption" in result.removed_sections
+    assert "copyright_tail" in result.removed_sections
+
+
+def test_cleaner_does_not_remove_ui_words_inside_article_sentences():
+    text = "독자들은 기사를 공유하고 구독 중이라고 밝혔으며 사진 활용 정책도 설명했다."
     assert clean_article_text(text).text == text
 
 
@@ -195,6 +224,68 @@ def test_replacement_requires_same_issue_or_strong_event_match_and_preserves_id(
     assert find_replacement(original, [other], issue_ids_by_article={"A": {"I1"}, "C": {"I2"}}) is None
 
 
+def test_related_search_relaxes_topic_and_trusted_media_policy_but_requires_domain(monkeypatch):
+    queries = []
+    items = [
+        {
+            "title": f"변전소 침수 안전점검 후속 대책 {index}",
+            "url": f"https://news.google.com/articles/{index}",
+            "sourceUrl": "https://www.yna.co.kr",
+            "source": "연합뉴스",
+            "provider": "Google 뉴스 RSS",
+            "pubDate": f"2026-07-{20 - index % 10:02d}T01:00:00Z",
+            "description": "후속 보도",
+        }
+        for index in range(12)
+    ]
+    items.append({
+        "title": "전주 변전소 침수 대비 안전점검 결과 후속",
+        "url": "https://news.google.com/articles/untrusted",
+        "sourceUrl": "https://untrusted.example.com",
+        "source": "미등록매체",
+        "provider": "Google 뉴스 RSS",
+        "pubDate": "2026-07-21T01:00:00Z",
+    })
+    items.append({
+        "title": "변전소 침수 안전점검 후속 대책 출처미상",
+        "url": "https://news.google.com/articles/unknown",
+        "source": "출처 미상",
+        "provider": "Google 뉴스 RSS",
+        "pubDate": "2026-07-21T02:00:00Z",
+    })
+    def fake_google(query, lookback, maximum):
+        queries.append(query)
+        return items
+
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.replacement_finder.fetch_google_rss",
+        fake_google,
+    )
+
+    found = search_related_candidates(
+        {"title": "전주 변전소 침수 대비 안전점검 결과 발표", "url": "https://original.example.com"}
+    )
+
+    assert len(found) == 10
+    assert any(item["source"] == "미등록매체" for item in found)
+    assert all(item["source"] != "출처 미상" for item in found)
+    assert any(item["relatedSearchPublisherScope"] == "domain_identified" for item in found)
+    assert all(item["relatedSearchPolicy"] == "relaxed_topic_filters_v1" for item in found)
+    assert len(queries) >= 4
+    assert all(len(query.split()) <= 3 for query in queries)
+
+
+def test_related_query_variants_cover_front_back_and_short_combinations():
+    variants = related_query_variants({
+        "title": "인천 물류센터 리튬배터리 화재 합동감식 원인 조사 착수"
+    })
+
+    assert "인천 물류센터 리튬배터리" in variants
+    assert "원인 조사 착수" in variants
+    assert "인천 물류센터" in variants
+    assert len(variants) == len(set(variants))
+
+
 def test_publisher_quality_warning_and_quarantine_calculation():
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row
@@ -205,10 +296,10 @@ def test_publisher_quality_warning_and_quarantine_calculation():
         attempted_at TEXT, cleaning_rule_version TEXT)""")
     for index in range(10):
         connection.execute(
-            "INSERT INTO publisher_extraction_events VALUES (?, 'a', 'bad', '나쁜언론', 'failed', 0, 0, 0, 1, 'access_blocked', ?, 'article-clean-v2.2')",
+            "INSERT INTO publisher_extraction_events VALUES (?, 'a', 'bad', '나쁜언론', 'failed', 0, 0, 0, 1, 'access_blocked', ?, 'article-clean-v2.3')",
             (str(index), f"2026-07-{index + 1:02d}"),
         )
-    connection.execute("INSERT INTO publisher_extraction_events VALUES ('x', 'a', 'new', '신규언론', 'success_full', 1, 0, 0, 0, NULL, '2026-07-20', 'article-clean-v2.2')")
+    connection.execute("INSERT INTO publisher_extraction_events VALUES ('x', 'a', 'new', '신규언론', 'success_full', 1, 0, 0, 0, NULL, '2026-07-20', 'article-clean-v2.3')")
     stats = {item["publisherId"]: item for item in publisher_statistics(connection, CONFIG)}
     assert stats["bad"]["status"] == "quarantine"
     assert stats["new"]["status"] == "warning"

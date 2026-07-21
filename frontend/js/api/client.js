@@ -162,6 +162,13 @@ export function reextractIssueArticles(issueId) {
   }, 300000);
 }
 
+export function searchRelatedArticles(date, articleId, expectedRevision) {
+  return request(`/briefings/${encodeURIComponent(date)}/articles/${encodeURIComponent(articleId)}/related-search`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision }),
+  }, 120000);
+}
+
 export function createManualArticle(payload) {
   return request(`/articles`, { method: "POST", body: JSON.stringify(payload) });
 }
