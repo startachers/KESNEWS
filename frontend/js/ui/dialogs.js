@@ -1,4 +1,4 @@
-import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, SETTINGS_KEY } from "../state/store.js";
+import { $, els, settings, setSettings, state, DEFAULT_SETTINGS, saveLocalSettings } from "../state/store.js";
 import { escapeHtml, escapeAttr, parseKeywordList, friendlyError } from "../utils/strings.js";
 import { parseDate } from "../utils/dates.js";
 import { refreshArticles } from "../features/collection.js?v=20260716-19";
@@ -51,8 +51,8 @@ export function renderQuerySettings(queries) {
   }).join("");
 }
 
-export function saveSettingsFromForm() {
-  setSettings({
+export async function saveSettingsFromForm() {
+  const next = {
     ...settings,
     autoRun: $("settingAutoRun").checked,
     enableYonhap: $("settingYonhap").checked,
@@ -73,17 +73,30 @@ export function saveSettingsFromForm() {
       enabled: row.querySelector('input[type="checkbox"]').checked,
       query: row.querySelector('input[type="text"]').value.trim()
     }))
-  });
-  if (!settings.coreKeywords.length) { showToast("기관 핵심어를 한 개 이상 입력해 주세요.", "error"); return; }
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  populateStaticControls(); closeOverlay("settingsOverlay"); renderAll(); showToast("검색 설정을 저장했습니다.", "success");
+  };
+  if (!next.coreKeywords.length) { showToast("기관 핵심어를 한 개 이상 입력해 주세요.", "error"); return; }
+  try {
+    const { autoRun, aiModel, ...serverSettings } = next;
+    const result = await api.putSettings(serverSettings);
+    setSettings({ ...result.data, autoRun, aiModel });
+    saveLocalSettings();
+    populateStaticControls(); closeOverlay("settingsOverlay"); renderAll(); showToast("검색 설정을 서버에 저장했습니다.", "success");
+  } catch (error) {
+    showToast(`검색 설정 저장 실패: ${friendlyError(error)}`, "error");
+  }
 }
 
-export function resetSettingsForm() {
-  setSettings(structuredClone(DEFAULT_SETTINGS));
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  openSettings();
-  showToast("기본 검색식으로 복원했습니다.");
+export async function resetSettingsForm() {
+  try {
+    const result = await api.resetSettings();
+    setSettings({ ...result.data, autoRun: DEFAULT_SETTINGS.autoRun, aiModel: DEFAULT_SETTINGS.aiModel });
+    saveLocalSettings();
+    populateStaticControls();
+    openSettings();
+    showToast("서버 기본 검색식으로 복원했습니다.");
+  } catch (error) {
+    showToast(`기본 설정 복원 실패: ${friendlyError(error)}`, "error");
+  }
 }
 
 export async function restartServerFromSettings() {

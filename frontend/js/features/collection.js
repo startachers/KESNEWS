@@ -26,7 +26,7 @@ export async function runSearch(auto = false) {
   if (isSearching) return;
   if (state.date !== localDateKey() && auto) return;
   const enabled = settings.queries.filter(q => q.enabled && q.query.trim());
-  if (!enabled.length && !settings.enableYonhap) { showToast("활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요.", "error"); return; }
+  if (!enabled.length && !settings.enableYonhap && !settings.enableOpmPress && !settings.enableMePress) { showToast("활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요.", "error"); return; }
   setSearching(true);
   state.demo = false;
   setSearchButton(true);
@@ -37,19 +37,8 @@ export async function runSearch(auto = false) {
   state.lastAttemptAt = new Date().toISOString();
   try {
     const result = await requestCollection({
-      reportDate: state.date,
-      lookbackHours: Number(settings.lookback),
-      maxRecordsPerQuery: Number(settings.maxRecords),
-      collectionLimit: Number(settings.collectionLimit || 400),
-      enableYonhap: !!settings.enableYonhap,
-      enableOpmPress: !!settings.enableOpmPress,
-      enableMePress: !!settings.enableMePress,
-      queries: enabled.map(q => ({ id: q.id, label: q.label, query: q.query, naverQueries: q.naverQueries || [], ...(q.maxRecords ? { maxRecords: Number(q.maxRecords) } : {}) })),
-      coreKeywords: settings.coreKeywords,
-      riskKeywords: settings.riskKeywords,
-      positiveKeywords: settings.positiveKeywords,
-      excludeKeywords: settings.excludeKeywords,
-      endpoint: settings.endpoint
+      report_date: state.date,
+      lookback_hours: Number(settings.lookback)
     });
     setSearchProgress(58, "기사 수집 완료 · 중복과 검색 기간을 정리하는 중…");
 

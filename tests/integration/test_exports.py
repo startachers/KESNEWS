@@ -471,6 +471,8 @@ def test_csv_round_trip_preserves_incident_and_exports_unknowns_as_blanks():
     )
     csv_text = client.get(f"/api/exports/{report_date}.csv").text
     rows = list(csv.DictReader(io.StringIO(csv_text.lstrip("﻿"))))
+    assert rows[0]["분류"] == "중대화재·원인 미상 속보"
+    assert rows[0]["주분류"] == "중대화재·원인 미상 속보"
     assert rows[0]["사고유형"] == "fire"
     assert rows[0]["원인상태"] == "unknown"
     assert rows[0]["원인확정수준"] == "unknown"

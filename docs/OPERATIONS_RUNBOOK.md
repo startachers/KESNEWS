@@ -22,8 +22,9 @@
 - `kr.or.kesco.media-briefing.weather`: 2시간 간격 기상정보 수집
 
 상태는 `./install_launchd.command status`, 제거는 `./install_launchd.command uninstall`로
-확인한다. 자동수집 설정은 Git 비추적 파일 `config/automated_collection.json`이다.
-설정 변경 뒤 재설치는 필요 없으며 다음 실행부터 적용된다.
+확인한다. 수동·자동 기사수집 설정은 화면의 `검색 설정`에서 함께 관리하며 SQLite에 저장된다.
+버전 관리되는 기본값은 `config/collection_settings.json`이다. 설정 변경 뒤 재설치는 필요 없으며
+다음 실행부터 적용된다. `POST /api/settings/reset`은 사용자 override만 지우고 기본값으로 돌아간다.
 
 네이버 뉴스 공식 API 자격정보는 프로젝트 루트의 Git 비추적 `.env`에 둔다.
 

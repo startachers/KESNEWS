@@ -6,12 +6,13 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection.collector import run_collection
+from backend.app.services.settings import collection_payload, get_effective_settings
 
 logger = logging.getLogger("kesco.collections")
 
@@ -19,28 +20,19 @@ router = APIRouter()
 _collection_lock = asyncio.Lock()
 
 
-class CollectionQuery(BaseModel):
-    id: str = "direct"
-    label: str = ""
-    query: str = ""
-    naverQueries: list[str] = Field(default_factory=list, max_length=3)
-    maxRecords: int | None = Field(default=None, ge=20)
-
-
 class CollectionRequest(BaseModel):
-    reportDate: str | None = None
-    lookbackHours: int = 24
-    maxRecordsPerQuery: int = Field(default=50, ge=20)
-    collectionLimit: int = 400
-    enableYonhap: bool = True
-    enableOpmPress: bool = True
-    enableMePress: bool = True
-    queries: list[CollectionQuery] = Field(default_factory=list)
-    coreKeywords: list[str] = Field(default_factory=list)
-    riskKeywords: list[str] = Field(default_factory=list)
-    positiveKeywords: list[str] = Field(default_factory=list)
-    excludeKeywords: list[str] = Field(default_factory=list)
-    endpoint: str = ""
+    # 구버전 화면이 보내던 검색식·키워드 필드는 호환상 무시한다. 수집 설정은
+    # config 기본값과 settings 테이블 override만 사용한다.
+    model_config = ConfigDict(extra="ignore")
+
+    report_date: str | None = Field(
+        default=None, validation_alias=AliasChoices("report_date", "reportDate")
+    )
+    lookback_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices("lookback_hours", "lookbackHours"),
+    )
 
 
 def _serialize_run(row) -> dict[str, Any]:
@@ -86,29 +78,15 @@ def _serialize_provider(row) -> dict[str, Any]:
 
 @router.post("/api/collections")
 async def create_collection(request: CollectionRequest) -> dict[str, Any]:
-    enabled_queries = [q for q in request.queries if q.query.strip()]
+    settings, _ = get_effective_settings()
+    enabled_queries = [query for query in settings.queries if query.enabled and query.query.strip()]
     if not enabled_queries and not (
-        request.enableYonhap or request.enableOpmPress or request.enableMePress
+        settings.enableYonhap or settings.enableOpmPress or settings.enableMePress
     ):
         return error_response(
             "COLLECTION_NO_SOURCE", "활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요."
         )
-
-    payload = {
-        "reportDate": request.reportDate,
-        "lookbackHours": request.lookbackHours,
-        "maxRecordsPerQuery": request.maxRecordsPerQuery,
-        "collectionLimit": request.collectionLimit,
-        "enableYonhap": request.enableYonhap,
-        "enableOpmPress": request.enableOpmPress,
-        "enableMePress": request.enableMePress,
-        "queries": [q.model_dump() for q in enabled_queries],
-        "coreKeywords": request.coreKeywords,
-        "riskKeywords": request.riskKeywords,
-        "positiveKeywords": request.positiveKeywords,
-        "excludeKeywords": request.excludeKeywords,
-        "endpoint": request.endpoint,
-    }
+    payload = collection_payload(settings, request.report_date, request.lookback_hours)
 
     if _collection_lock.locked():
         return error_response(

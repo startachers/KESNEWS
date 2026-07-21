@@ -511,6 +511,28 @@ POST /api/collections
   목록에서 제외한다. 기사 원본과 observation은 삭제하지 않으며, 담당자가 선택·메모·중요·
   숨김 처리한 기사와 수동 등록 기사는 보존한다.
 
+수집 요청의 검색식·키워드·provider 사용 여부는 요청 바디에서 받지 않는다. 구버전 클라이언트가
+해당 필드를 보내도 무시하고, 서버의 유효 설정만 사용한다. 수동 화면과 2시간 자동수집은 동일한
+설정 snapshot을 사용한다.
+
+### 3.5.1 검색 설정
+
+```text
+GET  /api/settings
+PUT  /api/settings
+POST /api/settings/reset
+```
+
+- 기본값은 버전 관리되는 `config/collection_settings.json`이다.
+- `PUT`은 검증된 전체 검색 설정을 `settings.key=collection` 사용자 override로 저장한다.
+- `GET`은 override가 있으면 그 값을, 없으면 config 기본값을 반환한다. `meta.hasOverride`,
+  `meta.updatedAt`, `meta.defaultSource`로 현재 출처를 함께 알린다.
+- `reset`은 override row만 삭제한다. 기사·관측·브리핑·담당자 편집값은 변경하지 않는다.
+- 검색 그룹 ID는 중복될 수 없고, 기관 핵심어는 최소 1개이며, 네이버 단순검색어는 그룹당
+  최대 3개다. 그룹별·전체 조회 상한은 API schema 범위 안에서만 저장한다.
+- 기존 브라우저 localStorage 검색 설정은 서버 override가 아직 없을 때 최초 1회 이전한다.
+  이후 localStorage에는 자동실행 여부와 AI 모델 같은 화면 개인값만 둔다.
+
 ### 3.6 신뢰 출처 필터와 통계
 
 - 일반 언론기사는 `config/trusted_media.yaml`의 원문 도메인 허용목록을 통과해야 저장한다.

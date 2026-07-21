@@ -1,17 +1,37 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.clock import now_iso, today_seoul
 from backend.app.repositories import article_repository as article_repo
 from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories import run_repository as run_repo
+from backend.app.repositories import settings_repository as settings_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection import collector as collector_module
 from backend.app.services.collection.http import CollectionHttpError
+from backend.app.services.settings import load_default_settings
 from backend.app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_collection_settings_override():
+    connection = get_connection()
+    try:
+        with connection:
+            settings_repo.delete_override(connection)
+    finally:
+        connection.close()
+    yield
+    connection = get_connection()
+    try:
+        with connection:
+            settings_repo.delete_override(connection)
+    finally:
+        connection.close()
 
 
 def _yonhap_result(url, pub_date, **overrides):
@@ -60,7 +80,25 @@ def _base_payload(**overrides):
         "endpoint": "",
     }
     payload.update(overrides)
-    return payload
+    settings = load_default_settings().model_dump()
+    settings.update(
+        {
+            "maxRecords": payload["maxRecordsPerQuery"],
+            "collectionLimit": payload["collectionLimit"],
+            "enableYonhap": payload["enableYonhap"],
+            "enableOpmPress": payload["enableOpmPress"],
+            "enableMePress": payload["enableMePress"],
+            "queries": [{"enabled": True, **query} for query in payload["queries"]],
+            "coreKeywords": payload["coreKeywords"],
+            "riskKeywords": payload["riskKeywords"],
+            "positiveKeywords": payload["positiveKeywords"],
+            "excludeKeywords": payload["excludeKeywords"],
+            "endpoint": payload["endpoint"],
+        }
+    )
+    saved = client.put("/api/settings", json=settings)
+    assert saved.status_code == 200, saved.text
+    return {"report_date": payload["reportDate"], "lookback_hours": payload["lookbackHours"]}
 
 
 def _articles(report_date: str, **params):
@@ -69,13 +107,14 @@ def _articles(report_date: str, **params):
     return response.json()
 
 
-def test_collection_rejects_per_query_limits_below_twenty():
-    global_limit = _base_payload(maxRecordsPerQuery=19)
-    query_override = _base_payload()
+def test_settings_rejects_per_query_limits_below_twenty():
+    settings = load_default_settings().model_dump()
+    global_limit = {**settings, "maxRecords": 19}
+    query_override = load_default_settings().model_dump()
     query_override["queries"][0]["maxRecords"] = 19
 
-    assert client.post("/api/collections", json=global_limit).status_code == 422
-    assert client.post("/api/collections", json=query_override).status_code == 422
+    assert client.put("/api/settings", json=global_limit).status_code == 422
+    assert client.put("/api/settings", json=query_override).status_code == 422
 
 
 def test_article_list_hides_legacy_auto_candidate_outside_current_24_hours():
@@ -328,8 +367,16 @@ def test_naver_and_google_same_article_create_two_observations(monkeypatch):
         )["items"],
     )
 
-    payload = _base_payload(reportDate=report_date, enableYonhap=False)
-    payload["queries"][0]["naverQueries"] = ["한국전기안전공사"]
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=False,
+        queries=[{
+            "id": "direct",
+            "label": "기관 직접",
+            "query": '("한국전기안전공사")',
+            "naverQueries": ["한국전기안전공사"],
+        }],
+    )
     data = client.post("/api/collections", json=payload).json()["data"]
     assert data["uniqueCount"] == 1
     assert data["duplicatesRemoved"] == 1
@@ -373,8 +420,16 @@ def test_naver_auth_failure_is_warning_and_never_exposes_credentials(monkeypatch
         )["items"],
     )
 
-    payload = _base_payload(reportDate=report_date, enableYonhap=False)
-    payload["queries"][0]["naverQueries"] = ["한국전기안전공사"]
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=False,
+        queries=[{
+            "id": "direct",
+            "label": "기관 직접",
+            "query": '("한국전기안전공사")',
+            "naverQueries": ["한국전기안전공사"],
+        }],
+    )
     response = client.post("/api/collections", json=payload)
     serialized = response.text
     data = response.json()["data"]
@@ -463,10 +518,14 @@ def test_direct_government_sources_default_on_and_bypass_relevance_filter(monkey
         lambda *a, **k: {"items": [], "provider": "기후에너지환경부 보도자료"},
     )
 
-    # enableOpmPress/enableMePress를 보내지 않는 구버전 프런트 요청도 기본 활성화한다.
-    payload = _base_payload(reportDate=report_date, enableYonhap=False, queries=[])
-    payload.pop("enableOpmPress")
-    payload.pop("enableMePress")
+    # 요청 바디에 provider 설정을 보내지 않아도 서버 설정의 직접 수집이 적용된다.
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=False,
+        enableOpmPress=True,
+        enableMePress=True,
+        queries=[],
+    )
     response = client.post("/api/collections", json=payload)
     assert response.status_code == 200
     data = response.json()["data"]

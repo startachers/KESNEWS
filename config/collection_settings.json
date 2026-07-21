@@ -1,6 +1,7 @@
 {
-  "lookbackHours": 24,
-  "maxRecordsPerQuery": 50,
+  "settingsVersion": 9,
+  "lookback": 24,
+  "maxRecords": 50,
   "collectionLimit": 400,
   "enableYonhap": true,
   "enableOpmPress": true,

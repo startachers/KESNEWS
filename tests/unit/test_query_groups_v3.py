@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 
 from backend.app.services.collection.collector import (
@@ -36,28 +35,24 @@ QUERY_IDS = [
 ]
 
 
-def test_automated_and_frontend_defaults_contain_same_22_query_groups():
-    config_paths = [ROOT / "config/automated_collection.json.example"]
-    local_config = ROOT / "config/automated_collection.json"
-    if local_config.exists():
-        config_paths.append(local_config)
-    for path in config_paths:
-        config = json.loads(path.read_text(encoding="utf-8"))
-        assert [query["id"] for query in config["queries"]] == QUERY_IDS
-        by_id = {query["id"]: query for query in config["queries"]}
-        assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
-        assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 66
-        assert by_id["macro_economy"]["maxRecords"] == 20
-        assert by_id["ai_trend"]["maxRecords"] == 20
+def test_server_defaults_are_the_single_source_for_22_query_groups():
+    config = json.loads(
+        (ROOT / "config/collection_settings.json").read_text(encoding="utf-8")
+    )
+    assert [query["id"] for query in config["queries"]] == QUERY_IDS
+    by_id = {query["id"]: query for query in config["queries"]}
+    assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
+    assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 66
+    assert by_id["macro_economy"]["maxRecords"] == 20
+    assert by_id["ai_trend"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]
-    assert re.findall(r'\{ id: "([^"]+)"', default_block) == QUERY_IDS
-    assert "settingsVersion: 8" in default_block
+    assert 'queries: []' in default_block
+    assert "collection_settings.json" not in store_source
+    assert "settingsVersion: 0" in default_block
     assert 'aiModel: "gemma4:31b"' in default_block
     assert "lookback: 24" in default_block
-    assert default_block.count("naverQueries:") == len(QUERY_IDS)
-    assert default_block.count("maxRecords: 20") == 2
 
 
 def test_query_settings_screen_defines_six_groups_and_every_query_id():

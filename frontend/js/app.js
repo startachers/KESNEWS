@@ -1,4 +1,4 @@
-import { $, els, settings, state, filters, SETTINGS_KEY, LAST_AUTO_KEY, saveDailyState, loadDailyState, setState, consumeSettingsMigrationNotice } from "./state/store.js";
+import { $, els, settings, state, filters, LAST_AUTO_KEY, saveDailyState, loadDailyState, loadServerSettings, saveLocalSettings, setState, consumeSettingsMigrationNotice } from "./state/store.js";
 import { localDateKey } from "./utils/dates.js";
 import { autoResize } from "./utils/dom.js";
 import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
@@ -22,12 +22,17 @@ async function init() {
   ["weatherDetailPanel", "weatherDetailRainfall", "weatherDetailRainfallPlace", "weatherDetailTemperature", "weatherDetailTemperaturePlace", "weatherDetailAlertSummary", "weatherDetailPriority", "weatherResponseTabCount", "weatherSourceGrid", "weatherOfficialAlerts", "weatherComparisonDaySelect", "weatherRegionComparison", "weatherCompactSource", "weatherOpenBtn", "weatherCompactLevel", "weatherCompactAlerts", "weatherCompactFocus", "weatherCompactForecast", "weatherCompactTemperature", "weatherCompactRainfall", "weatherCompactProbability", "weatherCompactNotice", "weatherOverlay"].forEach(id => els[id] = $(id));
   els.weatherExcludeBtn = $("weatherExcludeBtn");
 
+  try {
+    await loadServerSettings();
+  } catch (error) {
+    showToast(`서버 검색 설정을 불러오지 못했습니다: ${error.message}`, "error");
+  }
   setState(await loadDailyState(localDateKey()));
   bindEvents();
   populateStaticControls();
   renderAll();
   if (consumeSettingsMigrationNotice()) {
-    showToast("기본 설정을 갱신했습니다. Gemma 경영메시지는 31B를 기본으로 사용합니다.");
+    showToast("기존 브라우저 검색 설정을 서버 설정으로 이전했습니다.");
   }
   autoResize(els.summaryEditor);
   window.setTimeout(checkAiServer, 120);
@@ -107,7 +112,7 @@ function bindEvents() {
     settings.aiModel = els.aiModelSelect.value;
     state.summaryError = "";
     if (["ai", "ai-edited"].includes(state.summaryMode)) state.aiStale = true;
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    saveLocalSettings();
     saveDailyState();
     renderSummary();
   });

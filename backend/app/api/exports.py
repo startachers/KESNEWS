@@ -13,6 +13,7 @@ from backend.app.repositories.database import get_connection
 from backend.app.services.exports import csv_export, json_export, markdown_export
 from backend.app.services.analysis_markdown.service import GenerationError
 from backend.app.services.analysis_markdown.service import generate as generate_analysis_markdown
+from backend.app.services.settings import get_category_labels
 
 router = APIRouter()
 
@@ -100,19 +101,22 @@ async def import_json(report_date: str, request: Request, mode: str | None = Que
 
 @router.get("/api/exports/{report_date}.csv")
 async def export_csv(report_date: str, scope: str = Query("working")) -> Any:
+    category_labels = get_category_labels()
     connection = get_connection()
     try:
         briefing = briefing_repo.get_by_date(connection, report_date)
         if briefing is None:
             return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
         if scope == "working":
-            csv_text = csv_export.build_csv(connection, report_date)
+            csv_text = csv_export.build_csv(connection, report_date, category_labels)
         else:
             row = _version_for_scope(connection, briefing["id"], scope)
             if row is None:
                 return error_response("BRIEFING_VERSION_NOT_FOUND", "요청한 최종본이 없습니다.")
             snapshot = version_repo.serialize(row)["snapshot"]
-            csv_text = csv_export.build_csv_from_articles(snapshot.get("articles") or [])
+            csv_text = csv_export.build_csv_from_articles(
+                snapshot.get("articles") or [], category_labels
+            )
     finally:
         connection.close()
     return Response(
@@ -127,10 +131,13 @@ async def import_csv(report_date: str, request: Request) -> Any:
     body = await request.json()
     csv_text = body.get("csv") or ""
     rows = csv_export.parse_csv(csv_text)
+    category_labels = get_category_labels()
     connection = get_connection()
     try:
         with connection:
-            result = csv_export.import_csv(connection, report_date, rows)
+            result = csv_export.import_csv(
+                connection, report_date, rows, category_labels
+            )
     except briefing_repo.BriefingNotFound:
         return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
     finally:

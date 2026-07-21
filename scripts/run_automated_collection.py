@@ -11,17 +11,13 @@ from zoneinfo import ZoneInfo
 from backend.app.core.env import load_env
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-CONFIG_PATH = BASE_DIR / "config" / "automated_collection.json"
 ENDPOINT = "http://127.0.0.1:8787/api/collections"
 
 
 def main() -> int:
     load_env(BASE_DIR / ".env")
-    if not CONFIG_PATH.is_file():
-        print(f"자동수집 설정이 없습니다: {CONFIG_PATH}")
-        return 2
-    payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    payload["reportDate"] = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+    report_date = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+    payload = {"report_date": report_date, "lookback_hours": 24}
     request = urllib.request.Request(
         ENDPOINT,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -39,7 +35,7 @@ def main() -> int:
         return 1
     data = body.get("data") or {}
     print(
-        f"자동수집 {data.get('status')}: 보고일 {payload['reportDate']}, "
+        f"자동수집 {data.get('status')}: 보고일 {report_date}, "
         f"신규 {data.get('newCount', 0)}건, 고유 {data.get('uniqueCount', 0)}건"
     )
     return 0 if data.get("status") in {"success", "partial"} else 1

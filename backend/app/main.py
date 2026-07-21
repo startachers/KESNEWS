@@ -20,6 +20,7 @@ from backend.app.api.operations import router as operations_router
 from backend.app.api.press_releases import router as press_releases_router
 from backend.app.api.reports import router as reports_router
 from backend.app.api.report_drafts import router as report_drafts_router
+from backend.app.api.settings import router as settings_router
 from backend.app.api.weather import (
     WeatherRefreshRequest,
     refresh_weather,
@@ -184,4 +185,5 @@ app.include_router(reports_router)
 app.include_router(report_drafts_router)
 app.include_router(operations_router)
 app.include_router(weather_router)
+app.include_router(settings_router)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

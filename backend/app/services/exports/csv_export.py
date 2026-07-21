@@ -62,12 +62,19 @@ def _unescape_cell(value: str) -> str:
     return value
 
 
-def build_csv(connection: sqlite3.Connection, report_date: str) -> str:
+def build_csv(
+    connection: sqlite3.Connection,
+    report_date: str,
+    category_labels: dict[str, str] | None = None,
+) -> str:
     articles = article_repo.list_candidates(connection, report_date, include_dismissed=True)
-    return build_csv_from_articles(articles)
+    return build_csv_from_articles(articles, category_labels)
 
 
-def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
+def build_csv_from_articles(
+    articles: list[dict[str, Any]], category_labels: dict[str, str] | None = None
+) -> str:
+    category_labels = category_labels or {}
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
     writer.writerow(HEADERS)
@@ -80,7 +87,7 @@ def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
                 _escape_cell("Y" if article["starred"] else "N"),
                 _escape_cell(RISK_LABELS.get(article["risk"], article["risk"] or "")),
                 _escape_cell(SENTIMENT_LABELS.get(article["sentiment"], article["sentiment"] or "")),
-                _escape_cell(article["category"] or ""),
+                _escape_cell(category_labels.get(article["category"], article["category"] or "")),
                 _escape_cell(relevance["label"]),
                 _escape_cell(relevance["score"]),
                 _escape_cell("|".join(relevance["reasons"])),
@@ -90,7 +97,9 @@ def build_csv_from_articles(articles: list[dict[str, Any]]) -> str:
                 _escape_cell(article["url"]),
                 _escape_cell("|".join(article["matchedKeywords"] or [])),
                 _escape_cell(article["note"] or ""),
-                _escape_cell(article.get("category") or ""),
+                _escape_cell(
+                    category_labels.get(article.get("category"), article.get("category") or "")
+                ),
                 _escape_cell("|".join(article.get("matchedQueryIds") or [])),
                 _escape_cell(incident.get("incident_type")),
                 _escape_cell(incident.get("incident_status")),
@@ -121,7 +130,15 @@ def parse_csv(text: str) -> list[dict[str, str]]:
     return [dict(zip(header, [_unescape_cell(cell) for cell in row])) for row in rows[1:]]
 
 
-def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict[str, str]]) -> dict[str, Any]:
+def import_csv(
+    connection: sqlite3.Connection,
+    report_date: str,
+    rows: list[dict[str, str]],
+    category_labels: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    reverse_category_labels = {
+        label: category for category, label in (category_labels or {}).items()
+    }
     briefing = briefing_repo.get_by_date(connection, report_date)
     if briefing is None:
         raise briefing_repo.BriefingNotFound()
@@ -132,8 +149,13 @@ def import_csv(connection: sqlite3.Connection, report_date: str, rows: list[dict
         source = row.get("매체") or ""
         url = row.get("URL") or ""
         pub_date = row.get("보도일시") or None
-        category = row.get("분류") or None
-        primary_category = row.get("주분류") or category
+        category_value = row.get("분류") or ""
+        category = reverse_category_labels.get(category_value, category_value) or None
+        primary_category_value = row.get("주분류") or ""
+        primary_category = (
+            reverse_category_labels.get(primary_category_value, primary_category_value)
+            or category
+        )
         risk = _REVERSE_RISK_LABELS.get(row.get("위험도", ""))
         sentiment = _REVERSE_SENTIMENT_LABELS.get(row.get("정서", ""))
         keywords = [k for k in (row.get("키워드") or "").split("|") if k]

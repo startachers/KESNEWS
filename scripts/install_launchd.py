@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import os
 import plistlib
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -41,10 +40,6 @@ def install() -> int:
     if not python.is_file():
         print("가상환경이 없습니다. setup_kesco_briefing.command를 먼저 실행하세요.")
         return 1
-    config = BASE_DIR / "config" / "automated_collection.json"
-    if not config.exists():
-        shutil.copy2(BASE_DIR / "config" / "automated_collection.json.example", config)
-
     logs = BASE_DIR / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     common = {
@@ -103,7 +98,7 @@ def install() -> int:
             ["launchctl", "bootstrap", f"gui/{os.getuid()}", str(path)], check=True
         )
     print("launchd 설치 완료: 로그인 시 서버 시작, 2시간마다 기사·기상 자동수집")
-    print(f"자동수집 설정: {config}")
+    print("자동수집 설정: 웹 화면의 검색 설정(/api/settings)")
     return 0
 
 

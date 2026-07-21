@@ -921,7 +921,7 @@ settings 테이블    화면에서 변경한 사용자 override
 ### 9.2 설정 파일
 
 - `sources.yaml`: 수집원 주소, 사용 여부, 우선순위, fallback 여부
-- `search_rules.yaml`: 검색 그룹과 검색식
+- `collection_settings.json`: 검색 그룹·검색식·수집 상한·provider 사용 기본값
 - `classification_rules.yaml`: 위험어, 예방 문맥, 예외 문구, 점수
 - `editorial_policy.yaml`: 보고필수 기준, 최대 선정 건수, Top Issue 수
 - `briefing_style_guide.md`: AI 문체, 금지사항, 근거 표기 규칙
@@ -1465,9 +1465,10 @@ start_kesco_briefing.command
 
 기능 안정화 후에만 `launchd`를 추가한다. 자동수집이 실패해도 수동 `오늘 기사 검색`은 유지한다.
 
-Phase 9 기본값은 로그인 시 서버 자동 시작과 2시간 간격 수집이다. 자동수집 설정은
-`config/automated_collection.json`에 두며 추적되는 example에서 최초 복사한다. 자동·수동
-수집이 겹치면 두 번째 요청은 `COLLECTION_ALREADY_RUNNING`으로 거부하고 기존 실행을 유지한다.
+Phase 9 기본값은 로그인 시 서버 자동 시작과 2시간 간격 수집이다. 검색 기본값은
+`config/collection_settings.json`, 담당자 변경은 SQLite `settings` override에 둔다. 화면과
+자동수집 스크립트는 검색식을 요청 바디에 복제하지 않고 같은 서버 유효 설정을 사용한다.
+자동·수동 수집이 겹치면 두 번째 요청은 `COLLECTION_ALREADY_RUNNING`으로 거부하고 기존 실행을 유지한다.
 
 ---
 

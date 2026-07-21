@@ -34,6 +34,18 @@ export function putBriefing(date, expectedRevision, patch) {
   return request(`/briefings/${date}`, { method: "PUT", body: JSON.stringify({ expectedRevision, patch }) });
 }
 
+export function getSettings() {
+  return request(`/settings`);
+}
+
+export function putSettings(settings) {
+  return request(`/settings`, { method: "PUT", body: JSON.stringify(settings) });
+}
+
+export function resetSettings() {
+  return request(`/settings/reset`, { method: "POST" });
+}
+
 export function resetTodayWork(date, expectedRevision) {
   return request(`/briefings/${encodeURIComponent(date)}/reset`, {
     method: "POST",
