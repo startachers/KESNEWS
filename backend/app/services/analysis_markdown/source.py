@@ -44,10 +44,27 @@ def _confirmed_issue_evidence(
         representative_id = issue.get("representativeArticleId")
         if not representative_id or representative_id not in by_id:
             if issue.get("effectivePriority") == "required":
+                selected_member = next(
+                    (article for article in exchange.articles if article["id"] in members),
+                    None,
+                )
+                issue_title = issue.get("effectiveTitle") or issue.get("autoTitle") or ""
                 missing.append({
                     "issueId": issue["id"],
-                    "title": issue.get("effectiveTitle") or issue.get("autoTitle") or "",
+                    "issueTitle": issue_title,
+                    "articleId": selected_member["id"] if selected_member else "",
+                    "title": (
+                        selected_member.get("title") if selected_member else issue_title
+                    ) or issue_title,
+                    "source": selected_member.get("source") if selected_member else "",
+                    "url": selected_member.get("url") if selected_member else "",
                     "reason": "representative_evidence_missing",
+                    "errors": [{
+                        "code": "REQUIRED_ARTICLE_EVIDENCE_MISSING",
+                        "status": "representative_evidence_missing",
+                        "message": "필수 보고 이슈의 대표 근거 기사를 확보하지 못했습니다.",
+                    }],
+                    "availableActions": ["관련기사 선택", "본문 다시 추출", "원문 확인"],
                 })
             continue
         evidence_ids = [representative_id, *(issue.get("manualSupplementalArticleIds") or [])]

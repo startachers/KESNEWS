@@ -346,6 +346,12 @@ def test_required_issue_without_representative_blocks_markdown():
     except markdown_service.GenerationError as exc:
         assert exc.code == "REQUIRED_ARTICLE_EVIDENCE_MISSING"
         assert exc.details[0]["issueId"] == issue["id"]
+        assert exc.details[0]["articleId"] in article_ids
+        assert exc.details[0]["title"]
+        assert exc.details[0]["errors"][0]["code"] == "REQUIRED_ARTICLE_EVIDENCE_MISSING"
+        assert exc.details[0]["availableActions"] == [
+            "관련기사 선택", "본문 다시 추출", "원문 확인",
+        ]
     else:
         raise AssertionError("필수 이슈의 대표 근거가 없으면 MD 생성이 차단돼야 합니다.")
 

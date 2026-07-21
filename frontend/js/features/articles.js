@@ -19,6 +19,8 @@ const qualitySortedIssueIds = new Set();
 const reextractingIssueIds = new Set();
 const manualGroupSelection = new Set();
 const manualGroupSelectedKeys = new Set();
+const evidenceFailureByArticleId = new Map();
+const evidenceFailureByIssueId = new Map();
 let manualGroupPickerEntries = new Map();
 let manualGroupSearchText = "";
 
@@ -39,6 +41,26 @@ const EVIDENCE_ERROR_MESSAGES = {
   canonical_url_unresolved: "실제 기사 원문 주소를 확인하지 못했습니다.",
   ai_generated_content_remains: "언론사 AI 해설 또는 AI 생성 콘텐츠가 정제 본문에 남아 있습니다.",
 };
+
+function evidenceFailureReason(failure) {
+  return (failure?.errors || [])
+    .map(item => typeof item === "string" ? item : (item?.message || item?.code || ""))
+    .filter(Boolean)
+    .join(" · ") || "대표 근거 기사를 다시 지정해야 합니다.";
+}
+
+function evidenceFailureFor(articleId, issueId = "") {
+  return evidenceFailureByArticleId.get(articleId) || evidenceFailureByIssueId.get(issueId) || null;
+}
+
+export function setEvidenceValidationFailures(failures = []) {
+  evidenceFailureByArticleId.clear();
+  evidenceFailureByIssueId.clear();
+  failures.forEach(failure => {
+    if (failure.articleId) evidenceFailureByArticleId.set(failure.articleId, failure);
+    else if (failure.issueId) evidenceFailureByIssueId.set(failure.issueId, failure);
+  });
+}
 
 function isKescoPressArticle(article) {
   return ["kesco_republication", "kesco_based"].includes(article.origin?.effectiveType);
@@ -84,6 +106,8 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const titleEl = href ? `<a class="article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>` : `<span class="article-title">${escapeHtml(a.title)}</span>`;
   const relevanceBadge = relevance.rank < 99 ? `관련 ${relevance.rank}순위` : "관련 기준 외";
   const badges = [`<span class="badge badge-relevance ${relevance.rank <= 2 ? "top" : ""}" title="${escapeAttr(`${relevance.label} · ${relevance.reasons.join(" · ")}`)}">${escapeHtml(relevanceBadge)}</span>`, `<span class="badge badge-${a.sentiment}">${SENTIMENT_LABELS[a.sentiment]}</span>`];
+  const evidenceFailure = evidenceFailureFor(a.id, issue?.id);
+  if (evidenceFailure) badges.unshift(`<span class="badge badge-evidence-error" title="${escapeAttr(evidenceFailureReason(evidenceFailure))}">MD 생성 차단</span>`);
   const domainLabel = {
     electrical: "전기적 요인",
     battery: "배터리 요인",
@@ -180,6 +204,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
 
 function renderRelatedArticle(a, issue) {
   const quality = (issue.evidenceArticles || []).find(item => item.articleId === a.id) || {};
+  const evidenceFailure = evidenceFailureFor(a.id, issue.id);
   const href = safeUrl(a.url);
   const titleEl = href
     ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
@@ -202,7 +227,7 @@ function renderRelatedArticle(a, issue) {
     <input class="include-check related-include-check" type="checkbox" data-action="include" aria-label="브리핑 선정" title="${directCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
     <div class="related-article-content">
       <div class="related-article-heading">${titleEl}<span class="related-article-meta"><strong>${escapeHtml(quality.normalizedSource || a.source || "출처 미상")}</strong> · ${formatDateTime(a.pubDate)}</span></div>
-      <div class="related-quality-badges"><span class="evidence-role role-${escapeAttr(quality.role || "related")}">${roleLabel}</span><span class="quality-status status-${escapeAttr(quality.extractionStatus || "not_attempted")}">${statusLabel}</span><span class="quality-grade grade-${escapeAttr(quality.qualityGrade || "unavailable")}">${gradeLabel} ${Number(quality.contentQualityScore || 0)}</span></div>
+      <div class="related-quality-badges">${evidenceFailure ? `<span class="badge badge-evidence-error" title="${escapeAttr(evidenceFailureReason(evidenceFailure))}">MD 생성 차단</span>` : ""}<span class="evidence-role role-${escapeAttr(quality.role || "related")}">${roleLabel}</span><span class="quality-status status-${escapeAttr(quality.extractionStatus || "not_attempted")}">${statusLabel}</span><span class="quality-grade grade-${escapeAttr(quality.qualityGrade || "unavailable")}">${gradeLabel} ${Number(quality.contentQualityScore || 0)}</span></div>
       <div class="related-quality-meta">최초 수집 언론사 ${escapeHtml(quality.rawSource || a.source || "미확인")} · 실제 원문 도메인 ${escapeHtml(quality.sourceDomain || "미확인")} · 정제 ${Number(quality.cleanedCharacterCount || 0).toLocaleString("ko-KR")}자 · ${quality.lastExtractedAt ? formatDateTime(quality.lastExtractedAt) : "추출 전"}</div>
       <div class="source-validation ${sourceVerified ? "verified" : "invalid"}">${sourceVerified ? "출처 확인 완료" : (quality.lastExtractedAt ? "출처 확인 필요" : "출처 확인 전")}${quality.normalizationReason && quality.normalizationReason !== "raw_source" ? ` · 언론사명 정상화(${escapeHtml(quality.normalizationReason)})` : ""}</div>
       ${validationErrors.length ? `<div class="evidence-validation-errors"><strong>대표기사 지정 불가</strong><span>${escapeHtml(validationText.join(" · "))}</span></div>` : ""}

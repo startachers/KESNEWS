@@ -78,6 +78,14 @@ def test_frontend_exposes_reclustering_proposal_and_apply_controls():
     assert "reextractIssueArticles(issueId)" in articles_feature.text
     assert "Math.random()" not in articles_feature.text
     assert "관련기사·분석 근거 ${relatedMembers.length}건" in articles_feature.text
+    assert "오류 사유" in report_draft_feature.text
+    assert "언론사 ${escapeHtml(article.source" in report_draft_feature.text
+    assert "제목을 확인할 수 없는 기사" in report_draft_feature.text
+    assert '"REQUIRED_ARTICLE_EVIDENCE_MISSING"].includes(error.code)' in report_draft_feature.text
+    assert "대표 근거 기사를 다시 지정해야 하는 필수 보고 이슈" in report_draft_feature.text
+    assert "setEvidenceValidationFailures(error.details?.failedArticles || [])" in report_draft_feature.text
+    assert "MD 생성 차단" in articles_feature.text
+    assert "badge-evidence-error" in articles_feature.text
     assert '<details class="related-articles"' in articles_feature.text
     assert 'data-action="top-issue"' in articles_feature.text
     assert 'data-action="article-top-issue"' in articles_feature.text

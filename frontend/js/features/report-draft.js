@@ -4,7 +4,7 @@ import { downloadBlob } from "../utils/dom.js";
 import { escapeAttr, escapeHtml, friendlyError, safeUrl } from "../utils/strings.js";
 import { openOverlay, closeOverlay } from "../ui/dialogs.js";
 import { showToast } from "../ui/notifications.js?v=20260716-1";
-import { flushArticleChanges, focusRelatedEvidence, renderArticles } from "./articles.js?v=20260721-1";
+import { flushArticleChanges, focusRelatedEvidence, renderArticles, setEvidenceValidationFailures } from "./articles.js?v=20260721-2";
 
 let currentSignature = "";
 let currentSourceType = "manual";
@@ -66,13 +66,16 @@ export async function downloadAnalysisMarkdown() {
     await syncPendingChanges();
     showToast("선정 기사 전문을 확인해 Markdown을 만들고 있습니다.");
     const markdown = await api.getAnalysisMarkdown(state.date);
+    setEvidenceValidationFailures([]);
     const issuesResult = await api.listIssues(state.date);
     state.issues = issuesResult.data.issues || [];
     renderArticles();
     downloadBlob(markdown, `KESCO_AI분석자료_${state.date}.md`, "text/markdown;charset=utf-8");
     showToast("고성능 AI 분석용 Markdown을 저장했습니다.", "success");
   } catch (error) {
-    if (error.code === "SELECTED_EVIDENCE_INVALID") {
+    if (["SELECTED_EVIDENCE_INVALID", "REQUIRED_ARTICLE_EVIDENCE_MISSING"].includes(error.code)) {
+      setEvidenceValidationFailures(error.details?.failedArticles || []);
+      renderArticles();
       showEvidenceValidationFailure(error);
       return;
     }
@@ -83,15 +86,27 @@ export async function downloadAnalysisMarkdown() {
 function showEvidenceValidationFailure(error) {
   const articles = error.details?.failedArticles || [];
   const list = $("evidenceFailureList");
-  $("evidenceFailureSummary").textContent = `선택한 기사 중 근거 상태를 확인해야 하는 기사가 ${articles.length}건 있습니다.`;
-  list.innerHTML = articles.map((article, index) => {
-    const messages = (article.errors || []).map(item => item.message).join(" · ") || "기사 근거를 확인해 주세요.";
+  $("evidenceFailureSummary").textContent = error.code === "REQUIRED_ARTICLE_EVIDENCE_MISSING"
+    ? `대표 근거 기사를 다시 지정해야 하는 필수 보고 이슈가 ${articles.length}건 있습니다.`
+    : `선택한 기사 중 근거 상태를 확인해야 하는 기사가 ${articles.length}건 있습니다.`;
+  list.innerHTML = articles.length ? articles.map((article, index) => {
+    const messages = (article.errors || [])
+      .map(item => typeof item === "string" ? item : (item?.message || item?.code || ""))
+      .filter(Boolean)
+      .join(" · ") || "기사 근거를 확인해 주세요.";
     const href = safeUrl(article.url);
+    const articleId = article.articleId || "";
+    const issueTitle = article.issueTitle && article.issueTitle !== article.title
+      ? `<div class="evidence-failure-issue">관련 이슈 ${escapeHtml(article.issueTitle)}</div>`
+      : "";
     return `<article class="evidence-failure-item" data-article-id="${escapeAttr(article.articleId)}" data-issue-id="${escapeAttr(article.issueId || "")}">
-      <strong>${index + 1}. ${escapeHtml(article.title)}</strong><p>${escapeHtml(messages)}</p>
-      <div class="evidence-failure-actions">${article.issueId ? '<button class="btn btn-primary" data-action="select-related" type="button">관련기사 선택</button>' : ""}<button class="btn" data-action="reextract" type="button">본문 다시 추출</button>${href ? `<a class="btn" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">원문 확인</a>` : ""}</div>
+      <h3><span>${index + 1}</span>${escapeHtml(article.title || "제목을 확인할 수 없는 기사")}</h3>
+      <div class="evidence-failure-meta">언론사 ${escapeHtml(article.source || "출처 미상")}</div>
+      ${issueTitle}
+      <p><strong>오류 사유</strong><span>${escapeHtml(messages)}</span></p>
+      <div class="evidence-failure-actions">${article.issueId ? '<button class="btn btn-primary" data-action="select-related" type="button">관련기사 선택</button>' : ""}${articleId ? '<button class="btn" data-action="reextract" type="button">본문 다시 추출</button>' : ""}${href ? `<a class="btn" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">원문 확인</a>` : ""}</div>
     </article>`;
-  }).join("");
+  }).join("") : '<p class="evidence-failure-empty">문제 기사 상세정보를 불러오지 못했습니다. 창을 닫고 다시 시도해 주세요.</p>';
   list.onclick = async event => {
     const action = event.target.closest("[data-action]")?.dataset.action;
     const item = event.target.closest(".evidence-failure-item");
