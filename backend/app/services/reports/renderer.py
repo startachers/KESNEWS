@@ -95,34 +95,14 @@ def _render_lead(value: Any) -> str:
 
 
 def _render_trend_analysis(analysis: dict[str, Any]) -> str:
-    sections = []
-    situation = analysis.get("situationSummary")
-    situation_text, _ = _claim(situation)
-    if situation_text:
-        sections.append(f'<div class="analysis-prose"><p>{_text(situation_text)}</p></div>')
-    for item in analysis.get("keyIssues") or []:
-        if item.get("urgency") == "reference":
-            continue
-        impact = (
-            f'<p class="management-impact"><strong>경영 관점</strong> '
-            f'{_text(item.get("managementImpact"))}</p>'
-            if item.get("managementImpact")
-            else ""
-        )
-        sections.append(
-            f'<article class="analysis-issue"><h3>{_text(item.get("title"), "핵심 이슈")}</h3>'
-            f'<p>{_text(item.get("summary"))}</p>{impact}</article>'
-        )
-    outlook_text, _ = _claim(analysis.get("riskOutlook"))
-    if outlook_text:
-        sections.append(
-            f'<aside class="outlook"><span>전망</span><p>{_text(outlook_text)}</p></aside>'
-        )
-    return "".join(sections) or '<p class="empty">작성된 경영 시사점이 없습니다.</p>'
+    situation_text, _ = _claim(analysis.get("situationSummary"))
+    if not situation_text:
+        return '<p class="empty">작성된 경영 시사점이 없습니다.</p>'
+    return f'<div class="analysis-prose"><p>{_text(situation_text)}</p></div>'
 
 
 def _render_management_reference(analysis: dict[str, Any]) -> str:
-    items = []
+    items: list[str] = []
     for item in analysis.get("keyIssues") or []:
         if item.get("urgency") != "reference":
             continue
@@ -135,39 +115,11 @@ def _render_management_reference(analysis: dict[str, Any]) -> str:
             if value.strip()
         )
         if text:
-            items.append(f'<li><p>{_text(text)}</p></li>')
+            items.append(text)
     if not items:
         return '<p class="empty">별도 참고 동향 없음.</p>'
-    return f'<ol class="reference-list">{"".join(items)}</ol>'
-
-
-def _render_decisions_actions(analysis: dict[str, Any]) -> str:
-    groups = []
-    decisions = []
-    for item in analysis.get("decisionPoints") or []:
-        text, _ = _claim(item)
-        if text:
-            decisions.append(f'<li><p>{_text(text)}</p></li>')
-    if decisions:
-        groups.append(
-            '<section class="decision-group"><h3>의사결정 포인트</h3>'
-            f'<ul>{"".join(decisions)}</ul></section>'
-        )
-
-    actions = []
-    for item in analysis.get("actionItems") or []:
-        action = str(item.get("action") or "").strip()
-        if action:
-            priority = ISSUE_PRIORITY_LABELS.get(item.get("priority"), item.get("priority"))
-            actions.append(
-                f'<li><span>{_text(priority, "검토")}</span><p>{_text(action)}</p></li>'
-            )
-    if actions:
-        groups.append(
-            '<section class="decision-group action-group"><h3>실행 항목</h3>'
-            f'<ul>{"".join(actions)}</ul></section>'
-        )
-    return f'<div class="decision-grid">{"".join(groups)}</div>' if groups else ""
+    combined = "\n\n".join(items)
+    return f'<div class="analysis-prose"><p>{_text(combined)}</p></div>'
 
 
 def _article_badges(item: dict[str, Any]) -> str:
@@ -601,12 +553,6 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .analysis-lead:before{content:"CEO VIEW";display:block;margin-bottom:10px;color:var(--teal);font-size:10px;font-weight:900;letter-spacing:.16em}
     .analysis-lead p{margin:0;white-space:pre-wrap;color:#172e3b;font-size:var(--copy-size);font-weight:700;line-height:1.65;letter-spacing:-.012em}
     .analysis-prose{padding:2px 2px 4px}.analysis-prose>p{margin:0;white-space:pre-wrap;font-size:var(--copy-size);line-height:1.65;color:#293943}
-    .analysis-issue{margin-top:9px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;break-inside:avoid}
-    .analysis-issue h3{margin:0 0 7px;color:var(--navy);font-size:15px}.analysis-issue>p{margin:0;white-space:pre-wrap;font-size:var(--copy-size);line-height:1.65}
-    .management-impact{margin-top:7px!important;padding:7px 9px;background:#f3f7f7;color:#42535d;font-size:var(--copy-size);line-height:1.65}.management-impact strong{color:var(--teal)}
-    .outlook{margin-top:9px;padding:10px 13px;border-left:4px solid var(--amber);background:#fff8e9}.outlook>span{font-size:10px;font-weight:800;color:var(--amber)}.outlook>p{margin:3px 0;white-space:pre-wrap;font-size:var(--copy-size);line-height:1.65}
-    .reference-list{margin:0;padding:0;list-style:none}.reference-list li{margin-top:7px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;break-inside:avoid}.reference-list p{margin:0;white-space:pre-wrap;font-size:var(--copy-size);line-height:1.65}
-    .decision-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.decision-group{padding:11px 13px;background:#f4f7f7;border-radius:8px}.decision-group h3{margin:0 0 7px;color:var(--navy);font-size:13px}.decision-group ul{list-style:none;margin:0;padding:0}.decision-group li{position:relative;padding:6px 0;border-top:1px solid var(--line)}.decision-group li:first-child{border-top:0}.decision-group p{margin:0;font-size:var(--copy-size);line-height:1.65}.decision-group li>span{float:left;margin:1px 7px 0 0;padding:1px 6px;border-radius:999px;background:#fff3e0;color:var(--amber);font-size:9.5px;font-weight:800}
     .alert-box{margin-top:14px;padding:16px 18px;border:1px solid #e4b6b6;border-left:5px solid var(--red);border-radius:8px;background:#fdf3f3}
     .alert-box h3{margin:0 0 8px;color:var(--red);font-size:14px}
     .alert-box ul{margin:0;padding-left:18px}.alert-box li{margin:3px 0;font-size:13.5px}
@@ -640,7 +586,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
     .footer{margin-top:16px;padding-top:9px;border-top:1px solid var(--line);color:#77858e;font-size:9.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.decision-grid{grid-template-columns:1fr}.weather-forecast{grid-template-columns:1fr;gap:2px}}
+    @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.weather-forecast{grid-template-columns:1fr;gap:2px}}
     @page{size:A4;margin:0}
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article h3 a,.issue-rep a{color:var(--navy)}}
     """
@@ -654,9 +600,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <div class="date"><strong>{_text(date_label)}</strong><small>{('작성 ' + _text(briefing.get('preparedBy'))) if briefing.get('preparedBy') else '작성자 미지정'}</small></div></div>
     </header>
     <div class="body">
-    <section class="section"><h2>오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'))}</section>
-    <section class="section"><h2>경영 시사점</h2>{_render_trend_analysis(analysis)}{_render_decisions_actions(analysis)}</section>
-    <section class="section"><h2>참고 동향</h2>{_render_management_reference(analysis)}</section>
+    <section class="section"><h2>① 오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'))}</section>
+    <section class="section"><h2>② 경영 시사점</h2>{_render_trend_analysis(analysis)}</section>
+    <section class="section"><h2>③ 참고 동향</h2>{_render_management_reference(analysis)}</section>
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">

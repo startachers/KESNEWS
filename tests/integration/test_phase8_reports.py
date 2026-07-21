@@ -203,14 +203,16 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert snapshot["evidence"]["A01"]["article"]["title"]
     report = client.get(f"/report/{report_date}").text
     assert f'id="article-{article_id}"' in report
-    assert "오늘의 핵심" in report
-    assert "경영 시사점" in report
-    assert "참고 동향" in report
-    assert "전망" in report
-    assert "의사결정 포인트" in report
-    assert "확산 추이를 확인한다." in report
-    assert "실행 항목" in report
-    assert "사실관계를 점검한다." in report
+    assert "① 오늘의 핵심" in report
+    assert "② 경영 시사점" in report
+    assert "③ 참고 동향" in report
+    assert "직접 보도가 확인됐다." in report
+    assert "후속 확인" not in report
+    assert "후속 보도가 이어질 수 있다." not in report
+    assert "의사결정 포인트" not in report
+    assert "확산 추이를 확인한다." not in report
+    assert "실행 항목" not in report
+    assert "사실관계를 점검한다." not in report
     assert "관련 기사" in report
     assert "분석 근거" not in report
     assert "근거 기사 링크" not in report
