@@ -153,7 +153,19 @@ export function renderAiSummaryStatus() {
       KESCO_ROLE_CONFUSION: "역할 혼동",
       INVESTIGATION_OVERSTATED: "조사 중 표현",
       UNATTRIBUTED_CLAIM: "주장 귀속",
-      REFERENCE_SCOPE_INVALID: "참고 범위"
+      REFERENCE_SCOPE_INVALID: "참고 범위",
+      UNSUPPORTED_CONCEPT: "입력 외 개념",
+      UNSUPPORTED_NAMED_ENTITY: "입력 외 고유명사",
+      JURISDICTION_ACTION_MISMATCH: "소관·조치 불일치",
+      EXTERNAL_ACTION_AS_KESCO: "외부기관 조치",
+      UNCERTAINTY_OVERSTATED: "불확실성 과장",
+      UNCONFIRMED_ELECTRICAL_ACTION: "전기원인 미확인",
+      ELECTRICAL_CAUSE_UNSUPPORTED: "전기원인 근거",
+      OUT_OF_SCOPE_RECOMMENDATION: "비소관 제언",
+      MONITORING_AS_DIRECT: "모니터링 과장",
+      KESCO_AUTHORITY_OVERREACH: "권한 초과",
+      EVIDENCE_QUOTE_ID_MISMATCH: "근거 인용 ID",
+      FINAL_BASIS_SCOPE_MISMATCH: "중간·최종 소관 불일치"
     };
     const warningKinds = [...new Set((state.aiValidationWarnings || []).map(item => warningLabels[item.code] || item.code))];
     const warnings = warningKinds.length ? ` · 자동검증 경고 ${state.aiValidationWarnings.length}건(${warningKinds.join(", ")})` : " · 자동검증 통과";
@@ -291,19 +303,25 @@ export async function generateAiManagementSummary() {
 }
 
 export function formatAiAnalysis(analysis, evidenceMap = []) {
+  const managementReferences = (analysis.actionItems || [])
+    .filter(item => [undefined, "DIRECT", "COLLABORATIVE"].includes(item.kescoJurisdiction))
+    .filter(item => item.ownerType !== "EXTERNAL_AGENCY")
+    .map(item => item.action?.trim())
+    .filter(Boolean);
   const references = (analysis.keyIssues || [])
-    .filter(issue => issue.urgency === "reference")
+    .filter(issue => issue.urgency === "reference" || issue.kescoJurisdiction === "MONITORING")
     .map(issue => [issue.summary, issue.managementImpact].filter(Boolean).join(" ").trim())
     .filter(Boolean);
   const lines = [
-    "① 오늘의 핵심",
+    "① 오늘 한줄",
     analysis.managementMessage?.text?.trim() || "핵심 경영메시지를 생성하지 못했습니다.",
     "",
-    "② 경영 시사점",
-    analysis.situationSummary?.text?.trim() || "경영 시사점을 생성하지 못했습니다.",
+    "② 언론 동향 분석",
+    analysis.situationSummary?.text?.trim() || "언론 동향 분석을 생성하지 못했습니다.",
     "",
-    "③ 참고 동향",
-    references.length ? references.join("\n\n") : "별도 참고 동향 없음."
+    "③ 경영 참고사항",
+    managementReferences.length ? managementReferences.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
   ];
+  if (references.length) lines.push("", "④ 참고 동향", references.join("\n\n"));
   return lines.join("\n");
 }

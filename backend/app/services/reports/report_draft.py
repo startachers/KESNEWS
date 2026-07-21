@@ -109,13 +109,16 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
         raise ReportDraftInvalid("붙여넣은 분석 텍스트가 없습니다.")
     headings = {
         "core": re.compile(
-            r"(?im)^\s*(?:(?:①|1[.)]?)\s*)?(?:오늘의\s*핵심|언론\s*동향\s*시사점)\s*$"
+            r"(?im)^\s*(?:(?:①|1[.)]?)\s*)?(?:오늘\s*한줄|오늘의\s*핵심|언론\s*동향\s*시사점)\s*$"
         ),
         "implication": re.compile(
             r"(?im)^\s*(?:(?:②|2[.)]?)\s*)?(?:경영\s*시사점|언론\s*동향\s*분석)\s*$"
         ),
+        "management": re.compile(
+            r"(?im)^\s*(?:(?:③|3[.)]?)\s*)?경영\s*참고\s*사항\s*$"
+        ),
         "reference": re.compile(
-            r"(?im)^\s*(?:(?:③|3[.)]?)\s*)?(?:참고\s*동향|경영\s*참고\s*사항)\s*$"
+            r"(?im)^\s*(?:(?:③|④|3[.)]?|4[.)]?)\s*)?참고\s*동향\s*$"
         ),
     }
     matches = sorted(
@@ -136,8 +139,11 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     core = sections.get("core") or normalized
     implication = sections.get("implication") or ""
     references = sections.get("reference") or ""
+    management = sections.get("management") or ""
     if references.rstrip(" .") == "별도 참고 동향 없음":
         references = ""
+    if management.rstrip(" .") == "직접적인 경영 현안은 제한적입니다":
+        management = ""
     return {
         "managementMessage": {"text": core, "articleIds": evidence_ids},
         "situationSummary": {
@@ -151,12 +157,36 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
                 "summary": references,
                 "managementImpact": "",
                 "articleIds": evidence_ids,
+                "evidenceQuotes": [
+                    {"articleId": article_id, "fact": references}
+                    for article_id in evidence_ids
+                ],
+                "certainty": "reported",
+                "electricalCauseStatus": "not_applicable",
+                "kescoJurisdiction": "MONITORING",
+                "jurisdictionReason": "외부 분석의 참고 동향으로 입력됨",
+                "excludedElements": [],
+                "recommendation": "",
+                "actionLevel": "policy_monitoring",
             }]
             if references
             else []
         ),
         "decisionPoints": [],
-        "actionItems": [],
+        "actionItems": (
+            [{
+                "priority": "review",
+                "action": management,
+                "articleIds": evidence_ids,
+                "kescoJurisdiction": "DIRECT",
+                "actionLevel": "internal_review",
+                "evidence": "외부 분석 텍스트와 현재 선정 기사",
+                "uncertainty": "reported",
+                "ownerType": "KESCO",
+            }]
+            if management
+            else []
+        ),
         "riskOutlook": {"text": "", "articleIds": [], "isInference": True},
         "limitations": [],
         "confidence": "medium",

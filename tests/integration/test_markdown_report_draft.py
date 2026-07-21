@@ -70,7 +70,7 @@ def test_legacy_single_field_external_analysis_is_split_for_display_only():
 
     assert displayed["managementMessage"]["text"] == "우선 점검합니다."
     assert displayed["situationSummary"]["text"] == "현장 흐름을 분석합니다."
-    assert displayed["keyIssues"][0]["summary"] == "내부 체계를 살펴봅니다."
+    assert displayed["actionItems"][0]["action"] == "내부 체계를 살펴봅니다."
     assert legacy["managementMessage"]["text"].startswith("1. 언론 동향 시사점")
 
 
@@ -85,6 +85,21 @@ def test_new_plain_text_no_reference_phrase_does_not_create_reference_issue():
     )
 
     assert content["keyIssues"] == []
+
+
+def test_new_plain_text_splits_management_and_optional_monitoring_sections():
+    from backend.app.services.reports.report_draft import content_from_plain_text
+
+    content = content_from_plain_text(
+        "① 오늘 한줄\n현안을 확인합니다.\n\n"
+        "② 언론 동향 분석\n공식 조사 결과를 기다립니다.\n\n"
+        "③ 경영 참고사항\n관계기관과 전기적 요인을 확인합니다.\n\n"
+        "④ 참고 동향\n그리드코드 개정 동향을 모니터링합니다.",
+        ["A01"],
+    )
+
+    assert content["actionItems"][0]["action"] == "관계기관과 전기적 요인을 확인합니다."
+    assert content["keyIssues"][0]["summary"] == "그리드코드 개정 동향을 모니터링합니다."
 
 
 def test_markdown_export_contains_selected_full_text_tags_and_template(monkeypatch):
@@ -150,8 +165,9 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert preview.status_code == 200
     assert "외부 AI 경영메시지" in preview.text
     assert "외부 AI 언론상황" in preview.text
-    assert "오늘의 핵심" in preview.text
-    assert "경영 시사점" in preview.text
+    assert "오늘 한줄" in preview.text
+    assert "언론 동향 분석" in preview.text
+    assert "경영 참고사항" in preview.text
     assert "참고 동향" in preview.text
     assert "관련 기사" in preview.text
     assert "분석 근거" not in preview.text

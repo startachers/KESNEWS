@@ -455,6 +455,25 @@ async def analyze_briefing(report_date: str, body: AnalyzeRequest, request: Requ
                     "analysis": output.result,
                     "analysisBasis": output.basis,
                     "validationWarnings": output.validation_warnings,
+                    "validation": {
+                        "valid": True,
+                        "errors": [],
+                        "warnings": output.validation_warnings,
+                        "removedRecommendations": [
+                            warning.get("text", "")
+                            for warning in output.validation_warnings
+                            if warning.get("stage") == "basis"
+                            and warning.get("resolution") == "filtered"
+                            and warning.get("text")
+                        ],
+                        "rewrittenStatements": [
+                            warning.get("text", "")
+                            for warning in output.validation_warnings
+                            if warning.get("stage") == "final"
+                            and warning.get("resolution") == "corrected"
+                            and warning.get("text")
+                        ],
+                    },
                     "attempts": output.attempts,
                     "basisAttempts": output.basis_attempts,
                 },

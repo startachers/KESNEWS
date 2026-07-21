@@ -299,9 +299,19 @@ def format_analysis(result: dict[str, Any]) -> str:
 
     management = result.get("managementMessage") or {}
     situation = result.get("situationSummary") or {}
+    management_references: list[str] = []
+    for item in result.get("actionItems") or []:
+        if item.get("kescoJurisdiction") not in {None, "DIRECT", "COLLABORATIVE"}:
+            continue
+        if item.get("ownerType") == "EXTERNAL_AGENCY":
+            continue
+        action = str(item.get("action") or "").strip()
+        if action:
+            management_references.append(action)
+
     references: list[str] = []
     for item in result.get("keyIssues") or []:
-        if item.get("urgency") != "reference":
+        if item.get("urgency") != "reference" and item.get("kescoJurisdiction") != "MONITORING":
             continue
         summary = str(item.get("summary") or "").strip()
         impact = str(item.get("managementImpact") or "").strip()
@@ -310,13 +320,15 @@ def format_analysis(result: dict[str, Any]) -> str:
             references.append(text)
 
     lines = [
-        "① 오늘의 핵심",
+        "① 오늘 한줄",
         claim_text(management) or "핵심 경영메시지를 생성하지 못했습니다.",
         "",
-        "② 경영 시사점",
-        claim_text(situation) or "경영 시사점을 생성하지 못했습니다.",
+        "② 언론 동향 분석",
+        claim_text(situation) or "언론 동향 분석을 생성하지 못했습니다.",
         "",
-        "③ 참고 동향",
-        "\n\n".join(references) if references else "별도 참고 동향 없음.",
+        "③ 경영 참고사항",
+        "\n\n".join(management_references) if management_references else "직접적인 경영 현안은 제한적입니다.",
     ]
+    if references:
+        lines.extend(("", "④ 참고 동향", "\n\n".join(references)))
     return "\n".join(lines)

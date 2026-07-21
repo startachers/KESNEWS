@@ -153,9 +153,9 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     analysis = {
         "managementMessage": {"text": "안전점검 보도를 확인해야 한다.", "articleIds": ["A01"]},
         "situationSummary": {"text": "직접 보도가 확인됐다.", "articleIds": ["A01"]},
-        "keyIssues": [{"title": "안전점검", "urgency": "review", "summary": "직접 보도", "managementImpact": "후속 확인", "articleIds": ["A01"]}],
+        "keyIssues": [{"title": "안전점검", "urgency": "review", "summary": "직접 보도", "managementImpact": "후속 확인", "articleIds": ["A01"], "evidenceQuotes": [{"articleId": "A01", "fact": "안전점검 보도"}], "certainty": "confirmed", "electricalCauseStatus": "not_applicable", "kescoJurisdiction": "DIRECT", "jurisdictionReason": "공사 점검 업무", "excludedElements": [], "recommendation": "사실관계를 점검한다.", "actionLevel": "internal_review"}],
         "decisionPoints": [{"text": "확산 추이를 확인한다.", "articleIds": ["A01"]}],
-        "actionItems": [{"priority": "review", "action": "사실관계를 점검한다.", "articleIds": ["A01"]}],
+        "actionItems": [{"priority": "review", "action": "사실관계를 점검한다.", "articleIds": ["A01"], "kescoJurisdiction": "DIRECT", "actionLevel": "internal_review", "evidence": "안전점검 보도", "uncertainty": "confirmed", "ownerType": "KESCO"}],
         "riskOutlook": {"text": "후속 보도가 이어질 수 있다.", "articleIds": ["A01"], "isInference": True},
         "limitations": [],
         "confidence": "medium",
@@ -177,6 +177,13 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
                             "managementRecommendation": "사실관계를 점검할 필요가 있다.",
                             "articleIds": ["A01"],
                             "certainty": "confirmed",
+                            "evidenceQuotes": [{"articleId": "A01", "fact": "안전점검 보도"}],
+                            "electricalCauseStatus": "not_applicable",
+                            "kescoJurisdiction": "DIRECT",
+                            "jurisdictionReason": "공사 점검 업무",
+                            "excludedElements": [],
+                            "actionLevel": "internal_review",
+                            "ownerType": "KESCO",
                         }],
                         "limitations": [],
                         "confidence": "medium",
@@ -203,16 +210,16 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert snapshot["evidence"]["A01"]["article"]["title"]
     report = client.get(f"/report/{report_date}").text
     assert f'id="article-{article_id}"' in report
-    assert "① 오늘의 핵심" in report
-    assert "② 경영 시사점" in report
-    assert "③ 참고 동향" in report
+    assert "① 오늘 한줄" in report
+    assert "② 언론 동향 분석" in report
+    assert "③ 경영 참고사항" in report
     assert "직접 보도가 확인됐다." in report
     assert "후속 확인" not in report
     assert "후속 보도가 이어질 수 있다." not in report
     assert "의사결정 포인트" not in report
     assert "확산 추이를 확인한다." not in report
     assert "실행 항목" not in report
-    assert "사실관계를 점검한다." not in report
+    assert "사실관계를 점검한다." in report
     assert "관련 기사" in report
     assert "분석 근거" not in report
     assert "근거 기사 링크" not in report

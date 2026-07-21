@@ -33,17 +33,24 @@ function contentFromText(text) {
 function setEditorContent(content) {
   const value = content || emptyContent();
   const references = (value.keyIssues || [])
-    .filter(item => item.urgency === "reference")
+    .filter(item => item.urgency === "reference" || item.kescoJurisdiction === "MONITORING")
     .map(item => [item.summary, item.managementImpact].filter(Boolean).join(" ").trim())
     .filter(Boolean);
-  $("reportDraftContent").value = [
-    "① 오늘의 핵심",
+  const management = (value.actionItems || [])
+    .filter(item => [undefined, "DIRECT", "COLLABORATIVE"].includes(item.kescoJurisdiction))
+    .filter(item => item.ownerType !== "EXTERNAL_AGENCY")
+    .map(item => item.action?.trim())
+    .filter(Boolean);
+  const sections = [
+    "① 오늘 한줄",
     value.managementMessage?.text || "",
-    "② 경영 시사점",
+    "② 언론 동향 분석",
     value.situationSummary?.text || "",
-    "③ 참고 동향",
-    references.length ? references.join("\n\n") : "별도 참고 동향 없음."
-  ].join("\n\n");
+    "③ 경영 참고사항",
+    management.length ? management.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
+  ];
+  if (references.length) sections.push("④ 참고 동향", references.join("\n\n"));
+  $("reportDraftContent").value = sections.join("\n\n");
 }
 
 function setDraftStatus(message, tone = "") {

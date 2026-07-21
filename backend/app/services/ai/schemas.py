@@ -14,18 +14,60 @@ class Claim(_StrictModel):
     articleIds: list[str] = Field(default_factory=list)
 
 
+Certainty = Literal["confirmed", "reported", "suspected", "unknown"]
+ElectricalCauseStatus = Literal["confirmed", "suspected", "not_confirmed", "not_applicable"]
+KescoJurisdiction = Literal["DIRECT", "COLLABORATIVE", "MONITORING", "OUT_OF_SCOPE"]
+ActionLevel = Literal[
+    "internal_review", "interagency_coordination", "policy_monitoring", "exclude"
+]
+OwnerType = Literal["KESCO", "KESCO_WITH_PARTNERS", "EXTERNAL_AGENCY", "UNDETERMINED"]
+
+
+class EvidenceQuote(_StrictModel):
+    articleId: str
+    fact: str = Field(min_length=1)
+
+
 class KeyIssue(_StrictModel):
     title: str
     urgency: Literal["required", "review", "reference"]
     summary: str
     managementImpact: str
     articleIds: list[str] = Field(default_factory=list)
+    evidenceQuotes: list[EvidenceQuote] = Field(min_length=1)
+    certainty: Certainty
+    electricalCauseStatus: ElectricalCauseStatus
+    kescoJurisdiction: KescoJurisdiction
+    jurisdictionReason: str = Field(min_length=1)
+    excludedElements: list[str] = Field(default_factory=list)
+    recommendation: str
+    actionLevel: ActionLevel
+
+    @model_validator(mode="after")
+    def enforce_scope(self) -> "KeyIssue":
+        if self.kescoJurisdiction == "OUT_OF_SCOPE":
+            if self.recommendation.strip():
+                raise ValueError("OUT_OF_SCOPE 이슈에는 recommendation을 둘 수 없습니다.")
+            if self.actionLevel != "exclude":
+                raise ValueError("OUT_OF_SCOPE 이슈의 actionLevel은 exclude여야 합니다.")
+        return self
 
 
 class ActionItem(_StrictModel):
     priority: Literal["required", "review", "reference"]
     action: str
     articleIds: list[str] = Field(default_factory=list)
+    kescoJurisdiction: KescoJurisdiction
+    actionLevel: ActionLevel
+    evidence: str = Field(min_length=1)
+    uncertainty: Certainty
+    ownerType: OwnerType
+
+    @model_validator(mode="after")
+    def exclude_out_of_scope_action(self) -> "ActionItem":
+        if self.kescoJurisdiction == "OUT_OF_SCOPE":
+            raise ValueError("OUT_OF_SCOPE 조치는 최종 actionItems에 포함할 수 없습니다.")
+        return self
 
 
 class RiskOutlook(Claim):
@@ -44,7 +86,14 @@ class AnalysisBasisItem(_StrictModel):
     kescoInterpretation: str
     managementRecommendation: str
     articleIds: list[str] = Field(min_length=1)
-    certainty: Literal["confirmed", "attributed", "under_investigation", "inference"]
+    evidenceQuotes: list[EvidenceQuote] = Field(min_length=1)
+    certainty: Certainty
+    electricalCauseStatus: ElectricalCauseStatus
+    kescoJurisdiction: KescoJurisdiction
+    jurisdictionReason: str = Field(min_length=1)
+    excludedElements: list[str] = Field(default_factory=list)
+    actionLevel: ActionLevel
+    ownerType: OwnerType
 
     @model_validator(mode="after")
     def require_content(self) -> "AnalysisBasisItem":
@@ -58,6 +107,11 @@ class AnalysisBasisItem(_StrictModel):
             )
         ):
             raise ValueError("분석 근거 항목의 내용이 모두 비어 있습니다.")
+        if self.kescoJurisdiction == "OUT_OF_SCOPE":
+            if self.managementRecommendation.strip():
+                raise ValueError("OUT_OF_SCOPE 근거에는 경영 제언을 둘 수 없습니다.")
+            if self.actionLevel != "exclude":
+                raise ValueError("OUT_OF_SCOPE 근거의 actionLevel은 exclude여야 합니다.")
         return self
 
 
@@ -114,6 +168,10 @@ def validate_evidence(result: AnalysisResult, evidence_ids: set[str]) -> None:
         (f"decisionPoints[{i}]", item.articleIds) for i, item in enumerate(result.decisionPoints)
     )
     references.extend((f"actionItems[{i}]", item.articleIds) for i, item in enumerate(result.actionItems))
+    references.extend(
+        (f"keyIssues[{i}].evidenceQuotes", [quote.articleId for quote in item.evidenceQuotes])
+        for i, item in enumerate(result.keyIssues)
+    )
     references.extend((f"limitations[{i}]", item.articleIds) for i, item in enumerate(result.limitations))
     invalid = sorted({value for _, ids in references for value in ids if value not in evidence_ids})
     if invalid:
@@ -123,6 +181,7 @@ def validate_evidence(result: AnalysisResult, evidence_ids: set[str]) -> None:
 def validate_basis_evidence(result: AnalysisBasis, evidence_ids: set[str]) -> None:
     references = [item.articleIds for item in result.items]
     references.extend(item.articleIds for item in result.limitations)
+    references.extend([quote.articleId for quote in item.evidenceQuotes] for item in result.items)
     invalid = sorted({value for ids in references for value in ids if value not in evidence_ids})
     if invalid:
         raise ValueError(f"입력 evidence index에 없는 ID입니다: {', '.join(invalid)}")

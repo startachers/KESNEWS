@@ -22,9 +22,22 @@ def valid_analysis() -> dict:
     return {
         "managementMessage": {"text": "경영 메시지", "articleIds": ["A01"]},
         "situationSummary": {"text": "상황 요약", "articleIds": ["A01"]},
-        "keyIssues": [{"title": "이슈", "urgency": "required", "summary": "요약", "managementImpact": "영향", "articleIds": ["A01"]}],
+        "keyIssues": [{
+            "title": "이슈", "urgency": "required", "summary": "요약",
+            "managementImpact": "영향", "articleIds": ["A01"],
+            "evidenceQuotes": [{"articleId": "A01", "fact": "공사 관련 기사 설명"}],
+            "certainty": "confirmed", "electricalCauseStatus": "not_applicable",
+            "kescoJurisdiction": "DIRECT", "jurisdictionReason": "공사 직접 관련",
+            "excludedElements": [], "recommendation": "현황을 확인한다.",
+            "actionLevel": "internal_review",
+        }],
         "decisionPoints": [{"text": "판단", "articleIds": ["A01"]}],
-        "actionItems": [{"priority": "review", "action": "확인", "articleIds": ["A01"]}],
+        "actionItems": [{
+            "priority": "review", "action": "확인", "articleIds": ["A01"],
+            "kescoJurisdiction": "DIRECT", "actionLevel": "internal_review",
+            "evidence": "공사 관련 기사 설명", "uncertainty": "confirmed",
+            "ownerType": "KESCO",
+        }],
         "riskOutlook": {"text": "전망", "articleIds": ["A01"], "isInference": True},
         "limitations": [{"text": "본문 미확보", "articleIds": []}],
         "confidence": "medium",
@@ -42,6 +55,13 @@ def valid_basis() -> dict:
                 "managementRecommendation": "관련 현황과 안내 내용을 확인할 필요가 있다.",
                 "articleIds": ["A01"],
                 "certainty": "confirmed",
+                "evidenceQuotes": [{"articleId": "A01", "fact": "한국전기안전공사 관련 내용"}],
+                "electricalCauseStatus": "not_applicable",
+                "kescoJurisdiction": "DIRECT",
+                "jurisdictionReason": "공사 직접 관련",
+                "excludedElements": [],
+                "actionLevel": "internal_review",
+                "ownerType": "KESCO",
             }
         ],
         "limitations": [],
@@ -104,11 +124,18 @@ def test_valid_result_persists_fixed_evidence_and_structured_response():
     assert data["run"]["response"]["analysis"]["decisionPoints"][0]["articleIds"] == ["A01"]
     assert data["run"]["response"]["analysisBasis"]["items"][0]["certainty"] == "confirmed"
     assert data["run"]["response"]["validationWarnings"] == []
+    assert data["run"]["response"]["validation"] == {
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "removedRecommendations": [],
+        "rewrittenStatements": [],
+    }
     assert data["summaryMode"] == "ai"
     assert data["situationSummary"] == (
-        "① 오늘의 핵심\n경영 메시지\n\n"
-        "② 경영 시사점\n상황 요약\n\n"
-        "③ 참고 동향\n별도 참고 동향 없음."
+        "① 오늘 한줄\n경영 메시지\n\n"
+        "② 언론 동향 분석\n상황 요약\n\n"
+        "③ 경영 참고사항\n확인"
     )
     loaded = client.get(f"/api/briefings/{report_date}").json()["data"]
     assert loaded["aiState"]["lastSuccessfulRun"]["response"]["analysis"]["confidence"] == "medium"

@@ -790,14 +790,25 @@ AI 실행마다 고정 index를 만든다.
     "kescoInterpretation": "",
     "managementRecommendation": "",
     "articleIds": ["A01"],
-    "certainty": "confirmed"
+    "evidenceQuotes": [{"articleId": "A01", "fact": "기사에서 확인된 사실"}],
+    "certainty": "confirmed",
+    "electricalCauseStatus": "not_applicable",
+    "kescoJurisdiction": "DIRECT",
+    "jurisdictionReason": "",
+    "excludedElements": [],
+    "actionLevel": "internal_review",
+    "ownerType": "KESCO"
   }],
   "limitations": [],
   "confidence": "medium"
 }
 ```
 
-`certainty`는 `confirmed`, `attributed`, `under_investigation`, `inference` 중 하나다. 서버의
+`certainty`는 `confirmed`, `reported`, `suspected`, `unknown` 중 하나다. 각 항목은
+`evidenceQuotes`, `electricalCauseStatus`, `kescoJurisdiction`, `jurisdictionReason`,
+`excludedElements`, `actionLevel`, `ownerType`을 함께 반환한다. `kescoJurisdiction`은
+`DIRECT`, `COLLABORATIVE`, `MONITORING`, `OUT_OF_SCOPE` 중 하나이며 `OUT_OF_SCOPE`는
+제언을 비우고 `actionLevel=exclude`로 둔다. 서버의
 자동 근거 검증을 통과한 중간 항목의 기사 ID만 최종 문장 생성에 사용할 수 있다. 중간 분석과
 경고는 각각 `ai_runs.response_json.analysisBasis`, `validationWarnings`에 저장한다.
 
@@ -819,7 +830,15 @@ AI 실행마다 고정 index를 만든다.
       "urgency": "required",
       "summary": "",
       "managementImpact": "",
-      "articleIds": ["A01"]
+      "articleIds": ["A01"],
+      "evidenceQuotes": [{"articleId": "A01", "fact": "기사에서 확인된 사실"}],
+      "certainty": "reported",
+      "electricalCauseStatus": "not_confirmed",
+      "kescoJurisdiction": "COLLABORATIVE",
+      "jurisdictionReason": "",
+      "excludedElements": [],
+      "recommendation": "",
+      "actionLevel": "interagency_coordination"
     }
   ],
   "decisionPoints": [
@@ -832,7 +851,12 @@ AI 실행마다 고정 index를 만든다.
     {
       "priority": "required",
       "action": "",
-      "articleIds": ["A01"]
+      "articleIds": ["A01"],
+      "kescoJurisdiction": "DIRECT",
+      "actionLevel": "internal_review",
+      "evidence": "",
+      "uncertainty": "reported",
+      "ownerType": "KESCO"
     }
   ],
   "riskOutlook": {
@@ -865,6 +889,14 @@ AI 실행마다 고정 index를 만든다.
     `KESCO_ROLE_CONFUSION`
   - 근거 기사는 원인을 추정·조사 중으로 표현하지만 결과가 확정하면 `INVESTIGATION_OVERSTATED`
   - 언론·전문가 주장을 출처 없이 사실처럼 표현하면 `UNATTRIBUTED_CLAIM`
+  - 입력에 없는 사고 세부사항·설비·정책명·영문 고유명사는 `UNSUPPORTED_CONCEPT` 또는
+    `UNSUPPORTED_NAMED_ENTITY`
+  - 소관 등급과 조치 수준 불일치, 비소관 제언, 외부기관 조치의 공사 지시화는 각각
+    `JURISDICTION_ACTION_MISMATCH`, `OUT_OF_SCOPE_RECOMMENDATION`, `EXTERNAL_ACTION_AS_KESCO`
+  - `suspected`·`unknown` 확정형 변환과 전기 원인 미확인 상태의 검사체계 변경 제안은
+    `UNCERTAINTY_OVERSTATED`, `UNCONFIRMED_ELECTRICAL_ACTION`
+  - 그리드코드 등 모니터링 영역의 직접 소관 과장과 법령·기준·단속 권한 초과는
+    `MONITORING_AS_DIRECT`, `KESCO_AUTHORITY_OVERREACH`
 - 내부 경영관리 근거가 없는 `reference` 항목은 `REFERENCE_SCOPE_INVALID`로 제외한다.
 - 경고가 있는 중간 항목은 최종 생성 입력에서 제외한다. 통과 항목이 하나도 없으면
   `AI_GROUNDING_INVALID`로 결과 전체를 적용하지 않는다.
@@ -876,13 +908,14 @@ AI 실행마다 고정 index를 만든다.
 AI 결과의 근거 schema는 유지하되, 보고일 작업본의 `situationSummary` 표시 문자열은 다음 세
 항목으로 조립한다.
 
-1. `① 오늘의 핵심`: `managementMessage.text`
-2. `② 경영 시사점`: `situationSummary.text`
-3. `③ 참고 동향`: `keyIssues` 중 `urgency=reference`인 항목의 `summary`와
-   `managementImpact`
+1. `① 오늘 한줄`: `managementMessage.text`
+2. `② 언론 동향 분석`: `situationSummary.text`
+3. `③ 경영 참고사항`: `DIRECT`·`COLLABORATIVE`이며 외부기관 단독 소관이 아닌 `actionItems`
+4. `④ 참고 동향`: `MONITORING` 또는 `urgency=reference`인 `keyIssues`가 있을 때만 표시
 
-참고 동향 근거가 없으면 `별도 참고 동향 없음.`으로 표시한다. 모델은 각 필드 본문에 번호나
-제목을 중복 생성하지 않는다. 구조화된 판단·조치·전망과 근거 ID는 `ai_runs.response_json`에
+경영 참고사항이 없으면 `직접적인 경영 현안은 제한적입니다.`로 표시하고, 참고 동향 근거가
+없으면 ④ 절을 생략한다. 모델은 각 필드 본문에 번호나 제목을 중복 생성하지 않는다.
+구조화된 판단·조치·전망과 근거 ID는 `ai_runs.response_json`에
 그대로 보존하며, 담당자가 직접 수정한 `ai-edited` 작업본은 재분석으로 덮어쓰지 않는다.
 
 ### 5.4 외부 AI 분석 교환과 CEO 보고 편집본
@@ -908,9 +941,9 @@ GET  /api/briefings/{date}/report-draft
 ```
 
 - validate는 저장하지 않으며 현재 입력 서명을 검증한다. 일반 텍스트 입력은 현재 선정 기사
-  전체를 근거로 연결해 내부 구조로 변환한다. 새 출력 제목인 `오늘의 핵심`, `경영 시사점`,
-  `참고 동향`은 각각 `managementMessage`, `situationSummary`, `urgency=reference`인
-  `keyIssues`로 분리한다. 과거 `언론 동향 시사점`, `언론 동향 분석`, `경영 참고사항` 제목도
+  전체를 근거로 연결해 내부 구조로 변환한다. 새 출력 제목인 `오늘 한줄`, `언론 동향 분석`,
+  `경영 참고사항`, `참고 동향`을 내부 구조로 분리한다. 과거 `오늘의 핵심`, `경영 시사점`,
+  `언론 동향 시사점`, `경영 참고사항` 제목도
   입력 호환을 위해 같은 방식으로 읽는다. 제목이 없는 텍스트는 기존처럼 `managementMessage`로 보존한다.
   기존 구조화 JSON 입력도 호환을 위해 허용한다.
 - PUT은 `expectedRevision`을 요구하고 최종 상태에서는 거부한다.

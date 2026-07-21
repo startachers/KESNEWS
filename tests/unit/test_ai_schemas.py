@@ -16,11 +16,24 @@ def valid_analysis() -> dict:
                 "summary": "요약",
                 "managementImpact": "영향",
                 "articleIds": ["A01"],
+                "evidenceQuotes": [{"articleId": "A01", "fact": "전기설비 점검 보도"}],
+                "certainty": "confirmed",
+                "electricalCauseStatus": "not_applicable",
+                "kescoJurisdiction": "DIRECT",
+                "jurisdictionReason": "전기설비 점검 업무",
+                "excludedElements": [],
+                "recommendation": "현황을 확인한다.",
+                "actionLevel": "internal_review",
             }
         ],
         "decisionPoints": [{"text": "판단", "articleIds": ["A01"]}],
         "actionItems": [
-            {"priority": "review", "action": "확인", "articleIds": ["A01"]}
+            {
+                "priority": "review", "action": "확인", "articleIds": ["A01"],
+                "kescoJurisdiction": "DIRECT", "actionLevel": "internal_review",
+                "evidence": "전기설비 점검 보도", "uncertainty": "confirmed",
+                "ownerType": "KESCO",
+            }
         ],
         "riskOutlook": {"text": "전망", "articleIds": ["A01"], "isInference": True},
         "limitations": [{"text": "본문 미확보", "articleIds": []}],
@@ -59,6 +72,17 @@ def test_risk_outlook_requires_inference_true():
     payload = valid_analysis()
     payload["riskOutlook"]["isInference"] = False
     with pytest.raises(ValidationError):
+        AnalysisResult.model_validate(payload)
+
+
+def test_out_of_scope_action_item_is_rejected():
+    payload = valid_analysis()
+    payload["actionItems"][0].update(
+        kescoJurisdiction="OUT_OF_SCOPE",
+        actionLevel="exclude",
+        ownerType="EXTERNAL_AGENCY",
+    )
+    with pytest.raises(ValidationError, match="OUT_OF_SCOPE"):
         AnalysisResult.model_validate(payload)
 
 

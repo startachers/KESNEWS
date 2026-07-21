@@ -90,21 +90,37 @@ def _analysis_for_display(analysis: dict[str, Any]) -> dict[str, Any]:
 def _render_lead(value: Any) -> str:
     text, _ = _claim(value)
     if not text:
-        return '<p class="empty">작성된 오늘의 핵심이 없습니다.</p>'
+        return '<p class="empty">작성된 오늘 한줄이 없습니다.</p>'
     return f'<div class="analysis-lead"><p>{_text(text)}</p></div>'
 
 
 def _render_trend_analysis(analysis: dict[str, Any]) -> str:
     situation_text, _ = _claim(analysis.get("situationSummary"))
     if not situation_text:
-        return '<p class="empty">작성된 경영 시사점이 없습니다.</p>'
+        return '<p class="empty">작성된 언론 동향 분석이 없습니다.</p>'
     return f'<div class="analysis-prose"><p>{_text(situation_text)}</p></div>'
 
 
 def _render_management_reference(analysis: dict[str, Any]) -> str:
     items: list[str] = []
+    for item in analysis.get("actionItems") or []:
+        if item.get("kescoJurisdiction") not in (None, "DIRECT", "COLLABORATIVE"):
+            continue
+        if item.get("ownerType") == "EXTERNAL_AGENCY":
+            continue
+        action = str(item.get("action") or "").strip()
+        if action:
+            items.append(action)
+    if not items:
+        return '<p class="empty">직접적인 경영 현안은 제한적입니다.</p>'
+    combined = "\n\n".join(items)
+    return f'<div class="analysis-prose"><p>{_text(combined)}</p></div>'
+
+
+def _render_monitoring_reference(analysis: dict[str, Any]) -> str:
+    items: list[str] = []
     for item in analysis.get("keyIssues") or []:
-        if item.get("urgency") != "reference":
+        if item.get("urgency") != "reference" and item.get("kescoJurisdiction") != "MONITORING":
             continue
         text = " ".join(
             value.strip()
@@ -117,7 +133,7 @@ def _render_management_reference(analysis: dict[str, Any]) -> str:
         if text:
             items.append(text)
     if not items:
-        return '<p class="empty">별도 참고 동향 없음.</p>'
+        return ""
     combined = "\n\n".join(items)
     return f'<div class="analysis-prose"><p>{_text(combined)}</p></div>'
 
@@ -600,9 +616,10 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <div class="date"><strong>{_text(date_label)}</strong><small>{('작성 ' + _text(briefing.get('preparedBy'))) if briefing.get('preparedBy') else '작성자 미지정'}</small></div></div>
     </header>
     <div class="body">
-    <section class="section"><h2>① 오늘의 핵심</h2>{_render_lead(analysis.get('managementMessage'))}</section>
-    <section class="section"><h2>② 경영 시사점</h2>{_render_trend_analysis(analysis)}</section>
-    <section class="section"><h2>③ 참고 동향</h2>{_render_management_reference(analysis)}</section>
+    <section class="section"><h2>① 오늘 한줄</h2>{_render_lead(analysis.get('managementMessage'))}</section>
+    <section class="section"><h2>② 언론 동향 분석</h2>{_render_trend_analysis(analysis)}</section>
+    <section class="section"><h2>③ 경영 참고사항</h2>{_render_management_reference(analysis)}</section>
+    {f'<section class="section"><h2>④ 참고 동향</h2>{monitoring_reference}</section>' if (monitoring_reference := _render_monitoring_reference(analysis)) else ''}
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">
