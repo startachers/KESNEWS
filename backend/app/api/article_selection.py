@@ -189,6 +189,23 @@ async def create_selection_recommendations(
             elif await request.is_disconnected():
                 cancel_token.cancel("client_disconnected")
         output = await worker
+    except asyncio.CancelledError:
+        cancel_token.cancel("client_disconnected")
+        try:
+            await asyncio.shield(worker)
+        except Exception:
+            pass
+        connection = get_connection()
+        try:
+            with connection:
+                selection_repo.finish_failed(
+                    connection,
+                    run_id,
+                    "AI_CANCELLED: 브라우저 연결이 종료되어 기사 추천을 중단했습니다.",
+                )
+        finally:
+            connection.close()
+        raise
     except AnalysisCancelled as exc:
         code = "AI_TIMEOUT" if exc.reason == "timeout" else "AI_CANCELLED"
         stored = f"{code}: 기사 추천 실행이 중단됐습니다."

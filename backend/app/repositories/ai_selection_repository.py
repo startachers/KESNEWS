@@ -106,6 +106,16 @@ def latest_success(connection: sqlite3.Connection, briefing_id: str) -> sqlite3.
     ).fetchone()
 
 
+def latest_running(connection: sqlite3.Connection) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT * FROM ai_selection_runs
+        WHERE status = 'running'
+        ORDER BY started_at DESC, id DESC LIMIT 1
+        """
+    ).fetchone()
+
+
 def fail_running(connection: sqlite3.Connection, error_message: str) -> int:
     cursor = connection.execute(
         """

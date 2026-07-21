@@ -37,6 +37,8 @@ class BodyFetchResult:
     error: str = ""
     resolved_url: str = ""
     attempts: tuple[dict[str, str], ...] = ()
+    canonical_url: str = ""
+    page_publisher: str = ""
 
 
 class _ArticleParser(HTMLParser):
@@ -50,6 +52,7 @@ class _ArticleParser(HTMLParser):
         self.paragraphs: list[str] = []
         self.json_ld: list[str] = []
         self.meta_descriptions: list[str] = []
+        self.site_names: list[str] = []
         self.canonical_url = ""
         self._publisher_hint = re.compile(
             "|".join(re.escape(item) for item in content_hints), re.I
@@ -81,6 +84,8 @@ class _ArticleParser(HTMLParser):
             key = (attrs_dict.get("property") or attrs_dict.get("name") or "").lower()
             if key in {"og:description", "description"} and attrs_dict.get("content"):
                 self.meta_descriptions.append(attrs_dict["content"] or "")
+            if key == "og:site_name" and attrs_dict.get("content"):
+                self.site_names.append(attrs_dict["content"] or "")
         if tag == "link" and (attrs_dict.get("rel") or "").lower() == "canonical":
             self.canonical_url = attrs_dict.get("href") or ""
         if tag in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}:
@@ -136,6 +141,23 @@ def _article_body_from_json(value: Any) -> str:
     return ""
 
 
+def _publisher_from_json(value: Any) -> str:
+    if isinstance(value, dict):
+        publisher = value.get("publisher")
+        if isinstance(publisher, dict) and isinstance(publisher.get("name"), str):
+            return clean_text(publisher["name"])
+        for nested in value.values():
+            found = _publisher_from_json(nested)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for nested in value:
+            found = _publisher_from_json(nested)
+            if found:
+                return found
+    return ""
+
+
 def extract_article_body(html: str, *, url: str = "") -> str:
     parser = _ArticleParser(publisher_hints(url))
     parser.feed(html)
@@ -164,6 +186,20 @@ def extract_page_metadata(html: str, *, url: str = "") -> tuple[str, str]:
     parser.close()
     description = max((clean_text(item) for item in parser.meta_descriptions), key=len, default="")
     return parser.canonical_url, description
+
+
+def extract_page_publisher(html: str, *, url: str = "") -> str:
+    parser = _ArticleParser(publisher_hints(url))
+    parser.feed(html)
+    parser.close()
+    for raw in parser.json_ld:
+        try:
+            publisher = _publisher_from_json(json.loads(raw))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if publisher:
+            return publisher
+    return clean_text(parser.site_names[0]) if parser.site_names else ""
 
 
 def decode_html(raw: bytes, declared_charset: str | None) -> str:
@@ -308,9 +344,8 @@ def _fetch_page(url: str, timeout_seconds: float) -> tuple[str, str, str]:
             raise ValueError("기사 문서가 허용 크기를 초과함")
         html = decode_html(raw, response.headers.get_content_charset())
         final_url = response.geturl()
-    canonical, description = extract_page_metadata(html, url=final_url)
-    resolved = urllib.parse.urljoin(final_url, canonical) if canonical else final_url
-    return html, resolved, description
+    _, description = extract_page_metadata(html, url=final_url)
+    return html, final_url, description
 
 
 def _failure_reason(exc: Exception) -> str:
@@ -347,11 +382,14 @@ def fetch_article_body_with_retries(
         try:
             html, final_url, description = _fetch_page(candidate_url, timeout_seconds)
             summary = max(summary, description, key=len)
+            canonical, _ = extract_page_metadata(html, url=final_url)
+            canonical = urllib.parse.urljoin(final_url, canonical) if canonical else ""
+            page_publisher = extract_page_publisher(html, url=final_url)
             body = extract_article_body(html, url=final_url)
             if body and (body_validator is None or body_validator(body, final_url)):
                 attempts.append({"stage": stage, "url": candidate_url, "status": "success"})
                 return BodyFetchResult(
-                    body, "success_full", "", final_url, tuple(attempts)
+                    body, "success_full", "", final_url, tuple(attempts), canonical, page_publisher
                 )
             attempts.append({
                 "stage": stage, "url": candidate_url,

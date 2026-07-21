@@ -1,6 +1,4 @@
 import json
-import os
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -67,11 +65,13 @@ def test_required_article_failure_blocks_generation(monkeypatch):
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
     assert response.status_code == 422
-    assert response.json()["error"]["code"] == "REQUIRED_ARTICLE_EVIDENCE_MISSING"
-    assert response.json()["error"]["details"]["failedArticles"][0]["articleId"] == article_id
+    assert response.json()["error"]["code"] == "SELECTED_EVIDENCE_INVALID"
+    failed = response.json()["error"]["details"]["failedArticles"]
+    assert failed[0]["articleId"] == article_id
+    assert failed[0]["errors"][0]["code"] == "ARTICLE_BODY_UNAVAILABLE"
 
 
-def test_review_failure_is_excluded_and_valid_rss_is_included_without_ollama(monkeypatch):
+def test_any_selected_failure_blocks_all_markdown_without_ollama(monkeypatch):
     report_date = "2097-07-02"
     client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {"preparedBy": "홍보실"}})
     failed_id = _add_selected(report_date, "failed", "", "review")
@@ -93,14 +93,49 @@ def test_review_failure_is_excluded_and_valid_rss_is_included_without_ollama(mon
         "backend.app.services.analysis_markdown.service.search_trusted_candidates", lambda article: []
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
-    assert response.status_code == 200
-    result = response.json()["data"]
-    assert Path(result["mdPath"]).is_relative_to(Path(os.environ["KESCO_REPORTS_DIR"]))
-    assert result["eligibleCount"] == 1
-    assert result["excludedCount"] == 1
-    assert result["articles"][0 if result["articles"][0]["articleId"] == failed_id else 1]["analysisEligible"] is False
-    assert any(item["articleId"] == valid_id for item in result["articles"])
+    assert response.status_code == 422
+    result = response.json()["error"]
+    assert result["code"] == "SELECTED_EVIDENCE_INVALID"
+    assert [item["articleId"] for item in result["details"]["failedArticles"]] == [failed_id]
+    assert valid_id != failed_id
     assert calls["ollama"] == 0
+
+
+def test_2026_07_20_regression_reports_every_invalid_selected_article(monkeypatch):
+    report_date = "2097-07-20"
+    client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
+    truncated_id = _add_selected(
+        report_date, "truncated",
+        ("관계기관은 화재 현황과 후속 안전조치 계획을 발표했다. " * 6) + "다만 가정 돌봄이...",
+        "review", title="쿠팡 물류센터 화재 사흘째…인근 초교·어린이집 휴교·휴원",
+    )
+    contaminated_id = _add_selected(
+        report_date, "contaminated",
+        ("국회 포럼은 전력망 확충 계획과 병목 해소 방안을 논의했다고 밝혔다. " * 6)
+        + " 많이 본 기사 1. 전혀 다른 사건이 발생했다.",
+        "review", title="국회기후변화포럼 토론회 전력망 병목 해소 필요",
+    )
+    unavailable_id = _add_selected(
+        report_date, "unavailable", "", "review",
+        title="배터리 탑재 로봇 수백 대 인천 물류센터",
+    )
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.service.fetch_article_body_with_retries",
+        lambda url, **kwargs: BodyFetchResult("", "failed", "access_blocked"),
+    )
+
+    response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
+    assert response.status_code == 422
+    failed = response.json()["error"]["details"]["failedArticles"]
+    assert {item["articleId"] for item in failed} == {truncated_id, contaminated_id, unavailable_id}
+    codes = {item["articleId"]: {error["code"] for error in item["errors"]} for item in failed}
+    assert "ARTICLE_BODY_TRUNCATED" in codes[truncated_id]
+    assert "ARTICLE_BODY_CONTAMINATED" in codes[contaminated_id]
+    assert "ARTICLE_BODY_UNAVAILABLE" in codes[unavailable_id]
+    selected = client.get("/api/articles", params={"report_date": report_date}).json()["data"]["articles"]
+    assert {item["id"] for item in selected if item["included"]} == {
+        truncated_id, contaminated_id, unavailable_id,
+    }
 
 
 def test_generation_is_reproducible_and_note_changes_signature(monkeypatch):
@@ -129,7 +164,7 @@ def test_generation_is_reproducible_and_note_changes_signature(monkeypatch):
     assert changed["fileHash"] != first["fileHash"]
 
 
-def test_searched_replacement_is_persisted_as_separate_article(monkeypatch):
+def test_invalid_selected_article_is_not_automatically_replaced(monkeypatch):
     report_date = "2097-07-04"
     client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
     original_id = _add_selected(report_date, "replacement", "", "required")
@@ -159,20 +194,17 @@ def test_searched_replacement_is_persisted_as_separate_article(monkeypatch):
         }],
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
-    assert response.status_code == 200
-    result = response.json()["data"]
-    assert result["replacementCount"] == 1
-    replacement_id = result["articles"][0]["replacementArticleId"]
-    assert replacement_id and replacement_id != original_id
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "SELECTED_EVIDENCE_INVALID"
     connection = get_connection()
     try:
         original = connection.execute("SELECT body_text FROM articles WHERE id = ?", (original_id,)).fetchone()
-        link = connection.execute(
-            "SELECT replaces_article_id FROM article_extractions WHERE article_id = ? ORDER BY created_at DESC LIMIT 1",
-            (replacement_id,),
-        ).fetchone()
+        replacement_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM article_extractions WHERE replaces_article_id = ?",
+            (original_id,),
+        ).fetchone()["count"]
         assert not original["body_text"]
-        assert link["replaces_article_id"] == original_id
+        assert replacement_count == 0
     finally:
         connection.close()
 
@@ -210,6 +242,12 @@ def test_document_budget_signature_uses_final_included_articles(tmp_path, monkey
         return real_input_signature(payload)
 
     monkeypatch.setattr(markdown_service, "input_signature", capture)
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute("DELETE FROM publisher_extraction_events")
+    finally:
+        connection.close()
     output = markdown_service.generate(
         get_connection,
         report_date,

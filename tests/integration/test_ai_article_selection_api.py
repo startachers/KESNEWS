@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 
 from fastapi.testclient import TestClient
 
@@ -17,6 +19,22 @@ class FakeSelectionOllama:
     def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
         self.prompts.append(prompt)
         return json.dumps(self.response, ensure_ascii=False)
+
+
+class BlockingSelectionOllama:
+    context_length = 65_536
+
+    def __init__(self):
+        self.started = threading.Event()
+
+    def generate(self, *, model, prompt, format_schema=None, cancel_token=None):  # noqa: ARG002
+        self.started.set()
+        while True:
+            cancel_token.raise_if_cancelled()
+            time.sleep(0.005)
+
+    def unload_model(self, model):  # noqa: ARG002
+        return None
 
 
 def setup_candidates(report_date: str, count: int = 3):
@@ -303,3 +321,39 @@ def test_unknown_or_duplicate_candidate_ids_are_rejected_after_retry():
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "AI_SELECTION_SCHEMA_INVALID"
     assert len(fake.prompts) == 2
+
+
+def test_cancelled_recommendation_releases_lock_before_model_retry():
+    report_date = "2025-04-09"
+    _, revision = setup_candidates(report_date, 1)
+    blocking = BlockingSelectionOllama()
+    app.state.ollama_client = blocking
+    responses = []
+
+    thread = threading.Thread(
+        target=lambda: responses.append(
+            client.post(
+                f"/api/briefings/{report_date}/selection-recommendations",
+                json={"expectedRevision": revision, "model": "gemma4:31b"},
+            )
+        )
+    )
+    thread.start()
+    assert blocking.started.wait(timeout=2)
+
+    cancelled = client.post(f"/api/briefings/{report_date}/analysis/cancel")
+    thread.join(timeout=2)
+
+    assert cancelled.status_code == 200
+    assert cancelled.json()["data"]["cleanupComplete"] is True
+    assert not thread.is_alive()
+    assert responses[0].json()["error"]["code"] == "AI_CANCELLED"
+
+    app.state.ollama_client = FakeSelectionOllama(recommendations(1))
+    retried = client.post(
+        f"/api/briefings/{report_date}/selection-recommendations",
+        json={"expectedRevision": revision, "model": "gemma4:26b"},
+    )
+
+    assert retried.status_code == 200, retried.json()
+    assert retried.json()["data"]["run"]["model"] == "gemma4:26b"

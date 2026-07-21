@@ -42,7 +42,7 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260720-8" in response.text
+    assert "js/app.js?v=20260721-2" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
@@ -52,10 +52,11 @@ def test_index_html_is_served_at_root():
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260720-1' in app_script.text
-    assert 'articles.js?v=20260720-6' in app_script.text
+    assert 'articles.js?v=20260721-1' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
-    assert 'report-draft.js?v=20260720-1' in app_script.text
+    assert 'report-draft.js?v=20260721-1' in app_script.text
+    assert 'auto-selection.js?v=20260721-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
     assert '$("resetTodayBtn").addEventListener("click", resetTodayWork)' in app_script.text
 
@@ -75,7 +76,7 @@ def test_index_html_is_served_at_root():
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
-    assert 'articles.js?v=20260720-6' in dialogs_script.text
+    assert 'articles.js?v=20260721-1' in dialogs_script.text
     assert "await api.getServerProcessId()" in dialogs_script.text
 
     client_script = client.get("/js/api/client.js")
@@ -83,7 +84,7 @@ def test_index_html_is_served_at_root():
     assert "서버가 45초 안에 다시 시작되지 않았습니다" in client_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
-    assert 'articles.js?v=20260720-6' in renderers_script.text
+    assert 'articles.js?v=20260721-1' in renderers_script.text
 
     auto_selection_script = client.get("/js/features/auto-selection.js")
     assert 'setAttribute("aria-busy", String(value))' in auto_selection_script.text
@@ -91,6 +92,8 @@ def test_index_html_is_served_at_root():
     assert "<b>공사 연관성</b>" not in auto_selection_script.text
     assert "<b>선정 이유</b>" not in auto_selection_script.text
     assert "Top Issues는 수동으로 선택해 주세요" in auto_selection_script.text
+    assert 'error?.name === "AbortError"' in auto_selection_script.text
+    assert "await api.cancelBriefingAnalysis(reportDate)" in auto_selection_script.text
     assert "activatedTopIssueCount" not in auto_selection_script.text
 
     data_io_script = client.get("/js/features/data-io.js")
@@ -109,9 +112,15 @@ def test_index_html_is_served_at_root():
     api_client = client.get("/js/api/client.js")
     assert 'confirmation: "RESET_TODAY"' in api_client.text
     assert "const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 1230000;" in api_client.text
+    assert "const ARTICLE_SELECTION_REQUEST_TIMEOUT_MS = 660000;" in api_client.text
     analyze_request = api_client.text.split("export function analyzeBriefing", 1)[1]
     analyze_request = analyze_request.split("export function cancelBriefingAnalysis", 1)[0]
     assert "}, MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS);" in analyze_request
+    selection_request = api_client.text.split("export function recommendBriefingArticles", 1)[1]
+    selection_request = selection_request.split(
+        "export function applyBriefingArticleRecommendations", 1
+    )[0]
+    assert "}, ARTICLE_SELECTION_REQUEST_TIMEOUT_MS);" in selection_request
 
     stylesheet = client.get("/css/app.css")
     assert "button:disabled { cursor: not-allowed;" in stylesheet.text

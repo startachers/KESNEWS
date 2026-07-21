@@ -3,6 +3,7 @@ import { fetchWithTimeout } from "../utils/net.js";
 
 const CLUSTER_RUN_TIMEOUT_MS = 120000;
 const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 1230000;
+const ARTICLE_SELECTION_REQUEST_TIMEOUT_MS = 660000;
 
 async function request(path, options = {}, timeoutMs = 15000) {
   const response = await fetchWithTimeout(
@@ -75,7 +76,7 @@ export function recommendBriefingArticles(date, expectedRevision, model, signal)
     method: "POST",
     body: JSON.stringify({ expectedRevision, model }),
     signal,
-  }, 330000);
+  }, ARTICLE_SELECTION_REQUEST_TIMEOUT_MS);
 }
 
 export function applyBriefingArticleRecommendations(date, expectedRevision, runId) {
@@ -113,6 +114,8 @@ export async function getAnalysisMarkdown(date) {
     const body = await response.json().catch(() => ({}));
     const error = new Error(body?.error?.message || `Markdown 내보내기 실패 (${response.status})`);
     error.code = body?.error?.code;
+    error.details = body?.error?.details;
+    error.status = response.status;
     throw error;
   }
   return response.text();

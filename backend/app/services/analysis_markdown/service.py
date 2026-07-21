@@ -23,6 +23,7 @@ from backend.app.services.analysis_markdown.source import build_source_context
 from backend.app.services.extraction.article_body import fetch_article_body_with_retries
 from backend.app.services.extraction.cleaner import clean_article_text
 from backend.app.services.extraction.evidence_quality import assess
+from backend.app.services.extraction.evidence_validation import serialize_errors, validate_source
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.url import canonical_article_url
 
@@ -46,6 +47,9 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
     status = "success_full" if raw else "failed"
     attempts: tuple[dict[str, str], ...] = ()
     resolved_url = article.get("url") or ""
+    stored_canonical = article.get("canonicalUrl") or ""
+    canonical_url = stored_canonical if str(stored_canonical).startswith(("http://", "https://")) else ""
+    page_publisher = ""
     if not raw and article.get("description"):
         raw = article["description"]
         status = "success_summary"
@@ -74,19 +78,34 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
                     fetched.body_text, fetched.status, fetched_cleaning, fetched_eligibility
                 )
                 resolved_url = fetched.resolved_url or resolved_url
+                canonical_url = fetched.canonical_url or canonical_url
+                page_publisher = fetched.page_publisher or ""
         elif not eligibility.eligible:
             status = "failed"
             eligibility = type(eligibility)(False, fetched.error or eligibility.reason, "none")
-    result = dict(article)
+    source_validation = validate_source(
+        raw_source=article.get("rawSource") or article.get("source") or "",
+        displayed_source=article.get("source") or "",
+        source_url=article.get("url") or "",
+        resolved_url=resolved_url,
+        canonical_url=canonical_url,
+        page_publisher=page_publisher,
+    )
+    result = {**article, "source": source_validation.source}
     method = (attempts[-1].get("stage") if attempts else None) or (
         "stored_body" if status == "success_full" else "rss_summary" if status == "success_summary" else "none"
     )
     quality_result = assess(
-        {**article, "rawText": raw, "url": resolved_url}, cleaning,
+        {
+            **article, "source": source_validation.source, "rawText": raw,
+            "url": source_validation.canonical_url or source_validation.resolved_url,
+            "sourceValidationErrors": list(source_validation.errors),
+        }, cleaning,
         status=status, method=method, config=config,
     )
     result.update({
         "rawText": raw, "cleanedText": cleaning.text, "status": status,
+        "url": source_validation.canonical_url or source_validation.resolved_url,
         "failureReason": "" if eligibility.eligible else eligibility.reason,
         "analysisEligible": quality_result["analysisEligible"],
         "rawCharacterCount": len(raw), "cleanedCharacterCount": len(cleaning.text),
@@ -94,9 +113,17 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
         "noiseDetected": cleaning.noise_detected,
         "aiContentDetected": cleaning.ai_content_detected,
         "cleaningRuleVersion": config["cleaning_rule_version"],
+        "canonicalUrl": source_validation.canonical_url,
+        "pagePublisher": source_validation.page_publisher,
+        "sourceDomain": source_validation.source_domain,
+        "rawSource": source_validation.raw_source,
+        "normalizedSource": source_validation.source,
+        "normalizationReason": source_validation.normalization_reason,
         **quality_result,
     })
     result["status"] = quality_result["extractionStatus"]
+    if result.get("validationErrors"):
+        result["failureReason"] = result["validationErrors"][0]
     if not result["analysisEligible"] and not result["failureReason"]:
         blocking_reasons = {
             "문장 종료 불완전", "완전한 문장 부족", "언론사 확인 불가",
@@ -139,8 +166,10 @@ def _save_extraction(
                cleaned_character_count, extraction_attempts_json, replacement_article_id,
                replaces_article_id, same_issue_id, cleaning_rule_version, created_at,
                content_quality_score, quality_grade, quality_reasons_json,
-               complete_sentence_count, contamination_flags_json, extraction_method
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               complete_sentence_count, contamination_flags_json, extraction_method,
+               canonical_url, page_publisher, source_domain, raw_source, normalized_source,
+               normalization_reason, validation_errors_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             make_id(), article["id"], article.get("url"), article.get("resolvedUrl"),
             article.get("rawText"), article.get("cleanedText"), article["status"],
@@ -154,6 +183,10 @@ def _save_extraction(
             article.get("completeSentenceCount", 0),
             json.dumps(article.get("contaminationFlags") or [], ensure_ascii=False),
             article.get("extractionMethod"),
+            article.get("canonicalUrl"), article.get("pagePublisher"),
+            article.get("sourceDomain"), article.get("rawSource"),
+            article.get("normalizedSource"), article.get("normalizationReason"),
+            json.dumps(article.get("validationErrors") or [], ensure_ascii=False),
         ),
     )
 
@@ -180,6 +213,16 @@ def _persist_reextraction(
             body_text=prepared["rawText"],
             body_status="full_text",
             body_error="",
+        )
+    if not set(prepared.get("validationErrors") or []).intersection(
+        {"publisher_identity_mismatch", "canonical_url_unresolved"}
+    ):
+        article_repo.update_verified_source(
+            connection,
+            article["id"],
+            source=prepared.get("normalizedSource") or article.get("source") or "",
+            source_domain=prepared.get("sourceDomain") or "",
+            canonical_url=prepared.get("canonicalUrl") or prepared.get("resolvedUrl") or "",
         )
     elif prepared["status"] == "failed":
         article_repo.update_article_body(
@@ -380,6 +423,14 @@ def generate(
             for article in prepared:
                 _save_extraction(connection, article)
                 quality.record_event(connection, article, article)
+                if not set(article.get("validationErrors") or []).intersection(
+                    {"publisher_identity_mismatch", "canonical_url_unresolved"}
+                ):
+                    article_repo.update_verified_source(
+                        connection, article["id"], source=article.get("normalizedSource") or article.get("source") or "",
+                        source_domain=article.get("sourceDomain") or "",
+                        canonical_url=article.get("canonicalUrl") or article.get("resolvedUrl") or "",
+                    )
             publisher_stats = quality.publisher_statistics(connection, config)
         quarantine = {
             item["publisherId"] for item in publisher_stats if item["status"] in {"quarantine", "disabled"}
@@ -390,6 +441,29 @@ def generate(
         if (article.get("publisherId") or article.get("source")) in quarantine:
             article["analysisEligible"] = False
             article["failureReason"] = "publisher_quarantined"
+
+    invalid_selected = []
+    for article in prepared:
+        if article["analysisEligible"]:
+            continue
+        validation_errors = article.get("validationErrors") or []
+        errors = serialize_errors(validation_errors) if validation_errors else [{
+            "code": "ARTICLE_ANALYSIS_INELIGIBLE", "status": "analysis_ineligible",
+            "message": "기사 근거가 현재 분석 정책을 통과하지 못했습니다.",
+        }]
+        invalid_selected.append({
+            "articleId": article["id"], "title": article.get("title") or "",
+            "issueId": article.get("issueId") or None,
+            "source": article.get("source") or "", "url": article.get("url") or "",
+            "errors": errors,
+            "availableActions": ["관련기사 선택", "본문 다시 추출", "원문 확인"],
+        })
+    if invalid_selected:
+        raise GenerationError(
+            "SELECTED_EVIDENCE_INVALID",
+            f"선택한 기사 중 근거 상태를 확인해야 하는 기사가 {len(invalid_selected)}건 있습니다.",
+            invalid_selected,
+        )
 
     included: list[dict] = []
     excluded: list[dict] = []

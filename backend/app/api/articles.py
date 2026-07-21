@@ -64,7 +64,7 @@ async def reextract_one_article(article_id: str) -> Any:
         if row is None:
             return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
         observation = connection.execute(
-            "SELECT raw_url FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
+            "SELECT raw_url, raw_source, provider FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
             (article_id,),
         ).fetchone()
         article = {
@@ -74,6 +74,9 @@ async def reextract_one_article(article_id: str) -> Any:
             "bodyText": row["body_text"] or "", "bodyStatus": row["body_status"] or "missing",
             "publisherId": row["publisher_id"],
             "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
+            "canonicalUrl": row["canonical_url"] or "", "sourceDomain": row["source_domain"] or "",
+            "rawSource": (observation["raw_source"] if observation else None) or row["source"] or "",
+            "provider": (observation["provider"] if observation else None) or "",
         }
         with connection:
             prepared = reextract_article(connection, article)
@@ -94,6 +97,14 @@ async def reextract_one_article(article_id: str) -> Any:
             "lastExtractedAt": now_iso(),
             "extractionMethod": prepared["extractionMethod"],
             "cleanedText": prepared["cleanedText"],
+            "validationErrors": prepared["validationErrors"],
+            "source": prepared["normalizedSource"],
+            "rawSource": prepared["rawSource"],
+            "resolvedUrl": prepared["resolvedUrl"],
+            "canonicalUrl": prepared["canonicalUrl"],
+            "sourceDomain": prepared["sourceDomain"],
+            "pagePublisher": prepared["pagePublisher"],
+            "normalizationReason": prepared["normalizationReason"],
             "changedIssueIds": changed_issue_ids,
         }
     finally:

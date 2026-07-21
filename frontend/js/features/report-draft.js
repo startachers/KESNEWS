@@ -1,10 +1,10 @@
 import { $, state, flushDailyState } from "../state/store.js";
-import * as api from "../api/client.js";
+import * as api from "../api/client.js?v=20260721-1";
 import { downloadBlob } from "../utils/dom.js";
-import { friendlyError } from "../utils/strings.js";
+import { escapeAttr, escapeHtml, friendlyError, safeUrl } from "../utils/strings.js";
 import { openOverlay, closeOverlay } from "../ui/dialogs.js";
 import { showToast } from "../ui/notifications.js?v=20260716-1";
-import { flushArticleChanges, renderArticles } from "./articles.js?v=20260720-6";
+import { flushArticleChanges, focusRelatedEvidence, renderArticles } from "./articles.js?v=20260721-1";
 
 let currentSignature = "";
 let currentSourceType = "manual";
@@ -72,8 +72,51 @@ export async function downloadAnalysisMarkdown() {
     downloadBlob(markdown, `KESCO_AI분석자료_${state.date}.md`, "text/markdown;charset=utf-8");
     showToast("고성능 AI 분석용 Markdown을 저장했습니다.", "success");
   } catch (error) {
+    if (error.code === "SELECTED_EVIDENCE_INVALID") {
+      showEvidenceValidationFailure(error);
+      return;
+    }
     showToast(`Markdown 내보내기 실패: ${friendlyError(error)}`, "error");
   }
+}
+
+function showEvidenceValidationFailure(error) {
+  const articles = error.details?.failedArticles || [];
+  const list = $("evidenceFailureList");
+  $("evidenceFailureSummary").textContent = `선택한 기사 중 근거 상태를 확인해야 하는 기사가 ${articles.length}건 있습니다.`;
+  list.innerHTML = articles.map((article, index) => {
+    const messages = (article.errors || []).map(item => item.message).join(" · ") || "기사 근거를 확인해 주세요.";
+    const href = safeUrl(article.url);
+    return `<article class="evidence-failure-item" data-article-id="${escapeAttr(article.articleId)}" data-issue-id="${escapeAttr(article.issueId || "")}">
+      <strong>${index + 1}. ${escapeHtml(article.title)}</strong><p>${escapeHtml(messages)}</p>
+      <div class="evidence-failure-actions">${article.issueId ? '<button class="btn btn-primary" data-action="select-related" type="button">관련기사 선택</button>' : ""}<button class="btn" data-action="reextract" type="button">본문 다시 추출</button>${href ? `<a class="btn" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">원문 확인</a>` : ""}</div>
+    </article>`;
+  }).join("");
+  list.onclick = async event => {
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    const item = event.target.closest(".evidence-failure-item");
+    if (!action || !item) return;
+    if (action === "select-related") {
+      closeOverlay("evidenceFailureOverlay");
+      focusRelatedEvidence(item.dataset.issueId, item.dataset.articleId);
+      return;
+    }
+    if (action === "reextract") {
+      event.target.disabled = true;
+      try {
+        const result = await api.reextractArticle(item.dataset.articleId);
+        const issuesResult = await api.listIssues(state.date);
+        state.issues = issuesResult.data.issues || [];
+        renderArticles();
+        showToast(result.data.analysisEligible ? "본문 재추출 후 근거 검증을 통과했습니다." : "재추출했지만 다른 관련기사를 선택해야 합니다.", result.data.analysisEligible ? "success" : "");
+      } catch (reextractError) {
+        showToast(`본문 재추출 실패: ${friendlyError(reextractError)}`, "error");
+      } finally {
+        event.target.disabled = false;
+      }
+    }
+  };
+  openOverlay("evidenceFailureOverlay");
 }
 
 export async function openReportDraftEditor() {

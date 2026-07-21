@@ -34,7 +34,7 @@ def short_text(value: str | None, max_len: int = 100) -> str:
     return f"{text[: max_len - 1]}…" if len(text) > max_len else text
 
 
-CLEANING_RULE_VERSION = "article-clean-v2.1"
+CLEANING_RULE_VERSION = "article-clean-v2.2"
 
 _AI_SECTION_HEADING = re.compile(
     r"(?:핵심요약\s*쏙|쏙\s*AI\s*요약|AI\s*요약|기사\s*AI\s*해설|AI\s*해설|"
@@ -95,12 +95,17 @@ def clean_article_text(value: str | None, *, title: str = "") -> CleaningResult:
     ai_match = _AI_SECTION_HEADING.search(raw)
     tail_match = _TAIL_SECTION_HEADING.search(raw)
     cuts = [match.start() for match in (ai_match, tail_match) if match]
+    legal_match = _LEGAL.search(raw)
+    if legal_match:
+        cuts.append(legal_match.start())
     working = raw[: min(cuts)] if cuts else raw
     removed: list[str] = []
     if ai_match:
         removed.append("publisher_ai_section")
     if tail_match:
         removed.append("recommendation_section")
+    if legal_match:
+        removed.append("copyright_tail")
 
     paragraphs = _paragraphs(working)
     title_key = clean_text(title)

@@ -607,7 +607,8 @@ def _json_ids(value: str | None) -> list[str]:
 def _article_for_quality(connection: sqlite3.Connection, article_id: str) -> dict[str, Any] | None:
     row = connection.execute(
         """
-        SELECT a.*, ao.raw_url AS observation_url
+        SELECT a.*, ao.raw_url AS observation_url, ao.raw_source AS observation_source,
+               ao.provider AS observation_provider
         FROM articles a
         LEFT JOIN article_observations ao ON ao.id = (
             SELECT id FROM article_observations
@@ -627,6 +628,9 @@ def _article_for_quality(connection: sqlite3.Connection, article_id: str) -> dic
         "bodyFetchedAt": row["body_fetched_at"], "bodyError": row["body_error"] or "",
         "publisherId": row["publisher_id"],
         "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
+        "canonicalUrl": row["canonical_url"] or "", "sourceDomain": row["source_domain"] or "",
+        "rawSource": row["observation_source"] or row["source"] or "",
+        "provider": row["observation_provider"] or "",
     }
 
 
@@ -684,6 +688,12 @@ def list_evidence_articles(connection: sqlite3.Connection, issue_id: str) -> dic
             "articleId": article_id,
             "title": article["title"],
             "source": article["source"],
+            "rawSource": quality.get("rawSource") or article.get("rawSource") or article["source"],
+            "normalizedSource": quality.get("normalizedSource") or article["source"],
+            "sourceDomain": quality.get("sourceDomain") or article.get("sourceDomain") or "",
+            "canonicalUrl": quality.get("canonicalUrl") or article.get("url") or "",
+            "pagePublisher": quality.get("pagePublisher") or "",
+            "normalizationReason": quality.get("normalizationReason") or "",
             "url": article["url"],
             "publishedAt": article["pubDate"],
             "role": role,

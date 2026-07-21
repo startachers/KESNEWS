@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from backend.app.api.envelope import error_response, ok_envelope
 from backend.app.core.clock import now_iso
 from backend.app.repositories import ai_run_repository as ai_runs_repo
+from backend.app.repositories import ai_selection_repository as ai_selection_runs_repo
 from backend.app.repositories import article_repository as articles_repo
 from backend.app.repositories import briefing_repository as briefings_repo
 from backend.app.repositories import issue_repository as issues_repo
@@ -184,22 +185,55 @@ async def cancel_analysis(report_date: str) -> Any:
         briefing = briefings_repo.get_by_date(connection, report_date)
         if briefing is None:
             return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
-        run_id = analysis_registry.cancel_for_briefing(briefing["id"], "user")
-        if run_id is None:
-            running = ai_runs_repo.latest_running(connection)
-            if running is not None and running["briefing_id"] == briefing["id"]:
+        briefing_id = briefing["id"]
+    finally:
+        connection.close()
+
+    run_id = analysis_registry.cancel_for_briefing(briefing_id, "user")
+    if run_id is not None:
+        deadline = time.monotonic() + 10
+        while analysis_registry.active_run_id() == run_id and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        cleanup_complete = analysis_registry.active_run_id() != run_id
+        return ok_envelope(
+            {
+                "runId": run_id,
+                "cancelRequested": True,
+                "cleanupComplete": cleanup_complete,
+            }
+        )
+
+    connection = get_connection()
+    try:
+        running = ai_runs_repo.latest_running(connection)
+        if running is not None and running["briefing_id"] == briefing_id:
+            with connection:
+                ai_runs_repo.finish_failed(
+                    connection,
+                    running["id"],
+                    "AI_INTERRUPTED: 실행 프로세스가 없어 중단 처리했습니다.",
+                )
+            run_id = running["id"]
+        else:
+            selection_running = ai_selection_runs_repo.latest_running(connection)
+            if (
+                selection_running is not None
+                and selection_running["briefing_id"] == briefing_id
+            ):
                 with connection:
-                    ai_runs_repo.finish_failed(
+                    ai_selection_runs_repo.finish_failed(
                         connection,
-                        running["id"],
+                        selection_running["id"],
                         "AI_INTERRUPTED: 실행 프로세스가 없어 중단 처리했습니다.",
                     )
-                run_id = running["id"]
+                run_id = selection_running["id"]
             else:
                 return error_response("AI_CANCELLED", "현재 취소할 AI 분석이 없습니다.")
     finally:
         connection.close()
-    return ok_envelope({"runId": run_id, "cancelRequested": True})
+    return ok_envelope(
+        {"runId": run_id, "cancelRequested": True, "cleanupComplete": True}
+    )
 
 
 @router.post("/api/briefings/{report_date}/analyze")

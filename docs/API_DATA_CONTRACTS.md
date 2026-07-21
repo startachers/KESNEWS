@@ -307,11 +307,16 @@ POST  /api/issues/{issue_id}/articles/reextract
 
 - 품질 조회는 최신 `article_extractions` 이력의 추출 상태, 결정론적 품질 점수·등급,
   정제 전후 길이, 완전 문장 수, 오염 플래그, 추출 방식·시각과 정제 본문을 반환한다.
-- 품질 점수는 비교·정렬용 지표다. 최소 본문 길이, 문장 완결성, 출처·시각 및 언론사 허용
-  조건을 통과한 정제 본문을 점수만으로 분석 제외하지 않으며, 제거 완료된 페이지 부가 콘텐츠와
-  언론사 AI 부가 섹션은 사유로 표시하되 정제 본문의 충실도 점수를 감점하지 않는다.
-- 정제 본문 끝에 페이지 조각이 남아도 완결 문장이 2개 이상이면 `문장 종료 불완전`을 품질
-  사유로만 표시하고 분석 근거 자격은 유지한다.
+- 품질 점수는 비교·정렬용 지표다. 점수 계산 전에 `body_truncated`, `body_contaminated`,
+  `body_unavailable`, `publisher_identity_mismatch`, `canonical_url_unresolved`,
+  `ai_generated_content_remains` 절대 오류를 검사한다. 하나라도 있으면 점수와 관계없이
+  `analysisEligible=false`, `qualityGrade=unavailable`이며 대표기사로 지정할 수 없다.
+- 추천·랭킹·언론사 AI·저작권 이후 구간을 결정론적 정제기가 완전히 제거한 경우에는 통과한다.
+  정제 후에도 해당 콘텐츠가 남거나, 완결 문장이 앞에 있더라도 마지막 문장이 잘렸으면 절대
+  오류로 차단한다.
+- 발행사는 페이지 JSON-LD `publisher.name`, `og:site_name`, canonical 도메인, resolved 도메인,
+  신뢰 도메인 매핑, `raw_source` 순으로 결정한다. provider는 발행사로 사용하지 않는다.
+  원래 `raw_source`와 정규화 사유는 `article_extractions`에 보존한다.
 - evidence PATCH는 `expectedRevision`과 대표기사 최대 1건, 보조근거 최대 2건,
   분석 제외 기사 목록을 받는다. 현재 유효 membership에 없는 ID는 거부한다.
 - 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 군집과
@@ -322,9 +327,12 @@ POST  /api/issues/{issue_id}/articles/reextract
   `manual_supplemental_article_ids_json`, `manual_excluded_article_ids_json`을 보존한다.
   수동 대표 ID가 현재 membership에서 사라지면 자동 대표를 임시 표시하되
   `manualRepresentativeMissing=true`로 손실을 알린다.
-- AI 분석용 MD는 선정된 군집의 확정 대표와 수동 보조근거만 포함한다. 일반 관련기사,
-  분석 제외 및 부적격 기사는 제외한다. `required` 이슈에 대표 근거가 없으면
-  `REQUIRED_ARTICLE_EVIDENCE_MISSING`으로 생성을 중단한다.
+- AI 분석용 MD는 선정된 군집의 확정 대표와 수동 보조근거만 포함한다. 생성 직전에 선택 근거
+  전체의 출처·canonical/resolved URL·본문 완전성·오염·AI 잔존을 다시 검사한다. 한 건이라도
+  절대 오류가 있으면 정상 기사도 부분 출력하지 않고 `SELECTED_EVIDENCE_INVALID`(422)로 전체
+  생성을 중단한다. 응답의 `failedArticles[]`는 `articleId`, `title`, `issueId`, `errors[]`와
+  재선택·재추출·원문 확인 작업을 제공한다. 서버는 다른 기사를 자동 선택·대체하지 않으며 기존
+  담당자 선택 상태도 해제하지 않는다.
 - 단건 재추출은 원 기사 원문을 삭제하지 않고 새 `article_extractions` 이력을 추가한다.
   성공 후 자동 대표 후보만 다시 계산하며 수동 역할은 조용히 해제하지 않는다.
 - 이슈 전체 재추출은 현재 유효 membership의 모든 기사를 동시에 추출·평가한다. 기사별 결과는
@@ -703,6 +711,7 @@ floor·cap은 4.2절을 따른다.
 - `POST /api/briefings/{date}/analysis/cancel`은 해당 보고일의 실행을 실제 Ollama 연결까지 중단한다.
 - 브라우저 연결이 끊기거나 경영메시지 총 실행시간 20분을 넘으면 분석을 중단한다.
 - 기사 추천 총 실행시간은 31B의 60건 후보·64K context 실행을 허용하도록 20분으로 제한한다.
+- 기사 추천의 브라우저 대기 제한은 11분이다. 브라우저 제한시간을 넘기면 취소 API를 호출하고 서버의 Ollama 연결 종료와 실행 잠금 해제를 확인한 뒤 재실행을 허용한다.
 - 취소·시간초과·앱 재시작은 `ai_runs`를 `failed`로 끝내며 마지막 정상 결과와 담당자 수정본을 보존한다.
 - 경영메시지와 기사 추천의 기본 선택 모델은 `gemma4:31b`다. 설치 모델 목록에 31B가 있으면
   `/api/health.defaultModel`도 31B를 우선 반환한다.

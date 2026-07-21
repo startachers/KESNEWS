@@ -41,19 +41,35 @@ export async function openAutoSelectionProposal() {
     showToast("이미 브리핑 기사가 12건 이상 선정되어 있습니다.", "error");
     return;
   }
+  const reportDate = state.date;
+  const expectedRevision = state.revision;
+  const model = settings.aiModel || "gemma4:31b";
   setBusy(true);
   try {
     const result = await api.recommendBriefingArticles(
-      state.date,
-      state.revision,
-      settings.aiModel || "gemma4:31b",
+      reportDate,
+      expectedRevision,
+      model,
     );
     recommendationRun = result.data.run;
     renderRecommendations(recommendationRun);
     els.autoSelectionOverlay.classList.add("open");
     showToast("Gemma 추천 결과를 만들었습니다. 적용 전 내용을 확인해 주세요.", "success");
   } catch (error) {
-    showToast(`기사 추천 실패: ${friendlyError(error)}`, "error");
+    if (error?.name === "AbortError") {
+      try {
+        await api.cancelBriefingAnalysis(reportDate);
+        showToast("기사 추천 시간이 초과되어 서버 작업을 중단했습니다. 다시 실행할 수 있습니다.", "error");
+      } catch (cancelError) {
+        if (cancelError?.code === "AI_CANCELLED") {
+          showToast("기사 추천 시간이 초과됐습니다. 실행 작업은 이미 종료됐습니다.", "error");
+        } else {
+          showToast(`기사 추천 시간초과 후 작업 중단 실패: ${friendlyError(cancelError)}`, "error");
+        }
+      }
+    } else {
+      showToast(`기사 추천 실패: ${friendlyError(error)}`, "error");
+    }
   } finally {
     setBusy(false);
   }

@@ -1,6 +1,6 @@
 {
   "version": "analysis-md-v2",
-  "cleaning_rule_version": "article-clean-v2.1",
+  "cleaning_rule_version": "article-clean-v2.2",
   "minimum_full_text_characters": 500,
   "minimum_rss_summary_characters": 120,
   "official_document_minimum_characters": 180,

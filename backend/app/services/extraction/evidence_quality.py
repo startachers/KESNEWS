@@ -10,6 +10,7 @@ from backend.app.services.analysis_markdown.config import load_config
 from backend.app.services.analysis_markdown.eligibility import evaluate
 from backend.app.services.analysis_markdown.quality import publisher_statistics
 from backend.app.services.extraction.cleaner import CleaningResult, clean_article_text
+from backend.app.services.extraction.evidence_validation import body_errors
 
 _SENTENCE_END = re.compile(r"(?:[.!?]|(?:다|요|임|됨|함))(?:(?:[\"'’”)]*)\s|$)")
 _OFFICIAL_DOMAINS = (
@@ -81,28 +82,37 @@ def assess(
         score = min(score, 59)
         reasons.append("신뢰 언론사 허용목록 제외")
     score = max(0, min(100, score))
+    absolute_errors = list(dict.fromkeys([
+        *body_errors(text, status=status),
+        *(article.get("sourceValidationErrors") or []),
+    ]))
     grade = "excellent" if score >= 90 else "good" if score >= 75 else "limited" if score >= 60 else "unavailable"
     base = evaluate(cleaning, status=status, url=article.get("url") or "", config=config)
     eligible = bool(
         base.eligible
-        and (not incomplete or sentences >= 2)
+        and not absolute_errors
         and article.get("source")
         and (article.get("pubDate") or article.get("publishedAt"))
         and article.get("publisherAllowed") is not False
     )
     if not eligible and base.reason and base.reason not in reasons:
         reasons.append(base.reason)
+    if absolute_errors:
+        grade = "unavailable"
+        score = min(score, 59)
     return {
         "extractionStatus": status,
         "contentQualityScore": score,
         "qualityGrade": grade,
         "analysisEligible": eligible,
+        "representativeSelectable": eligible,
         "qualityReasons": list(dict.fromkeys(reasons)),
         "rawCharacterCount": len(article.get("rawText") or article.get("bodyText") or ""),
         "cleanedCharacterCount": len(text),
         "completeSentenceCount": sentences,
         "contaminationFlags": flags,
         "extractionMethod": method,
+        "validationErrors": absolute_errors,
     }
 
 
@@ -120,6 +130,7 @@ def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[
         "contentQualityScore": row["content_quality_score"] if "content_quality_score" in keys else None,
         "qualityGrade": row["quality_grade"] if "quality_grade" in keys else None,
         "analysisEligible": bool(row["analysis_eligible"]),
+        "representativeSelectable": bool(row["analysis_eligible"]),
         "qualityReasons": json.loads(row["quality_reasons_json"] or "[]") if "quality_reasons_json" in keys else ([row["failure_reason"]] if row["failure_reason"] else []),
         "rawCharacterCount": row["raw_character_count"],
         "cleanedCharacterCount": row["cleaned_character_count"],
@@ -128,6 +139,13 @@ def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[
         "lastExtractedAt": row["created_at"],
         "extractionMethod": (row["extraction_method"] if "extraction_method" in keys else None) or "legacy",
         "cleanedText": row["cleaned_text"] or "",
+        "canonicalUrl": row["canonical_url"] if "canonical_url" in keys else "",
+        "pagePublisher": row["page_publisher"] if "page_publisher" in keys else "",
+        "sourceDomain": row["source_domain"] if "source_domain" in keys else "",
+        "rawSource": row["raw_source"] if "raw_source" in keys else "",
+        "normalizedSource": row["normalized_source"] if "normalized_source" in keys else "",
+        "normalizationReason": row["normalization_reason"] if "normalization_reason" in keys else "",
+        "validationErrors": json.loads(row["validation_errors_json"] or "[]") if "validation_errors_json" in keys else [],
     }
 
 
@@ -138,7 +156,7 @@ def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any])
         # 정제 완료된 부가 콘텐츠 때문에 과거 점수가 낮았던 기사도 실제 정제 본문으로 판정한다.
         cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
         current = assess(
-            {**article, "rawText": latest.get("cleanedText") or ""}, cleaning,
+            {**article, "rawText": latest.get("cleanedText") or "", "sourceValidationErrors": latest.get("validationErrors") or []}, cleaning,
             status=latest["extractionStatus"], method=latest.get("extractionMethod") or "legacy",
         )
         current["rawCharacterCount"] = latest["rawCharacterCount"]
@@ -156,7 +174,7 @@ def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any])
     if latest:
         cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
         derived = assess(
-            {**article, "rawText": latest.get("cleanedText") or ""}, cleaning,
+            {**article, "rawText": latest.get("cleanedText") or "", "sourceValidationErrors": latest.get("validationErrors") or []}, cleaning,
             status=latest["extractionStatus"], method=latest.get("extractionMethod") or "legacy",
         )
         return _apply_publisher_status(connection, article, {**latest, **derived})
@@ -194,5 +212,6 @@ def _apply_publisher_status(
         "contentQualityScore": min(int(quality.get("contentQualityScore") or 0), 59),
         "qualityGrade": "unavailable",
         "analysisEligible": False,
+        "representativeSelectable": False,
         "qualityReasons": reasons,
     }

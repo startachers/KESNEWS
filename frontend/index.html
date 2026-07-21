@@ -477,9 +477,17 @@
     </div>
   </div>
 
+  <div class="overlay" id="evidenceFailureOverlay" role="dialog" aria-modal="true" aria-labelledby="evidenceFailureTitle">
+    <div class="modal evidence-failure-modal">
+      <div class="modal-header"><div><h2 id="evidenceFailureTitle">AI 분석자료를 생성할 수 없습니다</h2><p id="evidenceFailureSummary"></p></div><button class="close-btn" data-close="evidenceFailureOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body"><p class="evidence-failure-guide">각 이슈의 관련기사에서 정상 본문이 확보된 다른 기사를 선택한 뒤 다시 생성해 주세요. 오류 기사는 자동으로 교체하거나 조용히 제외하지 않습니다.</p><div id="evidenceFailureList" class="evidence-failure-list"></div></div>
+      <div class="modal-footer"><button class="btn" data-close="evidenceFailureOverlay">닫기</button></div>
+    </div>
+  </div>
+
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
   <script src="js/restart-guard.js?v=20260720-1"></script>
-  <script type="module" src="js/app.js?v=20260720-8"></script>
+  <script type="module" src="js/app.js?v=20260721-2"></script>
 </body>
 </html>

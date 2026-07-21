@@ -67,6 +67,19 @@ def test_google_news_parameter_parser_reads_current_data_attribute():
     assert parser.data_p == '%.@.[["en-US"],"TOKEN"]'
 
 
+def test_page_metadata_prefers_json_ld_publisher_and_reads_canonical():
+    html = '''
+    <html><head>
+      <link rel="canonical" href="https://www.joongang.co.kr/article/1">
+      <meta property="og:site_name" content="다른 표시값">
+      <script type="application/ld+json">{"@type":"NewsArticle","publisher":{"name":"중앙일보"}}</script>
+    </head></html>
+    '''
+    canonical, _ = article_body.extract_page_metadata(html, url="https://joongang.co.kr/a")
+    assert canonical == "https://www.joongang.co.kr/article/1"
+    assert article_body.extract_page_publisher(html, url="https://joongang.co.kr/a") == "중앙일보"
+
+
 def test_decode_html_recovers_cp949_when_header_claims_utf8():
     text = "에너지공기업 여름철 안전대책과 변압기 설비 점검"
     assert decode_html(text.encode("cp949"), "utf-8") == text

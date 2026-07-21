@@ -114,7 +114,7 @@ def test_issue_evidence_roles_quality_limits_and_revision_are_persisted():
         },
     )
     assert ineligible.status_code == 409
-    assert ineligible.json()["error"]["code"] == "ARTICLE_ANALYSIS_INELIGIBLE"
+    assert ineligible.json()["error"]["code"] == "ARTICLE_BODY_UNAVAILABLE"
 
     too_many = client.patch(
         f"/api/issues/{issue['id']}/evidence",
@@ -196,6 +196,10 @@ def test_reextract_updates_quality_and_enables_evidence_selection(monkeypatch):
     )
     assert selected.status_code == 200
     assert selected.json()["data"]["representativeArticleId"] == target
+    regenerated = markdown_service.generate(
+        get_connection, "2096-11-03", allow_network=False
+    ).content
+    assert f"기사 ID: `{target}`" in regenerated
 
 
 def test_reextract_all_issue_articles_runs_concurrently_and_scores_each_body(monkeypatch):

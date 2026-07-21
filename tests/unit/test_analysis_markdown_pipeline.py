@@ -6,6 +6,7 @@ from backend.app.services.analysis_markdown.quality import publisher_statistics
 from backend.app.services.analysis_markdown.replacement_finder import find_replacement
 from backend.app.services.extraction.cleaner import clean_article_text
 from backend.app.services.extraction.evidence_quality import assess
+from backend.app.services.extraction.evidence_validation import body_errors, validate_source
 
 
 CONFIG = {
@@ -19,7 +20,7 @@ CONFIG = {
         "minimum_attempts_for_quarantine": 10,
     },
     "disabled_publishers": [],
-    "cleaning_rule_version": "article-clean-v2.1",
+    "cleaning_rule_version": "article-clean-v2.2",
 }
 
 
@@ -96,7 +97,7 @@ def test_article_facts_remain_eligible_after_publisher_ai_section_is_removed():
     assert "언론사 AI 콘텐츠 감지" in result["qualityReasons"]
 
 
-def test_long_article_with_trailing_page_fragment_remains_eligible():
+def test_long_article_with_trailing_page_fragment_is_absolute_error():
     text = (
         "기상청은 집중호우 피해 현황과 대피 인원, 후속 안전조치 계획을 발표했다. " * 12
     ) + "인기 키워드 취재플러스"
@@ -114,7 +115,59 @@ def test_long_article_with_trailing_page_fragment_remains_eligible():
     )
     assert result["completeSentenceCount"] >= 2
     assert "문장 종료 불완전" in result["qualityReasons"]
-    assert result["analysisEligible"] is True
+    assert result["analysisEligible"] is False
+    assert result["qualityGrade"] == "unavailable"
+    assert "body_truncated" in result["validationErrors"]
+
+
+def test_truncated_body_patterns_override_a_high_quality_score():
+    base = "관계기관은 전기설비 안전점검 결과와 후속 계획을 발표했다. " * 15
+    for ending in ["다만 가정 돌봄이...", "후속 대책은 관계기관과 협의", '관계자는 “추가 조사 중이라고 말했다.']:
+        result = assess(
+            {"source": "KBS", "pubDate": "2026-07-20T12:01:00Z", "url": "https://news.kbs.co.kr/a", "rawText": base + ending},
+            clean_article_text(base + ending), status="success_full", method="stored_body", config=CONFIG,
+        )
+        assert result["analysisEligible"] is False
+        assert "body_truncated" in result["validationErrors"]
+        assert result["contentQualityScore"] <= 59
+
+
+def test_contamination_removed_cleanly_passes_but_residual_contamination_fails():
+    facts = "소방당국은 화재 피해와 조사 일정, 후속 안전조치 계획을 발표했다. " * 12
+    assert body_errors(clean_article_text(facts + " 추천기사 다른 사건 기사").text, status="success_full") == ()
+    residual = clean_article_text(facts + " 많이 본 기사 1. 다른 사건이 발생했다.")
+    assert "body_contaminated" in body_errors(residual.text, status="success_full")
+
+
+def test_source_normalization_and_publisher_conflict_use_page_and_url_evidence():
+    normalized = validate_source(
+        raw_source="KBS", displayed_source="KBS", source_url="https://joongang.co.kr/a",
+        resolved_url="https://joongang.co.kr/a", canonical_url="https://www.joongang.co.kr/a",
+        page_publisher="중앙일보",
+    )
+    assert normalized.source == "중앙일보"
+    assert normalized.raw_source == "KBS"
+    assert normalized.errors == ()
+    assert normalized.normalization_reason == "resolved_domain_and_page_publisher"
+
+    mismatch = validate_source(
+        raw_source="KBS", displayed_source="KBS", source_url="https://joongang.co.kr/a",
+        resolved_url="https://joongang.co.kr/a", canonical_url="https://joongang.co.kr/a",
+        page_publisher="KBS",
+    )
+    assert "publisher_identity_mismatch" in mismatch.errors
+
+    canonical_conflict = validate_source(
+        raw_source="KBS", displayed_source="KBS", source_url="https://news.kbs.co.kr/a",
+        resolved_url="https://news.kbs.co.kr/a", canonical_url="https://joongang.co.kr/a",
+    )
+    assert "publisher_identity_mismatch" in canonical_conflict.errors
+
+    google_unresolved = validate_source(
+        raw_source="중앙일보", displayed_source="중앙일보",
+        source_url="https://news.google.com/rss/articles/token",
+    )
+    assert "canonical_url_unresolved" in google_unresolved.errors
 
 
 def test_budget_stops_at_complete_sentence():
@@ -152,10 +205,10 @@ def test_publisher_quality_warning_and_quarantine_calculation():
         attempted_at TEXT, cleaning_rule_version TEXT)""")
     for index in range(10):
         connection.execute(
-            "INSERT INTO publisher_extraction_events VALUES (?, 'a', 'bad', '나쁜언론', 'failed', 0, 0, 0, 1, 'access_blocked', ?, 'article-clean-v2.1')",
+            "INSERT INTO publisher_extraction_events VALUES (?, 'a', 'bad', '나쁜언론', 'failed', 0, 0, 0, 1, 'access_blocked', ?, 'article-clean-v2.2')",
             (str(index), f"2026-07-{index + 1:02d}"),
         )
-    connection.execute("INSERT INTO publisher_extraction_events VALUES ('x', 'a', 'new', '신규언론', 'success_full', 1, 0, 0, 0, NULL, '2026-07-20', 'article-clean-v2.1')")
+    connection.execute("INSERT INTO publisher_extraction_events VALUES ('x', 'a', 'new', '신규언론', 'success_full', 1, 0, 0, 0, NULL, '2026-07-20', 'article-clean-v2.2')")
     stats = {item["publisherId"]: item for item in publisher_statistics(connection, CONFIG)}
     assert stats["bad"]["status"] == "quarantine"
     assert stats["new"]["status"] == "warning"

@@ -20,6 +20,7 @@ from backend.app.services.clustering.service import (
     input_signature,
 )
 from backend.app.services.analysis_markdown.service import reextract_articles
+from backend.app.services.extraction.evidence_validation import API_CODE_BY_ERROR, ERROR_MESSAGES
 
 router = APIRouter()
 
@@ -168,10 +169,17 @@ async def patch_issue_evidence(issue_id: str, request: IssueEvidencePatchRequest
                 "다른 화면에서 관련기사 근거 구성이 변경됐습니다.",
             )
         except PermissionError as exc:
+            article_id = str(exc.args[0]) if exc.args else ""
+            evidence = issues_repo.list_evidence_articles(connection, issue_id)
+            blocked = next(
+                (item for item in (evidence or {}).get("articles", []) if item["articleId"] == article_id),
+                {},
+            )
+            validation_error = next(iter(blocked.get("validationErrors") or []), "")
             return error_response(
-                "ARTICLE_ANALYSIS_INELIGIBLE",
-                "AI 분석 부적격 기사는 대표기사나 보조근거로 지정할 수 없습니다.",
-                {"articleId": str(exc)},
+                API_CODE_BY_ERROR.get(validation_error, "ARTICLE_ANALYSIS_INELIGIBLE"),
+                ERROR_MESSAGES.get(validation_error, "AI 분석 부적격 기사는 대표기사나 보조근거로 지정할 수 없습니다."),
+                {"articleId": article_id, "validationError": validation_error},
             )
         except ValueError as exc:
             if str(exc) == "supplemental_limit":

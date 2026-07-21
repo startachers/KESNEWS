@@ -65,6 +65,7 @@ EXPECTED_MIGRATIONS = [
     "0024_publisher_quality_rule_version.sql",
     "0025_analysis_markdown_manifest.sql",
     "0026_issue_evidence_quality.sql",
+    "0027_selected_evidence_validation.sql",
 ]
 
 
@@ -505,6 +506,19 @@ def test_kesco_press_origin_migration_keeps_source_lineage_separate(tmp_path):
         connection.close()
 
 
+def test_selected_evidence_validation_migration_preserves_source_lineage(tmp_path):
+    connection = get_connection(tmp_path / "selected-evidence.db")
+    try:
+        apply_migrations(connection)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(article_extractions)")}
+        assert {
+            "canonical_url", "page_publisher", "source_domain", "raw_source",
+            "normalized_source", "normalization_reason", "validation_errors_json",
+        }.issubset(columns)
+    finally:
+        connection.close()
+
+
 def test_init_db_backfills_phase4_assessment(tmp_path):
     db_path = tmp_path / "upgrade.db"
     connection = get_connection(db_path)
@@ -571,6 +585,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
             "0024_publisher_quality_rule_version.sql",
             "0025_analysis_markdown_manifest.sql",
             "0026_issue_evidence_quality.sql",
+            "0027_selected_evidence_validation.sql",
         ]
     upgraded = get_connection(db_path)
     try:

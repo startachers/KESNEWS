@@ -204,6 +204,22 @@ def update_article_body(
     )
 
 
+def update_verified_source(
+    connection: sqlite3.Connection,
+    article_id: str,
+    *,
+    source: str,
+    source_domain: str,
+    canonical_url: str,
+) -> None:
+    connection.execute(
+        """UPDATE articles
+           SET source = ?, source_domain = ?, canonical_url = COALESCE(NULLIF(?, ''), canonical_url),
+               updated_at = ? WHERE id = ?""",
+        (source, source_domain, canonical_url, now_iso(), article_id),
+    )
+
+
 def insert_observation(
     connection: sqlite3.Connection,
     *,
@@ -397,9 +413,9 @@ def list_candidate_article_ids(connection: sqlite3.Connection, report_date: str)
 _CANDIDATE_UNION_SQL = f"""
 WITH candidate_ids AS ({CANDIDATE_IDS_SQL}),
 latest_observation AS (
-    SELECT article_id, raw_url, provider
+    SELECT article_id, raw_url, raw_source, provider
     FROM (
-        SELECT article_id, raw_url, provider,
+        SELECT article_id, raw_url, raw_source, provider,
                ROW_NUMBER() OVER (PARTITION BY article_id ORDER BY observed_at DESC) AS rn
         FROM article_observations
     )
@@ -416,6 +432,8 @@ SELECT
     a.content_key AS content_key,
     a.title AS title,
     a.source AS source,
+    a.canonical_url AS canonical_url,
+    a.source_domain AS source_domain,
     a.published_at AS published_at,
     a.first_observed_at AS first_observed_at,
     a.description AS description,
@@ -428,6 +446,7 @@ SELECT
     a.publisher_id AS publisher_id,
     a.publisher_allowed AS publisher_allowed,
     lo.raw_url AS url,
+    lo.raw_source AS raw_source,
     lo.provider AS provider,
     aa.auto_risk AS auto_risk,
     aa.auto_risk_score AS auto_risk_score,
@@ -534,6 +553,9 @@ def list_candidates(
                 "contentKey": row["content_key"],
                 "title": row["title"],
                 "source": row["source"],
+                "rawSource": row["raw_source"] or row["source"] or "",
+                "canonicalUrl": row["canonical_url"] or "",
+                "sourceDomain": row["source_domain"] or "",
                 "url": row["url"] or "",
                 "pubDate": row["published_at"],
                 "firstObservedAt": row["first_observed_at"],
