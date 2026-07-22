@@ -78,6 +78,14 @@ def _create_selected_article(report_date: str) -> str:
     return article.json()["data"]["id"]
 
 
+def test_report_byline_marks_missing_author_without_hiding_the_field():
+    report = render_report(
+        {"reportDate": "2026-09-03", "version": 1, "briefing": {}, "articles": []}
+    )
+
+    assert '<div class="byline"><span>작성자</span><b>미지정</b></div>' in report
+
+
 def test_finalize_reopen_and_second_version_are_immutable():
     report_date = "2026-09-01"
     article_id = _create_selected_article(report_date)
@@ -141,6 +149,11 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert preview.status_code == 200
     assert preview.headers["cache-control"] == "no-store"
     assert "작업본 미리보기" in preview.text
+    assert '<strong class="report-date">2026. 09. 02 (수)</strong>' in preview.text
+    assert '<div class="byline"><span>작성자</span><b>홍보실</b></div>' in preview.text
+    assert ".byline{display:inline-flex;align-items:center;gap:7px" in preview.text
+    assert ".byline span{color:#7ed7ce;font-size:9.5px;font-weight:800" in preview.text
+    assert ".byline b{color:#f4f8fa;font-size:12px;font-weight:750" in preview.text
     assert "AI 분석 이후 선정 기사·메모·이슈 연결이 변경된 상태" not in preview.text
     assert "textarea" not in preview.text
     assert preview.text.count('<section class="report-page') == 2

@@ -765,8 +765,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .eyebrow{margin:0;color:#7ed7ce;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;font-weight:800}
     .masthead h1{margin:5px 0 0;font-size:28px;letter-spacing:-.035em}
     .masthead .subtitle{margin:4px 0 0;color:#c7d8df;font-size:11.5px}
-    .date{text-align:right}.date strong{display:block;font-size:19px;font-weight:800}
-    .date small{display:block;margin-top:6px;color:#c1d0db;font-size:12px}
+    .date{text-align:right}.date>.report-date{display:block;font-size:19px;font-weight:800}
+    .byline{display:inline-flex;align-items:center;gap:7px;margin-top:8px;padding:5px 9px;border:1px solid #ffffff38;border-radius:6px;background:#081a2b52;box-shadow:0 2px 8px #07182724}
+    .byline span{color:#7ed7ce;font-size:9.5px;font-weight:800;letter-spacing:.08em}.byline b{color:#f4f8fa;font-size:12px;font-weight:750;letter-spacing:-.01em}
     .status{display:inline-block;border-radius:999px;padding:4px 10px;font-size:10.5px;font-weight:800;margin-top:7px}
     .status.preview{background:#fff1d6;color:#8a5a10}.status.final{background:#e3f3f0;color:#086b63}
     .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:0;padding:0 52px;background:#dbe3e5;border-bottom:1px solid var(--line)}
@@ -829,7 +830,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <header class="masthead">
     <div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div>
     <div class="top"><div><p class="eyebrow">CEO MEDIA INTELLIGENCE</p><h1>일일 언론 동향 보고</h1><p class="subtitle">CEO 핵심 브리핑 · 관련 기사 별첨</p><span class="status {badge_class}">{_text(badge)}</span></div>
-    <div class="date"><strong>{_text(date_label)}</strong><small>{('작성 ' + _text(briefing.get('preparedBy'))) if briefing.get('preparedBy') else '작성자 미지정'}</small></div></div>
+    <div class="date"><strong class="report-date">{_text(date_label)}</strong><div class="byline"><span>작성자</span><b>{_text(briefing.get('preparedBy'), '미지정')}</b></div></div></div>
     </header>
     <div class="body">
     <section class="section"><h2>① 오늘 한줄</h2>{_render_lead(analysis.get('managementMessage'))}</section>
