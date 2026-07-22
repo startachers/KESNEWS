@@ -214,7 +214,7 @@ def test_post_deploy_grouped_article_top_tag_repair_promotes_tag_to_issue(tmp_pa
             INSERT INTO articles (
                 id, content_key, title, first_observed_at, last_observed_at,
                 created_at, updated_at
-            ) VALUES ('article-1', 'content-1', '군집 기사', ?, ?, ?, ?)
+            ) VALUES ('article-1', 'content-1', '그룹 기사', ?, ?, ?, ?)
             """,
             (now, now, now, now),
         )
@@ -239,7 +239,7 @@ def test_post_deploy_grouped_article_top_tag_repair_promotes_tag_to_issue(tmp_pa
             INSERT INTO issues (
                 id, representative_article_id, auto_title, spread_score,
                 direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
-            ) VALUES ('issue-1', 'article-1', '군집', 0, 0, 0, 'run-1', ?, ?)
+            ) VALUES ('issue-1', 'article-1', '그룹', 0, 0, 0, 'run-1', ?, ?)
             """,
             (now, now),
         )

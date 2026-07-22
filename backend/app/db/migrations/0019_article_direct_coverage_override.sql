@@ -1,4 +1,4 @@
--- 재군집화 전 단독 기사도 공사 직접 보도 자동 판정과 담당자 override를 보존한다.
+-- 재그룹화 전 단독 기사도 공사 직접 보도 자동 판정과 담당자 override를 보존한다.
 ALTER TABLE briefing_articles
 ADD COLUMN direct_coverage_override INTEGER
 CHECK (direct_coverage_override IS NULL OR direct_coverage_override IN (0, 1));

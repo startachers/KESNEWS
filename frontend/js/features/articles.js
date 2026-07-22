@@ -141,14 +141,14 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   if (isKescoPressIssue(issue)) badges.unshift('<span class="badge badge-press-origin">공사 보도자료 확산</span>');
   if (a.included) badges.push('<span class="badge badge-selected">브리핑 선정</span>');
   if (issue) {
-    badges.unshift(`<span class="badge badge-same-issue">군집 검토 <span class="review-stars">${starsText(issue.effectiveReviewStars)}</span> · ${issue.autoReviewRank || "-"}위</span>`);
+    badges.unshift(`<span class="badge badge-same-issue">그룹 검토 <span class="review-stars">${starsText(issue.effectiveReviewStars)}</span> · ${issue.autoReviewRank || "-"}위</span>`);
   }
   if (a.topIssue && !issue) badges.push('<span class="badge badge-top-issue">Top 이슈</span>');
   if (a.manual) badges.push('<span class="badge badge-manual">직접 추가</span>');
   if (a.isDemo) badges.push('<span class="badge badge-watch">샘플</span>');
   if (a.stale) badges.push('<span class="badge badge-watch" title="이전 수집 실패로 최신 상태를 확인하지 못했습니다">최신 미확인</span>');
   const topIssueButton = issue
-    ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="${issue.directCoverage ? "공사 직접 보도는 Top Issues에 선정할 수 없습니다" : "군집을 Top 이슈로 태그"}" aria-label="군집 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" || issue.directCoverage ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
+    ? `<button class="article-top-toggle media-top-toggle ${issue.selected ? "active" : ""}" data-action="top-issue" title="${issue.directCoverage ? "공사 직접 보도는 Top Issues에 선정할 수 없습니다" : "그룹을 Top 이슈로 태그"}" aria-label="그룹 Top 이슈 태그" aria-pressed="${String(!!issue.selected)}" ${state.status === "final" || issue.directCoverage ? "disabled" : ""}>${issue.selected ? "✓ TOP" : "+ TOP"}</button>`
     : `<button class="article-top-toggle ${a.topIssue ? "active" : ""}" data-action="article-top-issue" title="${a.directCoverage ? "공사 직접 보도는 Top Issues에 선정할 수 없습니다" : "개별 기사를 Top 이슈로 태그"}" aria-label="Top 이슈 태그" aria-pressed="${String(!!a.topIssue)}" ${state.status === "final" || a.directCoverage ? "disabled" : ""}>${a.topIssue ? "✓ TOP" : "+ TOP"}</button>`;
   const directCoverageButton = issue
     ? `<button class="article-direct-toggle ${issue.directCoverage ? "active" : ""}" data-action="direct-coverage" title="${issue.editorDirectCoverage == null ? "자동 판정 · 클릭하여 수동 해제" : "담당자 판정 · 클릭하여 전환"}" aria-label="공사 직접 보도 태그" aria-pressed="${String(!!issue.directCoverage)}" ${state.status === "final" ? "disabled" : ""}>${issue.directCoverage ? "공사보도 ✓" : "+ 공사보도"}</button>`
@@ -181,7 +181,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     ${issue.manualRepresentativeMissing ? '<div class="representative-missing"><strong>수동 대표기사 확인 필요</strong><span>기존 수동 대표기사를 현재 이슈에서 찾을 수 없습니다.</span></div>' : ""}
     <ul class="related-article-list">${orderedRelatedMembers.map(member => renderRelatedArticle(member.article, issue)).join("")}</ul>
   </details>` : "";
-  const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="군집 검토별점" ${state.status === "final" ? "disabled" : ""}>
+  const reviewControl = issue ? `<select class="review-star-select" data-action="review-stars" data-issue-id="${escapeAttr(issue.id)}" aria-label="그룹 검토별점" ${state.status === "final" ? "disabled" : ""}>
     <option value="auto" ${issue.editorReviewStars == null ? "selected" : ""}>자동 ${starsText(issue.autoReviewStars)}</option>
     ${[5,4,3,2,1].map(stars => `<option value="${stars}" ${issue.editorReviewStars === stars ? "selected" : ""}>${starsText(stars)}</option>`).join("")}
   </select>` : "";
@@ -678,7 +678,7 @@ export function handleArticleClick(e) {
   }
   if (action === "article-top-issue") {
     if (!article.topIssue && topIssueTagCount() >= MAX_TOP_ISSUES) {
-      showToast(`Top Issues는 군집과 개별 기사를 합쳐 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
+      showToast(`Top Issues는 그룹과 개별 기사를 합쳐 최대 ${MAX_TOP_ISSUES}개까지 태그할 수 있습니다.`, "error");
       return;
     }
     toggleArticleTopIssue(article);

@@ -70,7 +70,7 @@ export function renderTopIssues() {
 
   els.topIssues.innerHTML = Array.from({ length: MAX_TOP_ISSUES }, (_, index) => {
     const tagged = top[index];
-    if (!tagged) return `<div class="issue-card empty"><div>ISSUE ${String(index + 1).padStart(2, "0")}</div><strong>Media Coverage에서 군집 또는 기사를 태그하세요</strong></div>`;
+    if (!tagged) return `<div class="issue-card empty"><div>ISSUE ${String(index + 1).padStart(2, "0")}</div><strong>Media Coverage에서 그룹 또는 기사를 태그하세요</strong></div>`;
     if (tagged.kind === "article") {
       const article = tagged.item;
       const context = article.note || sourceAndTime(article.source, article.pubDate);

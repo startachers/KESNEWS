@@ -18,9 +18,9 @@
 - `legacy/kesco_media_briefing_original.html`은 회귀 비교 기준이다. 수정하지 않는다.
 - 한 작업에서 리팩터링과 신규 기능을 동시에 수행하지 않는다.
 - 현재 단계의 요구사항에 없는 프레임워크·클라우드·Docker·로그인·다중 사용자 기능을 추가하지 않는다.
-- 프런트엔드는 화면 표시와 사용자 입력만 담당한다. 수집, 중복 제거, 분류, 이슈 군집화, AI 분석, 영속 저장은 백엔드에 둔다.
+- 프런트엔드는 화면 표시와 사용자 입력만 담당한다. 수집, 중복 제거, 분류, 이슈 그룹화, AI 분석, 영속 저장은 백엔드에 둔다.
 - 기사 원본, provider observation, 기사 평가, 브리핑 선정 상태를 같은 데이터로 덮어쓰지 않는다.
-- 담당자 수동 수정과 수동 등급은 이후 자동 수집·재분석·재군집화로 덮어쓰지 않는다.
+- 담당자 수동 수정과 수동 등급은 이후 자동 수집·재분석·재그룹화로 덮어쓰지 않는다.
 - AI 결과를 자동 확정하지 않는다. 근거 기사 ID가 없는 판단은 최종 보고에 반영하지 않는다.
 - 오류를 성공처럼 숨기지 않는다. 마지막 정상 데이터와 현재 오류 상태를 함께 표시한다.
 - 신규 운영 의존성은 필요성, 대안, 영향 범위를 먼저 설명한 뒤 추가한다.
@@ -37,7 +37,7 @@
 - provider 일부 실패 시 기존 후보를 제거하지 않고 stale 상태로 보존한다.
 - 관련도 점수만으로 `required`를 만들지 않는다. 점수식과 floor·cap은 계약 문서를 따른다.
 - AI의 managementMessage, situationSummary, keyIssues, decisionPoints, actionItems, riskOutlook에 유효한 `articleIds`를 강제한다.
-- 재군집화는 proposal/apply 두 단계이며 `editor_*`와 membership override를 덮어쓰지 않는다.
+- 재그룹화는 proposal/apply 두 단계이며 `editor_*`와 membership override를 덮어쓰지 않는다.
 - JSON은 정식 백업이다. CSV는 완전 복원을 보장하지 않는다.
 
 ## Phase 1 특별 원칙

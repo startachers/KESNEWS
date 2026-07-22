@@ -90,6 +90,9 @@ def test_finalize_reopen_and_second_version_are_immutable():
     report_date = "2026-09-01"
     article_id = _create_selected_article(report_date)
     before = client.get(f"/api/briefings/{report_date}").json()["data"]
+    before_articles = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"]
 
     first = client.post(
         f"/api/briefings/{report_date}/finalize",
@@ -120,6 +123,17 @@ def test_finalize_reopen_and_second_version_are_immutable():
     assert reopened.status_code == 200
     reopened_data = reopened.json()["data"]
     assert reopened_data["status"] == "draft"
+    assert reopened_data["preparedBy"] == before["preparedBy"] == "홍보실"
+    assert reopened_data["actionNote"] == before["actionNote"] == "1차 지시"
+    assert reopened_data["latestFinalVersion"] == 1
+
+    restored_articles = client.get(
+        "/api/articles", params={"report_date": report_date}
+    ).json()["data"]["articles"]
+    assert [item["id"] for item in restored_articles] == [
+        item["id"] for item in before_articles
+    ]
+    assert restored_articles[0]["included"] == before_articles[0]["included"]
 
     changed = client.put(
         f"/api/briefings/{report_date}",

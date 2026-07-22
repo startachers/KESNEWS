@@ -296,7 +296,7 @@ async def get_cluster_run(cluster_run_id: str) -> Any:
     finally:
         connection.close()
     if row is None:
-        return error_response("CLUSTER_RUN_NOT_FOUND", "군집 실행을 찾을 수 없습니다.")
+        return error_response("CLUSTER_RUN_NOT_FOUND", "그룹 실행을 찾을 수 없습니다.")
     return ok_envelope(runs_repo.serialize(row))
 
 
@@ -306,16 +306,16 @@ async def apply_cluster_run(cluster_run_id: str) -> Any:
     try:
         run = runs_repo.get(connection, cluster_run_id)
         if run is None:
-            return error_response("CLUSTER_RUN_NOT_FOUND", "군집 실행을 찾을 수 없습니다.")
+            return error_response("CLUSTER_RUN_NOT_FOUND", "그룹 실행을 찾을 수 없습니다.")
         if run["status"] == "applied":
             return ok_envelope(runs_repo.serialize(run))
         briefing = briefings_repo.get_by_date(connection, run["report_date"])
         if briefing is not None and briefing["status"] == "final":
-            return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본에는 재군집화를 적용할 수 없습니다.")
+            return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본에는 그룹 변경을 적용할 수 없습니다.")
         articles = issues_repo.clustering_input(connection, run["report_date"])
         if input_signature(articles) != run["input_signature"]:
             return error_response(
-                "CLUSTER_RUN_STALE", "proposal 생성 후 기사 후보가 변경됐습니다. 다시 군집화해 주세요."
+                "CLUSTER_RUN_STALE", "proposal 생성 후 기사 후보가 변경됐습니다. 다시 그룹화해 주세요."
             )
         serialized = runs_repo.serialize(run)
         with connection:

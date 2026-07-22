@@ -164,7 +164,7 @@ def reset_daily_work(
     )
     # issue 원본과 membership은 여러 보고일의 검토 기록에서 재사용될 수 있다. 오늘 실행만
     # 비활성화하고 briefing별 Top/메모/검토 연결은 위에서 제거한다. 기사 후보 연결이 제거되므로
-    # 오늘 화면에서는 이슈가 사라지고, 재수집 후 새 군집 실행이 다시 계산한다.
+    # 오늘 화면에서는 이슈가 사라지고, 재수집 후 새 그룹 실행이 다시 계산한다.
     connection.execute(
         "UPDATE cluster_runs SET status = 'reset', applied_at = NULL "
         "WHERE report_date = ? AND status != 'running'",
@@ -530,7 +530,7 @@ def _effective_direct_coverage_for_article(
 def normalize_direct_coverage(
     connection: sqlite3.Connection, report_date: str
 ) -> dict[str, int]:
-    """공사 직접 보도 군집을 일반 브리핑과 Top Issues에서 배타적으로 제거한다."""
+    """공사 직접 보도 그룹을 일반 브리핑과 Top Issues에서 배타적으로 제거한다."""
     briefing = get_by_date(connection, report_date)
     if briefing is None:
         return {"articlesDeselected": 0, "topIssuesCleared": 0}
@@ -1014,10 +1014,10 @@ def list_article_top_issue_ids(
 def list_canonical_issue_ids_for_article_top_tags(
     connection: sqlite3.Connection, report_date: str
 ) -> set[str]:
-    """기사 Top 태그를 화면에 표시할 단 하나의 유효 군집으로 매핑한다.
+    """기사 Top 태그를 화면에 표시할 단 하나의 유효 그룹으로 매핑한다.
 
-    재군집화 뒤 한 기사가 여러 군집 기록과 겹칠 수 있다. 기사 태그 하나를 모든
-    겹친 군집으로 확장하면 Top Issues 상한을 우회하고 화면 변경이 가려지므로,
+    재그룹화 뒤 한 기사가 여러 그룹 기록과 겹칠 수 있다. 기사 태그 하나를 모든
+    겹친 그룹으로 확장하면 Top Issues 상한을 우회하고 화면 변경이 가려지므로,
     patch 경로와 같은 canonical issue 선택 규칙을 사용한다.
     """
     issue_ids = {

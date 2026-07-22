@@ -309,7 +309,7 @@ def test_json_round_trip_preserves_standalone_direct_coverage_override():
             "title": "KESCO 단독 직접 보도",
             "source": "전기신문",
             "url": "https://example.com/exports/standalone-direct",
-            "description": "군집화 전 수동 해제 백업 테스트",
+            "description": "그룹화 전 수동 해제 백업 테스트",
             "category": "kesco_direct",
         },
     ).json()["data"]["id"]

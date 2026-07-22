@@ -1,4 +1,4 @@
--- 군집 단위 5단계 검토순위. 순위는 보고일 후보 집합에 상대적이므로 issues가 아니라
+-- 그룹 단위 5단계 검토순위. 순위는 보고일 후보 집합에 상대적이므로 issues가 아니라
 -- briefing_id + issue_id에 저장한다. editor_* 값은 자동 재계산으로 덮어쓰지 않는다.
 
 CREATE TABLE IF NOT EXISTS issue_review_assessments (

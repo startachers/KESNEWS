@@ -148,7 +148,7 @@ def _backfill_phase5_assessments(connection: sqlite3.Connection) -> None:
 
 
 def _backfill_issue_review_assessments(connection: sqlite3.Connection) -> None:
-    """migration 직후 기존 보고일 군집에 검토순위가 없을 때 한 번 계산한다."""
+    """migration 직후 기존 보고일 그룹에 검토순위가 없을 때 한 번 계산한다."""
     from backend.app.repositories import issue_repository as issue_repo
 
     rows = connection.execute(

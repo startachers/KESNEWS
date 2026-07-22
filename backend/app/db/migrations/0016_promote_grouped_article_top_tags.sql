@@ -1,4 +1,4 @@
--- 군집 구성 기사에 남아 화면에서 숨겨진 개별 Top 태그를 군집 Top 태그로 승격한다.
+-- 그룹 구성 기사에 남아 화면에서 숨겨진 개별 Top 태그를 그룹 Top 태그로 승격한다.
 WITH mapped AS (
     SELECT
         ba.briefing_id,

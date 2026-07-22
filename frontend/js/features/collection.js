@@ -72,11 +72,11 @@ export async function runSearch(auto = false) {
 
       if (state.articles.length) {
         if (clusteringError) {
-          setStatus("error", `${state.articles.length}건 수집 완료 · 15% 이슈 재군집화 실패`);
-          showToast(`기사는 저장했지만 이슈 재군집화를 완료하지 못했습니다: ${shortText(clusteringError, 100)}`, "error");
+          setStatus("error", `${state.articles.length}건 수집 완료 · 15% 이슈 그룹화 실패`);
+          showToast(`기사는 저장했지만 이슈 그룹화를 완료하지 못했습니다: ${shortText(clusteringError, 100)}`, "error");
           finishSearchProgress(true);
         } else {
-          setStatus("live", `${state.articles.length}건 정리 · 이슈 ${issueCount}개 자동 재군집화 완료`);
+          setStatus("live", `${state.articles.length}건 정리 · 이슈 ${issueCount}개 자동 그룹화 완료`);
           showToast(`${state.articles.length}건을 정리하고 15% 기준으로 이슈 ${issueCount}개를 묶었습니다.${state.warnings.length ? ` 일부 검색 ${state.warnings.length}건은 보조 처리했습니다.` : ""}`, state.warnings.length ? "" : "success");
           finishSearchProgress();
         }

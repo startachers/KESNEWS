@@ -3,7 +3,7 @@
 - 검증일: 2026-07-16 (Asia/Seoul)
 - 범위: 신뢰 언론사 허용목록, 공식자료 예외, Google `<source url>`,
   `source_filter_stats`, migration/API/화면
-- 범위 제외: 네이버 뉴스 API, P4-001 `/api/settings`, 분류·AI·군집화 리팩터링
+- 범위 제외: 네이버 뉴스 API, P4-001 `/api/settings`, 분류·AI·그룹화 리팩터링
 
 ## 구현 결과
 

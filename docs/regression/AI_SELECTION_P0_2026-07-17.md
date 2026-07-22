@@ -40,7 +40,7 @@ git diff --check
 `suspected + negligence`, 아산 화재는 `suspected + electrical`, BIFC 화재는
 `suspected + battery`, 공동주택 점검은 관련도 100으로 확인했다. 추천 통합 테스트는 최대치보다
 요청 수보다 적은 결과는 거부되며 명시적 apply 전 작업본 revision이 바뀌지 않음을 확인한다.
-동일 군집의 후속 보도는 대표기사 1건만 남고, 반도체 실적 종합기사 본문의 부수적인 UPS 배터리
+동일 그룹의 후속 보도는 대표기사 1건만 남고, 반도체 실적 종합기사 본문의 부수적인 UPS 배터리
 단락은 제목-핵심주제 정합성 gate에서 제외됨을 단위 테스트로 확인한다.
 
 ## 수동 회귀
@@ -56,8 +56,8 @@ git diff --check
 
 ## 의도적으로 제외한 후속 범위
 
-- 군집 검토별점의 절대 편집등급 재설계
-- 사건 군집 anchor 강화와 오군집 교정
+- 그룹 검토별점의 절대 편집등급 재설계
+- 사건 그룹 anchor 강화와 잘못된 그룹 교정
 - 날짜별 `briefing_topics` 계층 및 주제 단위 proposal/apply
 - Top Issues 화면의 주제 단위 전환
 

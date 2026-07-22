@@ -15,30 +15,25 @@ import { flushArticleChanges } from "./articles.js?v=20260721-3";
 
 const PREVIEW_PRESENTATION_PREFIX = "kesco-preview-presentation";
 
-function previewPresentationKey(date, revision) {
-  return `${PREVIEW_PRESENTATION_PREFIX}:${date}:${revision}`;
-}
-
-function loadPreviewPresentation(date, revision) {
-  const key = previewPresentationKey(date, revision);
+function restoreFinalPresentation(date, revision, snapshot) {
+  const articles = snapshot?.articles || [];
+  const articleSummaries = articles
+    .filter(article => article.reportSummary)
+    .map(article => ({ articleId: String(article.id), summary: article.reportSummary }));
+  const presentation = {
+    articleOrder: articles.map(article => String(article.id)),
+    articleSummaries,
+    articleSummarySourceRevision: articleSummaries.length ? revision : null,
+  };
   try {
-    const value = JSON.parse(localStorage.getItem(key) || "null");
-    if (!value || !Array.isArray(value.articleOrder) || !Array.isArray(value.articleSummaries)) {
-      return null;
-    }
-    return {
-      articleOrder: value.articleOrder,
-      articleSummaries: value.articleSummaries,
-      articleSummarySourceRevision: value.articleSummarySourceRevision ?? null,
-    };
+    localStorage.setItem(
+      `${PREVIEW_PRESENTATION_PREFIX}:${date}:${revision}`,
+      JSON.stringify(presentation),
+    );
+    return true;
   } catch {
-    localStorage.removeItem(key);
-    return null;
+    return false;
   }
-}
-
-function clearPreviewPresentation(date, revision) {
-  localStorage.removeItem(previewPresentationKey(date, revision));
 }
 
 /** 실제 검색 전 화면 시연용 샘플이다. 운영 데이터(articles/briefings)와 분리된 순수 프런트엔드 픽스처이며 서버에 저장되지 않는다. */
@@ -153,45 +148,27 @@ export async function openFinalReport() {
   }
 }
 
-export async function finalizeCurrentBriefing() {
-  if (state.demo) {
-    showToast("샘플 화면은 최종 확정할 수 없습니다.", "error");
-    return;
-  }
-  if (!window.confirm(`${state.date} 작업본을 최종 확정하시겠습니까? 확정 후에는 수정할 수 없습니다.`)) return;
-  const previewRevision = state.revision;
-  const previewPresentation = loadPreviewPresentation(state.date, previewRevision);
+export async function cancelFinalization() {
+  if (!window.confirm(`최종 확정 v${state.latestFinalVersion}을 취소하고 직전 작업본으로 돌아가시겠습니까? 확정 기록은 보존됩니다.`)) return;
   try {
-    await flushArticleChanges();
-    await flushDailyState();
-    if (previewPresentation && state.revision !== previewRevision) {
-      throw new Error("CEO 미리보기 이후 작업본이 변경됐습니다. 미리보기를 다시 열어 확인해 주세요.");
-    }
-    const result = await api.finalizeBriefing(
-      state.date,
-      state.revision,
-      previewPresentation || {},
-    );
-    clearPreviewPresentation(state.date, previewRevision);
-    setState(await loadDailyState(state.date));
-    renderAll();
-    showToast(`최종본 v${result.data.version}을 확정했습니다.`, "success");
-    setStatus("live", `최종 확정 v${result.data.version}`);
-  } catch (error) {
-    showToast(`최종 확정 실패: ${friendlyError(error)}`, "error");
-  }
-}
-
-export async function reopenCurrentBriefing() {
-  if (!window.confirm(`최종본 v${state.latestFinalVersion}을 보존하고 작업본 수정을 재개하시겠습니까?`)) return;
-  try {
+    const version = await api.getBriefingVersion(state.date, state.latestFinalVersion);
     await api.reopenBriefing(state.date, state.revision);
     setState(await loadDailyState(state.date));
+    const presentationRestored = restoreFinalPresentation(
+      state.date,
+      state.revision,
+      version.data?.snapshot,
+    );
     renderAll();
-    showToast("최종본을 보존한 채 작업본을 다시 열었습니다.", "success");
-    setStatus("idle", `수정 중 · 최종본 v${state.latestFinalVersion} 보존`);
+    showToast(
+      presentationRestored
+        ? "최종 확정을 취소하고 직전 CEO 미리보기 작업본으로 돌아왔습니다."
+        : "최종 확정은 취소했지만 미리보기 임시 상태는 복원하지 못했습니다.",
+      presentationRestored ? "success" : "error",
+    );
+    setStatus("idle", `확정 취소 · 최종 기록 v${state.latestFinalVersion} 보존`);
   } catch (error) {
-    showToast(`수정 재개 실패: ${friendlyError(error)}`, "error");
+    showToast(`확정 취소 실패: ${friendlyError(error)}`, "error");
   }
 }
 
@@ -205,7 +182,7 @@ export async function resetTodayWork() {
     return;
   }
   const confirmed = window.confirm(
-    "오늘 수집한 기사, 선정·메모·Top Issues, 군집, AI 분석과 추천, 요약을 모두 삭제합니다. 초기화 전 DB 백업은 자동 생성됩니다. 처음부터 다시 시작하시겠습니까?"
+    "오늘 수집한 기사, 선정·메모·Top Issues, 그룹, AI 분석과 추천, 요약을 모두 삭제합니다. 초기화 전 DB 백업은 자동 생성됩니다. 처음부터 다시 시작하시겠습니까?"
   );
   if (!confirmed) return;
   const button = document.getElementById("resetTodayBtn");

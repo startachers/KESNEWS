@@ -29,6 +29,6 @@ Codex 사전평가를 반영해 백엔드·DB 구현 전 계약을 확정했다.
 - 관련도·심각도·확산도 점수 및 우선도 임계값 명시
 - 예방·사고·감사 문맥 충돌 순서 명시
 - 모든 AI 주장 필드에 근거 기사 ID schema 적용
-- 재군집화 preview/apply와 editor override 보존 규칙 추가
+- 재그룹화 preview/apply와 editor override 보존 규칙 추가
 - 현행 HTML 위험 등록부와 Phase 0·1 수동 회귀 체크리스트 추가
 - JSON은 정식 백업, CSV는 손실형 교환 형식으로 구분

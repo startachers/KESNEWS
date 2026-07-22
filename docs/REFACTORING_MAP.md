@@ -180,9 +180,9 @@ riskOutlook        → { text, articleIds, isInference }
 
 `keyIssues`와 `actionItems`를 포함해 모든 주장 필드의 ID를 입력 evidence index와 대조한다. 검증 실패 결과는 화면 상태에 적용하지 않는다.
 
-## 10. 재군집화 이동 계약
+## 10. 재그룹화 이동 계약
 
-자동 군집과 담당자 편집을 다음처럼 분리한다.
+자동 그룹과 담당자 편집을 다음처럼 분리한다.
 
 ```text
 자동 제목·상태·우선도      issues.auto_*
@@ -191,7 +191,7 @@ riskOutlook        → { text, articleIds, isInference }
 담당자 추가·제외           issue_membership_overrides
 ```
 
-재군집화는 proposal을 만든 뒤 apply하며, editor 값과 수동 membership을 덮어쓰지 않는다.
+재그룹화는 proposal을 만든 뒤 apply하며, editor 값과 수동 membership을 덮어쓰지 않는다.
 
 ## 11. 현행 위험과 Phase 경계
 
@@ -201,5 +201,5 @@ riskOutlook        → { text, articleIds, isInference }
 - Phase 3: 부분 수집 실패와 provider observation 수정
 - Phase 4: 선택 해제·version·JSON/CSV 왕복 수정
 - Phase 5: 점수·임계값·예방/사고 충돌 수정
-- Phase 6: 재군집화 override 보호
+- Phase 6: 재그룹화 override 보호
 - Phase 7: AI 전체 근거 schema 검증

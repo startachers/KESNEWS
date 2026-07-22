@@ -38,11 +38,10 @@ export function renderHeader() {
   $("addArticleBtn").disabled = finalized;
   $("importBtn").disabled = finalized;
   $("resetTodayBtn").disabled = finalized || isSearching || state.date !== localDateKey();
-  els.finalizeBtn.hidden = finalized;
-  els.reopenBtn.hidden = !finalized;
+  els.cancelFinalizeBtn.hidden = !finalized;
   els.finalReportBtn.hidden = !state.latestFinalVersion;
   els.briefingState.textContent = finalized
-    ? `최종 확정 v${state.latestFinalVersion} · 수정하려면 작업본을 다시 여세요.`
+    ? `최종 확정 v${state.latestFinalVersion} · 확정을 취소하면 직전 작업본으로 돌아갑니다.`
     : state.latestFinalVersion
       ? `수정 중 · 최종본 v${state.latestFinalVersion}은 보존됩니다.`
       : "작성 중 · 아직 최종 확정되지 않았습니다.";

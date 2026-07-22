@@ -1,4 +1,4 @@
--- 관련기사 본문 품질과 담당자 확정 근거 역할을 자동 군집 결과와 분리해 보존한다.
+-- 관련기사 본문 품질과 담당자 확정 근거 역할을 자동 그룹 결과와 분리해 보존한다.
 
 ALTER TABLE article_extractions ADD COLUMN content_quality_score INTEGER;
 ALTER TABLE article_extractions ADD COLUMN quality_grade TEXT;

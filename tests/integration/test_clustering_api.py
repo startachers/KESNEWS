@@ -697,7 +697,7 @@ def test_article_top_tag_maps_to_only_one_overlapping_issue_and_can_be_cleared()
                     direct_mention, needs_review, last_cluster_run_id, created_at, updated_at
                 ) VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?)
                 """,
-                (issue_id, article_id, f"겹친 군집 {index}", run_id, now, now),
+                (issue_id, article_id, f"겹친 그룹 {index}", run_id, now, now),
             )
             connection.execute(
                 """

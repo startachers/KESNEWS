@@ -44,7 +44,7 @@ def find_replacement(
         similarity = len(shared) / max(1, len(union))
         first_date, second_date = _date(original.get("pubDate")), _date(candidate.get("pubDate"))
         close_date = bool(first_date and second_date and abs((first_date - second_date).total_seconds()) <= 3 * 86400)
-        # 담당자가 확정한 기존 군집을 최우선한다. 군집이 없을 때는 날짜와 핵심 명사
+        # 담당자가 확정한 기존 그룹을 최우선한다. 그룹이 없을 때는 날짜와 핵심 명사
         # 3개 이상 및 높은 제목 유사도를 모두 요구해 다른 사건 오인을 피한다.
         if shared_issues:
             score = 2.0 + similarity

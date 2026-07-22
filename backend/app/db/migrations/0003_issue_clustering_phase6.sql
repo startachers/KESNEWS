@@ -1,4 +1,4 @@
--- Phase 6: 자동 이슈 군집과 담당자 편집/구성 override를 분리한다.
+-- Phase 6: 자동 이슈 그룹과 담당자 편집/구성 override를 분리한다.
 
 CREATE TABLE IF NOT EXISTS cluster_runs (
     id TEXT PRIMARY KEY,

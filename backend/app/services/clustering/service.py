@@ -165,7 +165,7 @@ def _cluster_indexes(
     pair_threshold: float,
     minimum_cross_score: float,
 ) -> list[list[int]]:
-    """강한 연결 하나만으로 서로 다른 사건이 연쇄 병합되지 않도록 군집 간 점수도 확인한다."""
+    """강한 연결 하나만으로 서로 다른 사건이 연쇄 병합되지 않도록 그룹 간 점수도 확인한다."""
     groups = {index: [index] for index in range(article_count)}
     cross_stats = {pair: (score, 1, score) for pair, score in scores.items()}
     while True:

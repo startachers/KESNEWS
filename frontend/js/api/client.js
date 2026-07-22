@@ -71,6 +71,10 @@ export function listBriefingVersions(date) {
   return request(`/briefings/${date}/versions`);
 }
 
+export function getBriefingVersion(date, version) {
+  return request(`/briefings/${date}/versions/${version}`);
+}
+
 export function analyzeBriefing(date, expectedRevision, model, signal) {
   return request(`/briefings/${date}/analyze`, {
     method: "POST",

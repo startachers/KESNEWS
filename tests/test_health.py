@@ -42,7 +42,10 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260722-2" in response.text
+    assert "js/app.js?v=20260722-3" in response.text
+    assert 'id="cancelFinalizeBtn" hidden>확정 취소</button>' in response.text
+    assert 'id="finalizeBtn">최종 확정</button>' not in response.text
+    assert 'id="reopenBtn"' not in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
@@ -120,15 +123,25 @@ def test_index_html_is_served_at_root():
     assert preview_function.index("await flushDailyState()") < preview_function.index(
         "previewWindow.location.replace(previewUrl)"
     )
-    finalize_function = data_io_script.text.split(
-        "export async function finalizeCurrentBriefing()", 1
-    )[1].split("export async function reopenCurrentBriefing()", 1)[0]
-    assert "loadPreviewPresentation(state.date, previewRevision)" in finalize_function
-    assert "previewPresentation || {}" in finalize_function
-    assert "clearPreviewPresentation(state.date, previewRevision)" in finalize_function
+    cancel_function = data_io_script.text.split(
+        "export async function cancelFinalization()", 1
+    )[1].split("export async function resetTodayWork()", 1)[0]
+    assert "await api.getBriefingVersion(state.date, state.latestFinalVersion)" in cancel_function
+    assert "await api.reopenBriefing(state.date, state.revision)" in cancel_function
+    assert "restoreFinalPresentation(" in cancel_function
+    assert "직전 작업본으로 돌아" in cancel_function
+    assert "확정 기록은 보존" in cancel_function
+    assert "export async function finalizeCurrentBriefing()" not in data_io_script.text
+    restore_function = data_io_script.text.split(
+        "function restoreFinalPresentation(date, revision, snapshot)", 1
+    )[1].split("export function loadSample()", 1)[0]
+    assert "article.reportSummary" in restore_function
+    assert "articleOrder:" in restore_function
+    assert "articleSummarySourceRevision:" in restore_function
+    assert "localStorage.setItem(" in restore_function
     final_report_function = data_io_script.text.split(
         "export async function openFinalReport()", 1
-    )[1].split("export async function finalizeCurrentBriefing()", 1)[0]
+    )[1].split("export async function cancelFinalization()", 1)[0]
     assert "await api.listBriefingVersions(state.date)" in final_report_function
     assert "item.version > current.version" in final_report_function
     assert "?version=${encodeURIComponent(latest.version)}" in final_report_function
@@ -167,6 +180,7 @@ def test_index_html_is_served_at_root():
     api_client = client.get("/js/api/client.js")
     assert "finalizeBriefing(date, expectedRevision, presentation = {})" in api_client.text
     assert "JSON.stringify({ expectedRevision, ...presentation })" in api_client.text
+    assert "getBriefingVersion(date, version)" in api_client.text
     assert 'confirmation: "RESET_TODAY"' in api_client.text
     assert "const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 1230000;" in api_client.text
     assert "const ARTICLE_SELECTION_REQUEST_TIMEOUT_MS = 660000;" in api_client.text

@@ -143,8 +143,8 @@ def _issue_maps(connection: sqlite3.Connection, report_date: str) -> tuple[dict[
         item = {"id": issue["id"], "title": issue.get("effectiveTitle") or issue.get("autoTitle") or ""}
         for article_id in issue.get("articleIds") or []:
             details.setdefault(article_id, []).append(item)
-            # 자동 군집만으로 대체기사를 확정하지 않는다. 담당자의 제목/우선도/구성
-            # override 또는 수동 군집이 있는 경우에만 확정 군집 근거로 사용한다.
+            # 자동 그룹만으로 대체기사를 확정하지 않는다. 담당자의 제목/우선도/구성
+            # override 또는 수동 그룹이 있는 경우에만 확정 그룹 근거로 사용한다.
             if (
                 issue.get("manualGroup")
                 or issue.get("editorTitle")

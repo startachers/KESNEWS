@@ -3,7 +3,7 @@ ALTER TABLE briefing_issues
 ADD COLUMN direct_coverage_override INTEGER
 CHECK (direct_coverage_override IS NULL OR direct_coverage_override IN (0, 1));
 
--- 기존 자동 판정 군집은 일반 브리핑과 Top Issues에서 제거한다.
+-- 기존 자동 판정 그룹은 일반 브리핑과 Top Issues에서 제거한다.
 UPDATE briefing_articles
 SET selected = 0,
     top_issue = 0,

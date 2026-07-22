@@ -31,6 +31,8 @@ final      현재 작업본이 최신 최종본과 동일하며 잠긴 상태
 - `finalize`는 작업본을 삭제하거나 새 작업본으로 바꾸지 않는다.
 - `finalize` 시 `briefing_versions`에 불변 snapshot을 추가하고 작업본을 잠근다.
 - `reopen`은 기존 최종 snapshot을 보존한 채 작업본을 다시 `draft`로 전환한다.
+- 메인 화면의 `확정 취소`는 `reopen` 전 직전 최종 snapshot을 읽어 기사 표시 순서와 AI 본문
+  요약을 새 작업본 revision의 브라우저 미리보기 임시 상태로 복원한다.
 - 재확정하면 `version`을 1 증가시킨 새 snapshot을 만든다.
 
 ### 1.3 날짜만 받는 조회 규칙
@@ -151,7 +153,7 @@ updated_at
 `top_issue`는 개별 기사를 Top Issues에 직접 올리는 태그다. Top 태그 활성화는 해당 기사를
 동시에 `selected=true`로 만들며, Top 태그 해제는 기사 선정을 해제하지 않는다. `starred`(중요 기사)는
 별도 상태다. `dismissed=true`가 되면 서버가 `selected=false`로 정규화한다.
-담당자가 직접 편집할 수 있지만 Gemma 기사 추천을 명시적으로 적용하면 기존 군집·기사 Top 태그를
+담당자가 직접 편집할 수 있지만 Gemma 기사 추천을 명시적으로 적용하면 기존 그룹·기사 Top 태그를
 초기화하고 적용된 추천 순위 상위 6건으로 교체한다.
 
 ### 2.3 DELETE 사용 제한
@@ -198,43 +200,43 @@ DELETE /api/articles/{article_id}
 - `firstObservedAt`은 기사가 로컬 수집기에 최초로 들어온 UTC 시각이다. 화면의
   `관련기사 수집순`은 적용된 이슈의 관련기사 수(대표 기사 제외)를 내림차순으로 사용한다.
   같은 건수이면 `firstObservedAt` 오름차순, 다시 같으면 공사 관련도순으로 정렬한다.
-- 군집을 카드 1건으로 접어 표시할 때는 현재 정렬에서 가장 앞선 구성 기사를 대표 카드로
-  사용하고, 군집 카드와 단일 기사를 같은 정렬 위치에 배치한다. 대표 기사를 무작위로 바꾸지 않는다.
-- Top Issues의 군집 카드는 현재 Media Coverage에 실제 표시되는 구성 기사 제목을 사용한다.
-  담당자가 편집한 군집 제목은 예외로 우선 보존하며, Media Coverage 검색은 기사 제목뿐 아니라
-  군집 제목도 함께 검색한다.
+- 그룹을 카드 1건으로 접어 표시할 때는 현재 정렬에서 가장 앞선 구성 기사를 대표 카드로
+  사용하고, 그룹 카드와 단일 기사를 같은 정렬 위치에 배치한다. 대표 기사를 무작위로 바꾸지 않는다.
+- Top Issues의 그룹 카드는 현재 Media Coverage에 실제 표시되는 구성 기사 제목을 사용한다.
+  담당자가 편집한 그룹 제목은 예외로 우선 보존하며, Media Coverage 검색은 기사 제목뿐 아니라
+  그룹 제목도 함께 검색한다.
 - 단계 3 이전 자동수집 기사처럼 `publisher_allowed`가 미판별(`null`)인 기사는 일반
   후보에서 제외한다. 단, 2번 합집합에 해당하는 기존 담당자 선택·중요·메모·숨김 상태는
   출처 판별값과 무관하게 계속 보존·표시한다.
 - `include_dismissed=false`면 `dismissed=true` 기사를 제외한다.
 - `GET /api/issues?report_date=`는 위 후보 기사가 유효 구성에 1건 이상 포함된 이슈를 반환하며 `briefing_issues`의 수동 상태를 합쳐 반환한다.
 
-Top Issues는 담당자가 직접 태그한 항목만 표시한다. 군집 태그는 `briefing_issues.selected`,
+Top Issues는 담당자가 직접 태그한 항목만 표시한다. 그룹 태그는 `briefing_issues.selected`,
 개별 기사 태그는 `briefing_articles.top_issue`에 저장하며 두 종류를 합쳐 최대 6개로 제한한다.
 카드에는 자동 순위·점수·기사/매체 수 대신 구성 기사의 유효 분류를 우선 표시한다. 담당자가
-배치 순서를 바꾸면 군집과 개별 기사의 `sort_order`를 하나의 0부터 시작하는 표시 순서로 정규화하며,
+배치 순서를 바꾸면 그룹과 개별 기사의 `sort_order`를 하나의 0부터 시작하는 표시 순서로 정규화하며,
 조회 화면은 이 값을 우선하고 값이 같거나 없을 때만 최신 보도 시각을 보조 기준으로 사용한다.
-군집 Top 태그를 활성화하면 사용자가 누른 대표 카드 기사(미지정 시 이슈 대표 기사)를
-`briefing_articles.selected=true`로 함께 저장한다. 군집 Top 태그를 해제해도 기사 선정은 유지한다.
+그룹 Top 태그를 활성화하면 사용자가 누른 대표 카드 기사(미지정 시 이슈 대표 기사)를
+`briefing_articles.selected=true`로 함께 저장한다. 그룹 Top 태그를 해제해도 기사 선정은 유지한다.
 Media Coverage에서 펼친 관련기사의 선정 여부도 기사별 PATCH로 자유롭게 바꿀 수 있다. 잘못 묶인
 기사는 브리핑 이슈 PATCH에 `articleId`, `membershipAction="remove"`, `expectedRevision`을 보내
 수동 remove override로 제외하며, 기사 원본과 선정·중요·메모 상태는 유지한다.
 7번째 항목을 선택하는 mutation은 `TOP_ISSUE_LIMIT_EXCEEDED`(409)로 거부한다.
-현재 후보 기사와 유효 구성 관계가 하나도 없는 과거 군집은 수동 선택 상태를 보존하되,
+현재 후보 기사와 유효 구성 관계가 하나도 없는 과거 그룹은 수동 선택 상태를 보존하되,
 화면에 표시되지 않으므로 최대 6개 제한의 개수에서도 제외한다.
-재군집화는 기사 단위 `top_issue`를 변경하지 않는다.
-재군집화 이력 때문에 기사 하나가 여러 군집 기록과 겹치더라도 기사 `top_issue` 하나를 여러
-군집 Top 태그로 확장하지 않는다. 해당 보고일에 이미 수동 선택된 군집, 수동 군집, 최신 군집
-순으로 단 하나의 유효 군집에만 표시한다.
-군집화 유사도 기준을 넓히더라도 사건 종류만 같고 장소·수치·고유 제목 단서가 전혀 없는 기사는
+재그룹화는 기사 단위 `top_issue`를 변경하지 않는다.
+재그룹화 이력 때문에 기사 하나가 여러 그룹 기록과 겹치더라도 기사 `top_issue` 하나를 여러
+그룹 Top 태그로 확장하지 않는다. 해당 보고일에 이미 수동 선택된 그룹, 수동 그룹, 최신 그룹
+순으로 단 하나의 유효 그룹에만 표시한다.
+그룹화 유사도 기준을 넓히더라도 사건 종류만 같고 장소·수치·고유 제목 단서가 전혀 없는 기사는
 같은 사건으로 병합하지 않는다.
 
-`kesco_direct`로 분류된 단독 기사와 `issues.direct_mention=true`인 군집은 보고일별
+`kesco_direct`로 분류된 단독 기사와 `issues.direct_mention=true`인 그룹은 보고일별
 `공사 직접 보도` 자동 태그가 활성화된다. 단독 기사의 유효값은
-`briefing_articles.direct_coverage_override ?? (effective_category == kesco_direct)`, 군집은
+`briefing_articles.direct_coverage_override ?? (effective_category == kesco_direct)`, 그룹은
 `briefing_issues.direct_coverage_override ?? 구성 기사의 수동 override ?? issues.direct_mention`이며 담당자의
-수동 해제·재태그는 이후 자동 수집·재분석·재군집화로 덮어쓰지 않는다. 유효 태그가 켜지면
-기사에는 `selected=false`, `top_issue=false`, 군집에는 `selected=false`를 강제한다.
+수동 해제·재태그는 이후 자동 수집·재분석·재그룹화로 덮어쓰지 않는다. 유효 태그가 켜지면
+기사에는 `selected=false`, `top_issue=false`, 그룹에는 `selected=false`를 강제한다.
 이 상태에서 기사 또는 Top Issues 선정을 요청하면 `DIRECT_COVERAGE_NOT_SELECTABLE`(409)로 거부한다.
 단, 담당자가 기사 선정 체크와 함께 `directCoverage=false`를 명시한 경우에는 자동 태그를 수동
 해제하는 판단으로 기록하고 같은 mutation에서 `selected=true`를 허용한다.
@@ -306,18 +308,18 @@ POST /api/briefings/{date}/selection-recommendations/apply
   `dismissed=true`는 적용 대상에서 제외한다.
 - apply 응답은 `appliedArticleIds`, 적용 후 `selectedCount`, `revision`을 반환한다.
   Top Issues는 이 응답과 독립적으로 담당자가 Media Coverage에서 수동 관리한다.
-- Top Issues 상한은 화면에 표시되는 고유 군집과 군집이 없는 단독 기사를 합산해 계산한다.
-  군집 구성 기사에 남은 구버전 개별 Top 태그는 같은 군집의 중복 항목으로 세지 않는다.
-- migration `0016_promote_grouped_article_top_tags.sql`은 기존 DB의 군집 구성 기사
+- Top Issues 상한은 화면에 표시되는 고유 그룹과 그룹이 없는 단독 기사를 합산해 계산한다.
+  그룹 구성 기사에 남은 구버전 개별 Top 태그는 같은 그룹의 중복 항목으로 세지 않는다.
+- migration `0016_promote_grouped_article_top_tags.sql`은 기존 DB의 그룹 구성 기사
   `top_issue=true`를 대응하는 `briefing_issues.selected=true`로 승격하고 기사 태그를 해제한다.
-  migration 적용 전 상태를 읽더라도 이슈 API는 해당 군집을 선택 상태로 반환하며, 군집 Top
+  migration 적용 전 상태를 읽더라도 이슈 API는 해당 그룹을 선택 상태로 반환하며, 그룹 Top
   해제 mutation은 구성 기사에 남은 개별 Top 태그도 함께 해제한다.
 - 추천 생성은 AI 결과의 자동 확정이 아니다. 담당자가 화면에서 추천 목록과 이유를 확인하고
   명시적으로 apply해야 실제 선정 상태가 바뀐다.
 
 ### 2.8 이슈별 AI 분석 근거 확정
 
-관련기사 품질 조회와 담당자 근거 확정은 자동 군집 구성과 별도 상태로 저장한다.
+관련기사 품질 조회와 담당자 근거 확정은 자동 그룹 구성과 별도 상태로 저장한다.
 
 ```text
 GET   /api/issues/{issue_id}/articles
@@ -343,15 +345,15 @@ POST  /api/issues/{issue_id}/articles/reextract
   원래 `raw_source`와 정규화 사유는 `article_extractions`에 보존한다.
 - evidence PATCH는 `expectedRevision`과 대표기사 최대 1건, 보조근거 최대 2건,
   분석 제외 기사 목록을 받는다. 현재 유효 membership에 없는 ID는 거부한다.
-- 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 군집과
-  기사 원본을 삭제하지 않으며 이후 자동 추출·군집화가 수동 제외를 해제하지 않는다.
+- 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 그룹과
+  기사 원본을 삭제하지 않으며 이후 자동 추출·그룹화가 수동 제외를 해제하지 않는다.
 - `issues.evidence_revision` 불일치는 `ISSUE_EVIDENCE_REVISION_CONFLICT`(409)로 반환하고
   저장된 수동 상태를 덮어쓰지 않는다.
-- 자동 재군집화는 동일 이슈가 유지되는 동안 `manual_representative_article_id`,
+- 자동 재그룹화는 동일 이슈가 유지되는 동안 `manual_representative_article_id`,
   `manual_supplemental_article_ids_json`, `manual_excluded_article_ids_json`을 보존한다.
   수동 대표 ID가 현재 membership에서 사라지면 자동 대표를 임시 표시하되
   `manualRepresentativeMissing=true`로 손실을 알린다.
-- AI 분석용 MD는 선정된 군집의 확정 대표와 수동 보조근거만 포함한다. 생성 직전에 선택 근거
+- AI 분석용 MD는 선정된 그룹의 확정 대표와 수동 보조근거만 포함한다. 생성 직전에 선택 근거
   전체의 출처·canonical/resolved URL·본문 완전성·오염·AI 잔존을 다시 검사한다. 한 건이라도
   절대 오류가 있으면 정상 기사도 부분 출력하지 않고 `SELECTED_EVIDENCE_INVALID`(422)로 전체
   생성을 중단한다. 응답의 `failedArticles[]`는 `articleId`, `title`, `issueId`, `errors[]`와
@@ -396,9 +398,9 @@ POST /api/briefings/{date}/reset
 - final 작업본은 초기화하지 않는다. 이전에 확정한 `briefing_versions` 불변 snapshot과 보고서
   백업은 삭제하지 않는다.
 - 하나의 transaction에서 오늘 날짜의 수집 실행·provider observation 연결, 기사 작업목록과
-  편집 상태, 오늘 브리핑의 군집 Top·메모·검토 연결, AI 분석·기사 추천 실행, 보고 편집본을
-  삭제하고 작업본의 담당자·요약·지시사항·AI 상태를 초기값으로 되돌린다. 오늘 군집 실행은
-  `reset` 상태로 비활성화해 재수집 뒤 새 군집 실행이 다시 계산하도록 한다.
+  편집 상태, 오늘 브리핑의 그룹 Top·메모·검토 연결, AI 분석·기사 추천 실행, 보고 편집본을
+  삭제하고 작업본의 담당자·요약·지시사항·AI 상태를 초기값으로 되돌린다. 오늘 그룹 실행은
+  `reset` 상태로 비활성화해 재수집 뒤 새 그룹 실행이 다시 계산하도록 한다.
 - 다른 보고일에서 참조할 수 있는 `articles` 원본과 자동·수동 평가 자체는 물리 삭제하지 않는다.
   여러 보고일에서 공유할 수 있는 `issues`, membership 원본도 물리 삭제하지 않는다. 오늘 날짜의
   수집·작업본 연결을 제거하므로 초기화 직후 오늘 기사·이슈 목록에는 표시되지 않는다.
@@ -493,7 +495,7 @@ dedup_score
 2. 정규화 후 기존 `articles`와 동일 원문인지 판정한다.
 3. 동일 원문이면 하나의 `article_id`에 여러 observation을 연결한다.
 4. `articles`에는 대표 정규화 값만 두고 provider 이력은 observation에서 조회한다.
-5. 같은 사건을 다른 매체가 별도로 쓴 기사는 병합하지 않고 이슈 군집화에서 묶는다.
+5. 같은 사건을 다른 매체가 별도로 쓴 기사는 병합하지 않고 이슈 그룹화에서 묶는다.
 
 ### 3.4 부분 수집 실패 시 보존 규칙
 
@@ -579,7 +581,7 @@ article_origin_assessments
 - 일반 기사 수집은 공사 사이트를 호출하지 않고 DB에 저장된 최신 원문만 사용한다. 정규화·분류를 마친 각 기사와 제목·본문·발행일을 비교한다.
 - 자동 출처는 `kesco_republication`(보도자료 전재) 또는 `kesco_based`(보도자료 기반)이며, 매칭되지 않은 기사는 기존 기사 판정을 그대로 사용한다.
 - 출처 판정은 관련도·심각도·보고 우선도와 별도 축이다. 공사 보도자료를 기사화했다는 이유만으로 중요 기사나 위험 기사로 올리지 않는다.
-- 같은 `press_release_id`에 연결된 기사들은 서로 다른 언론사의 별도 Article로 보존하되 재군집화에서 같은 이슈로 묶는다.
+- 같은 `press_release_id`에 연결된 기사들은 서로 다른 언론사의 별도 Article로 보존하되 재그룹화에서 같은 이슈로 묶는다.
 - 담당자 최종 출처 판정과 `manual_override=true`는 이후 자동 수집·재판정으로 덮어쓰지 않는다.
 - 보도자료 갱신 실패는 일반 기사 수집과 완전히 분리한다. 직전 정상 원문과 기존 출처 판정을 보존한다.
 - 화면에서는 일반 이슈와 구분해 `공사 보도자료 확산`으로 표시한다.
@@ -629,13 +631,13 @@ cause_domain     electrical | battery | mechanical | negligence |
 예를 들어 쓰레기 소각 부주의 추정은 `suspected + negligence`, 절연열화 추정은
 `suspected + electrical`이다.
 
-### 4.2 군집 검토순위 점수와 5단계 별점
+### 4.2 그룹 검토순위 점수와 5단계 별점
 
 화면의 기존 기사 위험 신호(`critical/watch/routine`)와 3단계 보고 우선도
 (`required/review/reference`)는 신규 검토 흐름에서 사용하지 않는다. 기존 컬럼은 JSON·CSV와
 과거 snapshot 호환을 위해 당분간 보존하되 신규 화면·정렬·최종 보고의 기준이 아니다.
 
-검토순위는 보고일별 유효 군집을 단위로 다음과 같이 계산한다.
+검토순위는 보고일별 유효 그룹을 단위로 다음과 같이 계산한다.
 
 ```text
 review_score = 0.30 × relevance_score
@@ -673,7 +675,7 @@ issue_review_assessments
   editor_stars, editor_reason, reasons_json, scoring_version
 ```
 
-유효 별점은 `editor_stars ?? auto_stars`다. 담당자 값은 자동 재수집·재분류·재군집화로
+유효 별점은 `editor_stars ?? auto_stars`다. 담당자 값은 자동 재수집·재분류·재그룹화로
 덮어쓰지 않으며, 변경은 브리핑 `expectedRevision`을 검증한다.
 
 ### 4.2.1 레거시 자동 우선도 점수
@@ -720,7 +722,7 @@ reference  45 미만
 - `low relevance`는 자동 최대 `reference`; 단, 전기안전 분야 중대사고 hard floor가 있으면 `review`
 - 담당자 `final_priority`는 모든 자동 floor·cap보다 우선한다.
 
-이 절의 `priority` floor·cap은 레거시 기사 판정 호환 규칙이다. 신규 군집 검토순위의
+이 절의 `priority` floor·cap은 레거시 기사 판정 호환 규칙이다. 신규 그룹 검토순위의
 floor·cap은 4.2절을 따른다.
 
 ### 4.4 문맥 판정 순서
@@ -979,7 +981,7 @@ GET  /api/briefings/{date}/report-draft
 
 ---
 
-## 6. 재군집화와 담당자 수정 보존
+## 6. 재그룹화와 담당자 수정 보존
 
 ### 6.1 자동값과 편집값 분리
 
@@ -996,7 +998,7 @@ auto_status      editor_status
 
 ### 6.2 구성 기사 override
 
-자동 군집 구성과 담당자 변경을 별도 저장한다.
+자동 그룹 구성과 담당자 변경을 별도 저장한다.
 
 ```text
 issue_auto_articles
@@ -1006,8 +1008,8 @@ issue_membership_overrides
 `issue_membership_overrides.action`:
 
 ```text
-add       자동 군집과 무관하게 포함
-remove    자동 군집에 있어도 제외
+add       자동 그룹과 무관하게 포함
+remove    자동 그룹에 있어도 제외
 ```
 
 유효 구성은 다음과 같다.
@@ -1018,9 +1020,9 @@ remove    자동 군집에 있어도 제외
 
 ### 6.3 cluster run
 
-재군집화는 즉시 덮어쓰지 않는다.
+재그룹화는 즉시 덮어쓰지 않는다.
 
-담당자는 기사별 `군집 선택`을 2건 이상 지정해 다음 API로 수동 군집을 만들 수 있다.
+담당자는 기사별 `그룹 선택`을 2건 이상 지정해 다음 API로 수동 그룹을 만들 수 있다.
 
 ```text
 POST /api/issues/manual-group
@@ -1028,7 +1030,7 @@ POST /api/issues/manual-group
 
 요청은 `reportDate`, `articleIds`, `expectedRevision`을 받는다. 선택 기사는 기존 이슈에서
 `remove` 처리되고 새 수동 이슈에는 `add` 처리된다. 수동 이슈는 `manual_group=true`로
-기록하며, 이후 자동 재군집화에서도 해당 수동 구성의 배타성을 다시 적용한다.
+기록하며, 이후 자동 재그룹화에서도 해당 수동 구성의 배타성을 다시 적용한다.
 화면에서 기존 이슈 묶음을 선택하면 그 이슈의 유효 `articleIds` 전체를 요청에 포함한다.
 따라서 기존 묶음끼리 또는 기존 묶음과 개별 기사를 선택하면 구성 전체가 하나의 새 수동
 이슈로 합쳐지고, 이전 이슈에는 선택된 구성원이 남지 않는다.
@@ -1053,18 +1055,18 @@ POST /api/cluster-runs/{cluster_run_id}/apply
 
 화면의 `오늘 기사 검색`은 기사 수집이 성공하고 후보가 1건 이상이면 `similarityThreshold=0.15`로
 proposal을 생성한 뒤 즉시 apply한다. 수집·목록 갱신·proposal 생성·apply 단계는 진행률로
-표시한다. 자동 재군집화가 실패해도 이미 저장된 기사와 provider observation은 되돌리지 않으며,
-수집 성공과 재군집화 오류를 함께 표시한다. 수동 `이슈 재군집화`는 기존 proposal 검토·적용
+표시한다. 자동 재그룹화가 실패해도 이미 저장된 기사와 provider observation은 되돌리지 않으며,
+수집 성공과 재그룹화 오류를 함께 표시한다. 수동 `이슈 재그룹화`는 기존 proposal 검토·적용
 절차를 그대로 유지한다.
 
 ### 6.4 적용 규칙
 
 - `editor_title`, `editor_status`, `editor_priority`는 절대 덮어쓰지 않는다.
 - 수동 `add/remove` membership은 절대 삭제하지 않는다.
-- 새 군집과 기존 이슈는 기사 집합 겹침, 대표 개체, 시간 범위로 매칭해 안정적인 `issue_id`를 재사용한다.
+- 새 그룹과 기존 이슈는 기사 집합 겹침, 대표 개체, 시간 범위로 매칭해 안정적인 `issue_id`를 재사용한다.
 - 자동 대응이 사라진 수동 편집 이슈는 삭제하지 않고 `needs_review=true`로 표시한다.
-- 최종 확정 snapshot의 이슈와 기사 구성은 재군집화의 영향을 받지 않는다.
-- 재군집화는 `final` 작업본에 적용할 수 없다.
+- 최종 확정 snapshot의 이슈와 기사 구성은 재그룹화의 영향을 받지 않는다.
+- 재그룹화는 `final` 작업본에 적용할 수 없다.
 
 ### 6.5 auto_status 전이와 spread_score 초기 산식
 

@@ -37,11 +37,11 @@ export function generateSummary() {
   const categoryLabel = settings.queries.find(q => q.id === topCategory?.[0])?.label || "주요 이슈";
   const lines = [
     `• 최근 ${settings.lookback}시간 기준 ${sources}개 매체의 관련 보도 ${items.length}건을 CEO 보고 대상으로 선별했습니다.`,
-    `• 최우선 검토 군집은 「${topIssue?.effectiveTitle || top.title}」이며, 검토별점 ${topIssue?.effectiveReviewStars || 1}점·자동순위 ${topIssue?.autoReviewRank || "미산정"}위입니다.`,
-    `• 보도 비중은 ${categoryLabel} 분야가 ${topCategory?.[1] || 0}건으로 가장 높고, 우선 검토 군집 ${priorityIssueCount}개·긍정 보도 ${positive.length}건입니다.`
+    `• 최우선 검토 그룹은 「${topIssue?.effectiveTitle || top.title}」이며, 검토별점 ${topIssue?.effectiveReviewStars || 1}점·자동순위 ${topIssue?.autoReviewRank || "미산정"}위입니다.`,
+    `• 보도 비중은 ${categoryLabel} 분야가 ${topCategory?.[1] || 0}건으로 가장 높고, 우선 검토 그룹 ${priorityIssueCount}개·긍정 보도 ${positive.length}건입니다.`
   ];
-  if ((topIssue?.effectiveReviewStars || 0) >= 4) lines.push("• 제언: 상위 검토 군집의 긴급성과 대응적합도 근거를 확인하고, 필요 시 주관 부서의 사실관계와 대응 메시지를 정렬할 필요가 있습니다.");
-  else lines.push("• 제언: 상위 검토 군집은 많지 않으며, 주요 성과 보도의 후속 확산 기회를 함께 검토할 수 있습니다.");
+  if ((topIssue?.effectiveReviewStars || 0) >= 4) lines.push("• 제언: 상위 검토 그룹의 긴급성과 대응적합도 근거를 확인하고, 필요 시 주관 부서의 사실관계와 대응 메시지를 정렬할 필요가 있습니다.");
+  else lines.push("• 제언: 상위 검토 그룹은 많지 않으며, 주요 성과 보도의 후속 확산 기회를 함께 검토할 수 있습니다.");
   return lines.join("\n");
 }
 

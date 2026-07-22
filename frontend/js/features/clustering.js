@@ -41,7 +41,7 @@ function renderThreshold(dirty = thresholdDirty) {
 function setBusy(value, mode = "") {
   busy = value;
   els.reclusterBtn.disabled = value || state.status === "final" || state.demo || !state.articles.length;
-  els.reclusterBtn.textContent = value && mode === "calculate" ? "제안 생성 중…" : "이슈 재군집화";
+  els.reclusterBtn.textContent = value && mode === "calculate" ? "제안 생성 중…" : "이슈 다시 그룹화";
   els.clusterThreshold.disabled = value;
   els.clusterRecalculateBtn.disabled = value || !thresholdDirty;
   els.clusterRecalculateBtn.textContent = value && mode === "calculate" ? "계산 중…" : "이 기준으로 다시 계산";
@@ -82,7 +82,7 @@ function renderProposal(run) {
       </div>
       <ul class="cluster-members">${members}</ul>
     </article>`;
-  }).join("") : '<div class="cluster-empty">군집화할 기사 후보가 없습니다.</div>';
+  }).join("") : '<div class="cluster-empty">그룹화할 기사 후보가 없습니다.</div>';
   els.clusterApplyBtn.disabled = thresholdDirty || !proposal.length;
 }
 
@@ -98,8 +98,8 @@ async function calculateProposal() {
     renderProposal(activeRun);
     setStatus("live", `${activeRun.proposal.length}개 이슈 제안 생성 · 적용 전`);
   } catch (error) {
-    showToast(`재군집화 제안 실패: ${friendlyError(error)}`, "error");
-    setStatus("error", "재군집화 제안을 만들지 못했습니다");
+    showToast(`그룹 변경 제안 실패: ${friendlyError(error)}`, "error");
+    setStatus("error", "그룹 변경 제안을 만들지 못했습니다");
   } finally {
     setBusy(false);
   }
@@ -120,11 +120,11 @@ export async function recalculateClusterProposal() {
 export async function openClusterProposal() {
   if (busy) return;
   if (state.status === "final") {
-    showToast("최종 확정된 작업본입니다. 수정 재개 후 재군집화해 주세요.", "error");
+    showToast("최종 확정된 작업본입니다. 수정 재개 후 다시 그룹화해 주세요.", "error");
     return;
   }
   if (state.demo || !state.articles.length) {
-    showToast("실제 기사를 수집하거나 등록한 뒤 재군집화해 주세요.", "error");
+    showToast("실제 기사를 수집하거나 등록한 뒤 다시 그룹화해 주세요.", "error");
     return;
   }
   activeRun = null;
@@ -151,16 +151,16 @@ export async function applyClusterProposal() {
     activeRun = null;
     closeOverlay("clusterOverlay");
     showToast(`${issueCount}개 이슈 구성을 적용했습니다. 기사 원문과 수동 수정은 보존됩니다.`, "success");
-    setStatus("live", `${issueCount}개 이슈 재군집화 적용 완료`);
+    setStatus("live", `${issueCount}개 이슈 그룹 변경 적용 완료`);
   } catch (error) {
     if (error.code === "CLUSTER_RUN_STALE") {
       activeRun = null;
       closeOverlay("clusterOverlay");
-      showToast("제안 생성 후 기사 후보가 변경됐습니다. 재군집화를 다시 실행해 주세요.", "error");
+      showToast("제안 생성 후 기사 후보가 변경됐습니다. 그룹화를 다시 실행해 주세요.", "error");
     } else {
-      showToast(`재군집화 적용 실패: ${friendlyError(error)}`, "error");
+      showToast(`그룹 변경 적용 실패: ${friendlyError(error)}`, "error");
     }
-    setStatus("error", "재군집화 제안을 적용하지 못했습니다");
+    setStatus("error", "그룹 변경 제안을 적용하지 못했습니다");
   } finally {
     setBusy(false);
   }
