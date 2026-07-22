@@ -166,6 +166,9 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." not in preview.text
     assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
     assert "기사 중요도순" in preview.text
+    assert '<button id="articleSummaryBtn" type="button" onclick="summarizeArticleBodies()">AI 본문 요약</button>' in preview.text
+    assert "fetch('/api/briefings/2026-09-02/article-summaries'" in preview.text
+    assert 'data-article-id="' in preview.text
     assert 'class="appendix-masthead" id="appendix-articles"' in preview.text
     assert 'padding:13px 20px 14px;border-top:5px solid #35b8aa' in preview.text
     assert 'grid-template-columns:auto auto 1fr' in preview.text
@@ -197,6 +200,7 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert latest.status_code == specified.status_code == 200
     assert "최종본 v1" in latest.text
     assert "onclick=\"window.print()\"" in latest.text
+    assert "AI 본문 요약" not in latest.text
     missing = client.get(f"/api/briefings/{report_date}/versions/99")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "BRIEFING_VERSION_NOT_FOUND"

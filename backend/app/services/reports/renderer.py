@@ -546,7 +546,8 @@ def _article_cards(
             else article_main
         )
         cards.append(
-            f'<article class="article"{anchor} data-editor-index="{editor_index}" '
+            f'<article class="article"{anchor} data-article-id="{_text(item.get("id"))}" '
+            f'data-editor-index="{editor_index}" '
             f'data-starred="{1 if item.get("starred") else 0}" data-risk-rank="{risk_rank}" '
             f'data-priority-score="{priority_score}">'
             f'<span class="article-number" aria-hidden="true">{editor_index + 1:02d}</span>'
@@ -574,6 +575,51 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     weather_html = _render_weather(snapshot)
     article_count = len(snapshot.get("articles") or [])
     article_layout_class = " is-twelve" if article_count == 12 else ""
+    summary_button = (
+        '<button id="articleSummaryBtn" type="button" onclick="summarizeArticleBodies()">'
+        'AI 본문 요약</button><span id="articleSummaryStatus" class="toolbar-status" '
+        'role="status" aria-live="polite"></span>'
+        if preview
+        else ""
+    )
+    summary_script = (
+        f"""
+    async function summarizeArticleBodies() {{
+      const button = document.getElementById('articleSummaryBtn');
+      const status = document.getElementById('articleSummaryStatus');
+      if (!button || !status || button.disabled) return;
+      button.disabled = true;
+      status.classList.remove('error');
+      status.textContent = '선정 기사 본문을 요약하고 있습니다…';
+      try {{
+        const healthResponse = await fetch('/api/health', {{headers: {{Accept: 'application/json'}}}});
+        const health = await healthResponse.json();
+        const model = health.defaultModel || (health.models || [])[0]?.name;
+        if (!healthResponse.ok || !model || health.error) throw new Error('사용 가능한 로컬 AI 모델이 없습니다.');
+        const response = await fetch('/api/briefings/{_text(report_date)}/article-summaries', {{
+          method: 'POST',
+          headers: {{Accept: 'application/json', 'Content-Type': 'application/json'}},
+          body: JSON.stringify({{model}}),
+        }});
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error?.message || `AI 요약 실패 (${{response.status}})`);
+        const cards = Array.from(document.querySelectorAll('.article[data-article-id]'));
+        for (const item of payload.data.summaries || []) {{
+          const card = cards.find(candidate => candidate.dataset.articleId === item.articleId);
+          const description = card?.querySelector('.desc');
+          if (description) description.textContent = item.summary;
+        }}
+        status.textContent = `AI 본문 요약 완료 · ${{payload.data.summaries.length}}건`;
+      }} catch (error) {{
+        status.classList.add('error');
+        status.textContent = error instanceof Error ? error.message : 'AI 본문 요약에 실패했습니다.';
+      }} finally {{
+        button.disabled = false;
+      }}
+    }}"""
+        if preview
+        else ""
+    )
     styles = """
     :root{color-scheme:light;--navy:#12243a;--navy2:#173b51;--teal:#087f76;--mint:#dff3ef;--red:#b02a2a;--amber:#b06a12;--line:#d7dfe3;--soft:#f4f7f7;--ink:#22303a;--muted:#66757f;--copy-size:14px;--report-scale:.93}
     *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -581,6 +627,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .toolbar{position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;gap:8px;padding:10px 20px;background:#10253cee}
     .toolbar a,.toolbar button{border:1px solid #ffffff55;border-radius:8px;padding:7px 14px;background:#fff;color:var(--navy);font-weight:700;font-size:13px;text-decoration:none;cursor:pointer}
     .toolbar button[aria-pressed="true"]{border-color:#77d6cd;background:#dff3ef;color:#075f59}
+    .toolbar button:disabled{cursor:wait;opacity:.65}.toolbar-status{align-self:center;color:#d9e6ec;font-size:12px;font-weight:700}.toolbar-status.error{color:#ffd1d1}
     main{width:min(210mm,calc(100% - 28px));margin:24px auto 48px;display:grid;gap:24px}
     .report-page{position:relative;width:210mm;height:297mm;overflow:hidden;padding:12mm 7mm;background:#fff;box-shadow:0 14px 45px #10253c1c}
     .page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}
@@ -649,7 +696,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article-link,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
-    <div class="toolbar"><a href="/">편집 화면</a><button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
+    <div class="toolbar"><a href="/">편집 화면</a>{summary_button}<button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
     <main>
     <section class="report-page analysis-page" data-fit-page><div class="page-inner">
     <header class="masthead">
@@ -688,4 +735,5 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
       button.setAttribute('aria-pressed', String(importanceMode));
       button.textContent = importanceMode ? '기사 편집순' : '기사 중요도순';
     }}
+    {summary_script}
     </script></body></html>"""

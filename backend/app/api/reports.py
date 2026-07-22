@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Query
+import asyncio
+from uuid import uuid4
+
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -16,7 +19,11 @@ from backend.app.repositories import briefing_version_repository as version_repo
 from backend.app.repositories import weather_repository as weather_repo
 from backend.app.repositories.database import backup_database, get_connection
 from backend.app.services.exports.json_export import build_version_export
+from backend.app.services.ai.article_summarizer import ArticleSummaryError, summarize_articles
+from backend.app.services.ai.ollama_client import OllamaError, default_client
+from backend.app.services.ai.runtime import CancellationToken, analysis_registry
 from backend.app.services.reports.renderer import render_report
+from backend.app.services.reports.renderer import _article_body_preview, _article_source_label
 from backend.app.services.reports.snapshot import build_snapshot
 from backend.app.services.reports.storage import write_report, write_snapshot_backup
 
@@ -25,6 +32,10 @@ router = APIRouter()
 
 class RevisionRequest(BaseModel):
     expectedRevision: int
+
+
+class ArticleSummaryRequest(BaseModel):
+    model: str
 
 
 def _briefing_error(exc: Exception, report_date: str):
@@ -166,6 +177,68 @@ async def preview_report(report_date: str):
     finally:
         connection.close()
     return HTMLResponse(render_report(snapshot, preview=True))
+
+
+@router.post("/api/briefings/{report_date}/article-summaries")
+async def summarize_preview_articles(
+    report_date: str, body: ArticleSummaryRequest, request: Request
+) -> Any:
+    connection = get_connection()
+    try:
+        briefing = briefing_repo.get_by_date(connection, report_date)
+        if briefing is None:
+            return error_response("BRIEFING_NOT_FOUND", f"{report_date} 작업본이 없습니다.")
+        snapshot = build_snapshot(connection, briefing, version=None, finalized_at=None)
+        source_revision = briefing["revision"]
+    finally:
+        connection.close()
+
+    articles = [
+        {
+            "articleId": str(item.get("id") or ""),
+            "title": str(item.get("title") or ""),
+            "source": _article_source_label(item),
+            "content": _article_body_preview(item),
+        }
+        for item in snapshot.get("articles") or []
+        if item.get("id")
+    ]
+    if not articles:
+        return error_response("AI_SCHEMA_INVALID", "요약할 선정 기사가 없습니다.")
+
+    run_id = f"preview-summary-{uuid4().hex}"
+    cancel_token = CancellationToken()
+    if not analysis_registry.register(run_id, briefing["id"], cancel_token):
+        return error_response(
+            "AI_ALREADY_RUNNING",
+            "다른 AI 분석이 이미 실행 중입니다. 완료하거나 취소한 뒤 다시 시도해 주세요.",
+            {"runId": analysis_registry.active_run_id()},
+        )
+    client = getattr(request.app.state, "ollama_client", default_client)
+    try:
+        summaries = await asyncio.to_thread(
+            summarize_articles,
+            client,
+            model=body.model,
+            articles=articles,
+            cancel_token=cancel_token,
+        )
+    except ArticleSummaryError as exc:
+        return error_response("AI_SCHEMA_INVALID", str(exc))
+    except (OllamaError, OSError, TimeoutError):
+        return error_response("AI_UNAVAILABLE", "Ollama에 연결할 수 없습니다.")
+    finally:
+        analysis_registry.unregister(run_id)
+        unload = getattr(client, "unload_model", None)
+        if callable(unload):
+            try:
+                await asyncio.to_thread(unload, body.model)
+            except (OllamaError, OSError, TimeoutError):
+                pass
+
+    return ok_envelope(
+        {"summaries": summaries, "model": body.model, "sourceRevision": source_revision}
+    )
 
 
 @router.get("/report/{report_date}", response_class=HTMLResponse)
