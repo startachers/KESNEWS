@@ -135,7 +135,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     payload = {
         "reportDate": report_date,
         "inputSignature": exchange["inputSignature"],
-        "sourceLabel": "고성능 AI",
+        "sourceLabel": "외부분석도구표시금지",
         "text": (
             "① 오늘의 핵심\n외부 AI 경영메시지\n\n"
             "② 경영 시사점\n외부 AI 언론상황\n\n"
@@ -153,7 +153,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
         json={
             "expectedRevision": briefing["revision"],
             "sourceType": "external",
-            "sourceLabel": "고성능 AI",
+            "sourceLabel": "외부분석도구표시금지",
             "inputSignature": exchange["inputSignature"],
             "content": validated.json()["data"]["content"],
         },
@@ -173,8 +173,8 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert "관련기사" in preview.text
     assert "분석 근거" not in preview.text
     assert "근거 기사 링크" not in preview.text
-    assert "RSS 요약입니다." in preview.text
-    assert "고성능 AI" not in preview.text
+    assert "전기안전 특별점검 확대" in preview.text
+    assert "외부분석도구표시금지" not in preview.text
     assert "CEO 보고 편집본" not in preview.text
     assert "CEO 참고·지시사항" not in preview.text
     assert 'class="evidence-list"' not in preview.text
@@ -191,7 +191,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     )
     assert finalized.status_code == 200
     version = client.get(f"/api/briefings/{report_date}/versions/1").json()["data"]
-    assert version["snapshot"]["reportDraft"]["sourceLabel"] == "고성능 AI"
+    assert version["snapshot"]["reportDraft"]["sourceLabel"] == "외부분석도구표시금지"
 
     restored_date = "2098-07-23"
     restored = client.post(f"/api/exports/{restored_date}.json", json=exported)

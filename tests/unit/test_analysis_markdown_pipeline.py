@@ -166,6 +166,8 @@ def test_contamination_removed_cleanly_passes_but_residual_contamination_fails()
     assert body_errors(clean_article_text(facts + " 추천기사 다른 사건 기사").text, status="success_full") == ()
     residual = clean_article_text(facts + " 많이 본 기사 1. 다른 사건이 발생했다.")
     assert "body_contaminated" in body_errors(residual.text, status="success_full")
+    hani_residual = facts + " Your browser does not support the audio element. 뉴스룸 PICK"
+    assert "body_contaminated" in body_errors(hani_residual, status="success_full")
 
 
 def test_source_normalization_and_publisher_conflict_use_page_and_url_evidence():

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import Any
 
+from backend.app.services.extraction.cleaner import clean_article_text, clean_text
+from backend.app.services.extraction.evidence_validation import body_errors, validate_source
 from backend.app.services.reports.report_draft import content_from_plain_text
 
 KST = timezone(timedelta(hours=9))
@@ -62,6 +65,43 @@ def _datetime_label(value: Any, fallback: str, *, with_year: bool = False) -> st
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(KST)
     return parsed.strftime("%Y. %m. %d %H:%M" if with_year else "%m월 %d일 %H:%M")
+
+
+def _article_body_preview(item: dict[str, Any]) -> str:
+    body_text = str(item.get("bodyText") or "")
+    description = clean_text(item.get("description"))
+    if not body_text:
+        return description or "본문 미확보"
+
+    title = clean_text(item.get("title"))
+    source = clean_text(item.get("source"))
+    cleaned = clean_text(clean_article_text(body_text, title=title).text)
+    if description and "body_contaminated" in body_errors(cleaned, status="success_full"):
+        return description
+    title_candidates = [title]
+    if source:
+        without_source = re.sub(rf"\s*-\s*{re.escape(source)}\s*$", "", title).strip()
+        if without_source and without_source != title:
+            title_candidates.append(without_source)
+    for candidate in sorted(title_candidates, key=len, reverse=True):
+        if candidate and cleaned.startswith(candidate):
+            cleaned = cleaned[len(candidate) :].lstrip(" -·|:：")
+            break
+    return cleaned or description or "본문 미확보"
+
+
+def _article_source_label(item: dict[str, Any]) -> str:
+    source = str(item.get("source") or "")
+    url = str(item.get("url") or item.get("canonicalUrl") or "")
+    validation = validate_source(
+        raw_source=str(item.get("rawSource") or source),
+        displayed_source=str(item.get("normalizedSource") or source),
+        source_url=url,
+        resolved_url=url,
+        canonical_url=str(item.get("canonicalUrl") or ""),
+        page_publisher=str(item.get("pagePublisher") or ""),
+    )
+    return validation.source or source or "출처 미상"
 
 
 def _claim(value: Any) -> tuple[str, list[str]]:
@@ -491,12 +531,13 @@ def _article_cards(
             priority_score = float(priority_score)
         except (TypeError, ValueError):
             priority_score = 0
-        description = " ".join(str(item.get("description") or "핵심 요약 없음").split())
+        body_preview = _article_body_preview(item)
+        source_label = _article_source_label(item)
         article_main = (
             f'<div class="article-main"><div class="article-title-row"><h3>{title}</h3>'
-            f'<p class="meta">{_text(item.get("source"), "출처 미상")} · '
+            f'<p class="meta">{_text(source_label)} · '
             f'{_text(_datetime_label(item.get("pubDate"), "시각 미상"))}</p></div>'
-            f'<p class="desc">{_text(description)}</p></div>'
+            f'<p class="desc">{_text(body_preview)}</p></div>'
         )
         linked_main = (
             f'<a class="article-link" href="{_text(url)}" target="_blank" '
@@ -593,13 +634,13 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .appendix-masthead:after{content:"";position:absolute;right:-42px;bottom:-84px;width:145px;height:145px;border:1px solid #ffffff24;border-radius:50%;box-shadow:0 0 0 27px #ffffff0a,0 0 0 54px #ffffff08}
     .appendix-masthead .doc-meta{position:relative;z-index:1;padding-bottom:6px;margin-bottom:9px;border-bottom-color:#ffffff38;color:#cfdae1;font-size:10px}.appendix-title{position:relative;z-index:1;display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;gap:0 13px}.appendix-title .eyebrow{color:#7ed7ce;font-size:10px}.appendix-title h2{margin:0;color:#fff;font-size:24px;line-height:1.15;letter-spacing:-.035em}.appendix-count{justify-self:end;display:flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid #ffffff70;border-radius:999px;background:#ffffffed;color:#08756e;box-shadow:0 3px 10px #0718272e}.appendix-count strong{font-size:19px;line-height:1}.appendix-count span{font-size:8.5px;line-height:1.15;letter-spacing:.09em;font-weight:900}
     .articles{counter-reset:article-card;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(108px,auto);gap:10px 11px;margin-top:18px;min-width:0}
-    .articles.is-twelve{grid-template-rows:repeat(6,minmax(0,1fr));grid-auto-rows:unset;height:238mm}
+    .articles.is-twelve{grid-template-rows:repeat(6,minmax(0,1fr));grid-auto-rows:unset;height:264mm}
     .article{position:relative;display:block;min-width:0;overflow:hidden;padding:12px 13px 11px 50px;border:1px solid #ccd8dd;border-top:3px solid var(--navy);border-radius:4px 12px 12px 4px;background:linear-gradient(145deg,#fff 0%,#fbfdfd 100%);box-shadow:0 4px 13px #10253c0a;break-inside:avoid}
     .article-number{position:absolute;left:12px;top:12px;display:grid;place-items:center;width:27px;height:27px;border-radius:8px 2px 8px 2px;background:var(--navy);color:#fff;font-size:10.5px;font-weight:900;letter-spacing:.04em}.article:after{content:"";position:absolute;right:-16px;top:-18px;width:44px;height:44px;border-radius:50%;background:#35b8aa18}
-    .article-link{display:block;height:100%;min-width:0;color:inherit;text-decoration:none}.article-main{display:grid;height:100%;min-width:0;grid-template-rows:64px minmax(0,1fr)}.article-title-row{display:flex;min-width:0;height:64px;flex-direction:column}.article h3{display:-webkit-box;min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:14.8px;line-height:1.38;letter-spacing:-.02em;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .article-link{display:block;height:100%;min-width:0;color:inherit;text-decoration:none}.article-main{display:grid;height:100%;min-width:0;grid-template-rows:64px minmax(0,1fr)}.article-title-row{display:flex;min-width:0;height:64px;flex-direction:column}.article h3{display:-webkit-box;min-width:0;height:2.76em;min-height:2.76em;margin:0;overflow:hidden;color:var(--navy);font-size:14.8px;line-height:1.38;letter-spacing:-.02em;line-clamp:2;-webkit-box-orient:vertical;-webkit-line-clamp:2}
     .article .meta{order:-1;margin:0 0 5px;color:var(--teal);font-size:10.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap}
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
-    .article .desc{display:-webkit-box;min-width:0;margin:0;padding-top:8px;overflow:hidden;border-top:1px solid #cfd9dd;color:#4e5e67;font-size:12px;line-height:1.48;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .article .desc{display:-webkit-box;align-self:start;min-width:0;height:calc(4.44em + 9px);margin:0;padding-top:8px;overflow:hidden;border-top:1px solid #cfd9dd;color:#4e5e67;font-size:13px;line-height:1.48;line-clamp:3;-webkit-box-orient:vertical;-webkit-line-clamp:3}
     .empty{color:#7c8991}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}

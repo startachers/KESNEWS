@@ -4,9 +4,57 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
-from backend.app.services.reports.renderer import render_report
+from backend.app.services.reports.renderer import (
+    _article_body_preview,
+    _article_source_label,
+    render_report,
+)
 
 client = TestClient(app)
+
+
+def test_article_body_preview_removes_repeated_title_and_source_suffix():
+    preview = _article_body_preview(
+        {
+            "title": "서울 아파트 화재…주민 대피 - 테스트일보",
+            "source": "테스트일보",
+            "bodyText": (
+                "서울 아파트 화재…주민 대피 신고 20분 만에 초진됐다. "
+                "소방당국은 정확한 원인을 조사하고 있다."
+            ),
+            "description": "RSS 요약입니다.",
+        }
+    )
+
+    assert preview.startswith("신고 20분 만에 초진됐다.")
+    assert not preview.startswith("서울 아파트 화재")
+
+
+def test_article_source_label_uses_trusted_publisher_name_instead_of_domain():
+    assert _article_source_label(
+        {
+            "source": "hani.co.kr",
+            "url": "https://www.hani.co.kr/arti/society/environment/1210000.html",
+        }
+    ) == "한겨레"
+
+
+def test_article_body_preview_falls_back_when_extracted_body_is_contaminated():
+    preview = _article_body_preview(
+        {
+            "title": "[단독] ‘전력수요 급증’ 메가프로젝트…12차 전기본에 15GW 우선 반영할 듯",
+            "source": "hani.co.kr",
+            "bodyText": (
+                "본문 사회 환경 [단독] ‘전력수요 급증’ 메가프로젝트…12차 전기본에 "
+                "15GW 우선 반영할 듯 장수경 기자 수정 2026-07-21 19:32 펼침 0:00 "
+                "Your browser does not support the audio element. 뉴스룸 PICK 다른 기사 어떠세요"
+            ),
+            "description": "정부가 발표한 3대 메가프로젝트로 신규 전력 수요가 늘어날 전망이다.",
+        }
+    )
+
+    assert preview == "정부가 발표한 3대 메가프로젝트로 신규 전력 수요가 늘어날 전망이다."
+    assert "Your browser" not in preview
 
 
 def _create_selected_article(report_date: str) -> str:
@@ -110,9 +158,11 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert '<a class="article-link" href="https://example.com/report/2026-09-02"' in preview.text
     assert '<div class="article-main"><div class="article-title-row"><h3>' in preview.text
     assert '</p></div><p class="desc">' in preview.text
+    assert "전기안전 취약시설 점검을 확대했다." in preview.text
     assert '.article-link{display:block;height:100%;min-width:0;color:inherit;text-decoration:none}' in preview.text
-    assert ".article h3{display:-webkit-box;min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:14.8px" in preview.text
-    assert ".article .desc{display:-webkit-box;min-width:0;margin:0;padding-top:8px" in preview.text
+    assert ".article h3{display:-webkit-box;min-width:0;height:2.76em;min-height:2.76em" in preview.text
+    assert "font-size:14.8px;line-height:1.38;letter-spacing:-.02em;line-clamp:2" in preview.text
+    assert ".article .desc{display:-webkit-box;align-self:start;min-width:0;height:calc(4.44em + 9px)" in preview.text
     assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." not in preview.text
     assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
     assert "기사 중요도순" in preview.text
@@ -214,6 +264,7 @@ def test_twelve_article_preview_uses_balanced_two_column_layout():
             "title": f"브리핑 기사 {index:02d}",
             "source": "테스트일보",
             "description": "CEO 브리핑용 핵심 요약",
+            "bodyText": f"추출된 기사 본문 {index:02d} 첫 문장과 후속 설명",
         }
         for index in range(1, 13)
     ]
@@ -231,8 +282,14 @@ def test_twelve_article_preview_uses_balanced_two_column_layout():
     assert '<div class="articles is-twelve">' in preview
     assert '<div class="appendix-count"><strong>12</strong>' in preview
     assert "grid-template-rows:repeat(6,minmax(0,1fr))" in preview
+    assert "height:264mm" in preview
     assert preview.count('class="article-number"') == 12
     assert "grid-template-rows:64px minmax(0,1fr)" in preview
+    assert "추출된 기사 본문 01 첫 문장과 후속 설명" in preview
+    assert "CEO 브리핑용 핵심 요약" not in preview
+    assert "height:calc(4.44em + 9px)" in preview
+    assert "font-size:13px;line-height:1.48;line-clamp:3" in preview
+    assert "-webkit-line-clamp:3" in preview
     assert ".article.critical" not in preview
 
 

@@ -29,7 +29,9 @@ _ELLIPSIS_END = re.compile(r"(?:\.{3,}|…+)\s*[\"'’”)]*$")
 _COMPLETE_END = re.compile(r"(?:[.!?]|(?:다|요|임|됨|함))[\"'’”)]*$")
 _RESIDUAL_CONTAMINATION = re.compile(
     r"(?:많이\s*본\s*(?:기사|뉴스)|이\s*시각\s*주요기사|HOT\s*뉴스|랭킹뉴스|"
-    r"인기\s*기사|추천기사|기자의\s*다른\s*기사|오피니언|최신기사)", re.I
+    r"인기\s*기사|추천기사|기자의\s*다른\s*기사|다른\s*기사\s*어떠세요|"
+    r"뉴스룸\s*PICK|오늘의\s*주요기사|Your browser does not support the audio element|"
+    r"오피니언|최신기사)", re.I
 )
 _RESIDUAL_AI = re.compile(
     r"(?:기사\s*AI\s*해설|AI\s*해설|AI\s*요약|시나리오별\s*(?:예측|전망)|Key\s*Points)", re.I
