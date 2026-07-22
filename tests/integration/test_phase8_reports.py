@@ -96,6 +96,7 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert preview.text.count(" data-fit-page>") == 2
     assert "padding:12mm 7mm" in preview.text
     assert "--report-scale:.93" in preview.text
+    assert "--copy-size:14px" in preview.text
     assert ".page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}" in preview.text
     assert "-webkit-print-color-adjust:exact;print-color-adjust:exact" in preview.text
     assert "@media screen and (max-width:760px)" in preview.text
