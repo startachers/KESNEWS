@@ -136,8 +136,10 @@ def test_finalize_reopen_and_second_version_are_immutable():
 def test_preview_and_report_routes_are_read_only_and_versioned():
     report_date = "2026-09-02"
     _create_selected_article(report_date)
+    preview_revision = client.get(f"/api/briefings/{report_date}").json()["data"]["revision"]
     preview = client.get(f"/preview/{report_date}")
     assert preview.status_code == 200
+    assert preview.headers["cache-control"] == "no-store"
     assert "작업본 미리보기" in preview.text
     assert "AI 분석 이후 선정 기사·메모·이슈 연결이 변경된 상태" not in preview.text
     assert "textarea" not in preview.text
@@ -166,6 +168,18 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." not in preview.text
     assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
     assert "기사 중요도순" in preview.text
+    assert '<a href="/">편집 화면</a>' not in preview.text
+    assert '<button id="finalizeBtn" type="button" onclick="finalizeBriefing()">최종 확정</button>' in preview.text
+    assert f"expectedRevision: {preview_revision}," in preview.text
+    assert "function currentPreviewPresentation()" in preview.text
+    assert "articleOrder: Array.from(" in preview.text
+    assert "articleSummaries," in preview.text
+    assert "articleSummarySourceRevision," in preview.text
+    assert "previewArticleSummaries.set(item.articleId, item.summary)" in preview.text
+    assert "localStorage.setItem(previewPresentationKey" in preview.text
+    assert "restorePreviewPresentation();" in preview.text
+    assert "window.location.assign(" in preview.text
+    assert "+ '?version=' + encodeURIComponent(payload.data.version)" in preview.text
     assert '<button id="articleSummaryBtn" type="button" onclick="summarizeArticleBodies()">AI 본문 요약</button>' in preview.text
     assert "fetch('/api/briefings/2026-09-02/article-summaries'" in preview.text
     assert 'data-article-id="' in preview.text
@@ -198,12 +212,99 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     latest = client.get(f"/report/{report_date}")
     specified = client.get(f"/report/{report_date}?version=1")
     assert latest.status_code == specified.status_code == 200
+    assert latest.headers["cache-control"] == "no-store"
+    assert specified.headers["cache-control"] == "no-store"
     assert "최종본 v1" in latest.text
     assert "onclick=\"window.print()\"" in latest.text
+    assert "편집 화면" not in latest.text
+    assert "최종 확정" not in latest.text
     assert "AI 본문 요약" not in latest.text
     missing = client.get(f"/api/briefings/{report_date}/versions/99")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "BRIEFING_VERSION_NOT_FOUND"
+
+
+def test_finalize_preserves_preview_article_order_and_ai_summaries_in_snapshot():
+    report_date = "2026-09-28"
+    first_id = _create_selected_article(report_date)
+    second = client.post(
+        "/api/articles",
+        json={
+            "reportDate": report_date,
+            "title": "산업단지 전기설비 특별점검 시행",
+            "source": "두번째일보",
+            "url": "https://example.com/report/2026-09-28/second",
+            "description": "기존 두 번째 기사 본문입니다.",
+            "category": "direct",
+        },
+    )
+    assert second.status_code == 200
+    second_id = second.json()["data"]["id"]
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+
+    finalized = client.post(
+        f"/api/briefings/{report_date}/finalize",
+        json={
+            "expectedRevision": briefing["revision"],
+            "articleOrder": [second_id, first_id],
+            "articleSummaries": [
+                {"articleId": first_id, "summary": "첫 번째 기사 AI 확정 요약입니다."},
+                {"articleId": second_id, "summary": "두 번째 기사 AI 확정 요약입니다."},
+            ],
+            "articleSummarySourceRevision": briefing["revision"],
+        },
+    )
+
+    assert finalized.status_code == 200
+    version = client.get(f"/api/briefings/{report_date}/versions/1").json()["data"]
+    articles = version["snapshot"]["articles"]
+    assert [item["id"] for item in articles] == [second_id, first_id]
+    assert [item["reportSummary"] for item in articles] == [
+        "두 번째 기사 AI 확정 요약입니다.",
+        "첫 번째 기사 AI 확정 요약입니다.",
+    ]
+    report = client.get(f"/report/{report_date}")
+    assert report.status_code == 200
+    assert report.text.index(f'data-article-id="{second_id}"') < report.text.index(
+        f'data-article-id="{first_id}"'
+    )
+    assert "두 번째 기사 AI 확정 요약입니다." in report.text
+    assert "첫 번째 기사 AI 확정 요약입니다." in report.text
+
+
+def test_finalize_rejects_preview_order_that_does_not_match_selected_articles():
+    report_date = "2026-09-29"
+    _create_selected_article(report_date)
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+
+    response = client.post(
+        f"/api/briefings/{report_date}/finalize",
+        json={"expectedRevision": briefing["revision"], "articleOrder": ["missing-article"]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "FINALIZE_PRESENTATION_INVALID"
+    current = client.get(f"/api/briefings/{report_date}").json()["data"]
+    assert current["status"] == "draft"
+
+
+def test_finalize_rejects_ai_summaries_from_a_stale_preview_revision():
+    report_date = "2026-09-30"
+    article_id = _create_selected_article(report_date)
+    briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
+
+    response = client.post(
+        f"/api/briefings/{report_date}/finalize",
+        json={
+            "expectedRevision": briefing["revision"],
+            "articleOrder": [article_id],
+            "articleSummaries": [{"articleId": article_id, "summary": "오래된 AI 요약"}],
+            "articleSummarySourceRevision": briefing["revision"] - 1,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "AI_INPUT_STALE"
 
 
 def test_preview_rebuild_excludes_article_deselected_after_previous_preview():

@@ -7,7 +7,7 @@ import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFro
 import { runSearch } from "./features/collection.js?v=20260716-19";
 import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js?v=20260722-1";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, handleTopIssuesClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260721-3";
-import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport, resetTodayWork } from "./features/data-io.js";
+import { importFile, exportJson, exportCsv, copySummary, changeReportDate, finalizeCurrentBriefing, reopenCurrentBriefing, openPreview, openFinalReport, resetTodayWork } from "./features/data-io.js?v=20260722-1";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";

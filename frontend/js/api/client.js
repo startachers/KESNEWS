@@ -53,10 +53,10 @@ export function resetTodayWork(date, expectedRevision) {
   }, 30000);
 }
 
-export function finalizeBriefing(date, expectedRevision) {
+export function finalizeBriefing(date, expectedRevision, presentation = {}) {
   return request(`/briefings/${date}/finalize`, {
     method: "POST",
-    body: JSON.stringify({ expectedRevision }),
+    body: JSON.stringify({ expectedRevision, ...presentation }),
   });
 }
 

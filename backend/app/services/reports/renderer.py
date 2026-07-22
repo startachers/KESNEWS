@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from html import escape
@@ -68,6 +69,9 @@ def _datetime_label(value: Any, fallback: str, *, with_year: bool = False) -> st
 
 
 def _article_body_preview(item: dict[str, Any]) -> str:
+    report_summary = clean_text(item.get("reportSummary"))
+    if report_summary:
+        return report_summary
     body_text = str(item.get("bodyText") or "")
     description = clean_text(item.get("description"))
     if not body_text:
@@ -582,6 +586,123 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
         if preview
         else ""
     )
+    finalize_button = (
+        '<button id="finalizeBtn" type="button" onclick="finalizeBriefing()">'
+        '최종 확정</button><span id="finalizeStatus" class="toolbar-status" '
+        'role="status" aria-live="polite"></span>'
+        if preview
+        else ""
+    )
+    report_date_json = json.dumps(report_date, ensure_ascii=False).replace("<", "\\u003c")
+    source_revision = int(snapshot.get("sourceRevision") or briefing.get("revision") or 0)
+    presentation_key_json = json.dumps(
+        f"kesco-preview-presentation:{report_date}:{source_revision}", ensure_ascii=False
+    ).replace("<", "\\u003c")
+    finalize_script = (
+        f"""
+    const previewArticleSummaries = new Map();
+    let articleSummarySourceRevision = null;
+    const previewPresentationKey = {presentation_key_json};
+
+    function currentPreviewPresentation() {{
+      return {{
+        articleOrder: Array.from(
+          document.querySelectorAll('.articles .article[data-article-id]'),
+        ).map(card => card.dataset.articleId),
+        articleSummaries: Array.from(
+          previewArticleSummaries,
+          ([articleId, summary]) => ({{articleId, summary}}),
+        ),
+        articleSummarySourceRevision,
+      }};
+    }}
+
+    function savePreviewPresentation() {{
+      try {{
+        localStorage.setItem(previewPresentationKey, JSON.stringify(currentPreviewPresentation()));
+      }} catch (error) {{
+        console.error('미리보기 작업 상태를 메인 화면과 공유하지 못했습니다.', error);
+      }}
+    }}
+
+    function restorePreviewPresentation() {{
+      try {{
+        const stored = JSON.parse(localStorage.getItem(previewPresentationKey) || 'null');
+        if (!stored) return;
+        const list = document.querySelector('.articles');
+        const cards = Array.from(list?.querySelectorAll('.article[data-article-id]') || []);
+        const cardsById = new Map(cards.map(card => [card.dataset.articleId, card]));
+        if (
+          Array.isArray(stored.articleOrder)
+          && stored.articleOrder.length === cards.length
+          && new Set(stored.articleOrder).size === cards.length
+          && stored.articleOrder.every(articleId => cardsById.has(articleId))
+        ) {{
+          stored.articleOrder.forEach((articleId, index) => {{
+            const card = cardsById.get(articleId);
+            const number = card.querySelector('.article-number');
+            if (number) number.textContent = String(index + 1).padStart(2, '0');
+            list.appendChild(card);
+          }});
+        }}
+        if (
+          Array.isArray(stored.articleSummaries)
+          && stored.articleSummarySourceRevision === {source_revision}
+        ) {{
+          for (const item of stored.articleSummaries) {{
+            const card = cardsById.get(item.articleId);
+            const description = card?.querySelector('.desc');
+            if (description && item.summary) {{
+              description.textContent = item.summary;
+              previewArticleSummaries.set(item.articleId, item.summary);
+            }}
+          }}
+          articleSummarySourceRevision = stored.articleSummarySourceRevision;
+        }}
+      }} catch (error) {{
+        localStorage.removeItem(previewPresentationKey);
+        console.error('저장된 미리보기 작업 상태를 복원하지 못했습니다.', error);
+      }}
+    }}
+
+    async function finalizeBriefing() {{
+      const button = document.getElementById('finalizeBtn');
+      const status = document.getElementById('finalizeStatus');
+      if (!button || !status || button.disabled) return;
+      if (!window.confirm('{_text(report_date)} 작업본을 CEO 보고 버전으로 최종 확정하시겠습니까? 확정 후에는 수정할 수 없습니다.')) return;
+      button.disabled = true;
+      status.classList.remove('error');
+      status.textContent = '최종 확정 중…';
+      try {{
+        const {{articleOrder, articleSummaries, articleSummarySourceRevision}} =
+          currentPreviewPresentation();
+        const response = await fetch('/api/briefings/' + encodeURIComponent({report_date_json}) + '/finalize', {{
+          method: 'POST',
+          headers: {{Accept: 'application/json', 'Content-Type': 'application/json'}},
+          body: JSON.stringify({{
+            expectedRevision: {source_revision},
+            articleOrder,
+            articleSummaries,
+            articleSummarySourceRevision,
+          }}),
+        }});
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error?.message || `최종 확정 실패 (${{response.status}})`);
+        localStorage.removeItem(previewPresentationKey);
+        status.textContent = `최종 확정 v${{payload.data.version}} 완료`;
+        window.location.assign(
+          '/report/' + encodeURIComponent({report_date_json})
+          + '?version=' + encodeURIComponent(payload.data.version),
+        );
+      }} catch (error) {{
+        status.classList.add('error');
+        status.textContent = error instanceof Error ? error.message : '최종 확정에 실패했습니다.';
+        button.disabled = false;
+      }}
+    }}"""
+        if preview
+        else ""
+    )
     summary_script = (
         f"""
     async function summarizeArticleBodies() {{
@@ -604,11 +725,17 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error?.message || `AI 요약 실패 (${{response.status}})`);
         const cards = Array.from(document.querySelectorAll('.article[data-article-id]'));
+        previewArticleSummaries.clear();
         for (const item of payload.data.summaries || []) {{
           const card = cards.find(candidate => candidate.dataset.articleId === item.articleId);
           const description = card?.querySelector('.desc');
-          if (description) description.textContent = item.summary;
+          if (description) {{
+            description.textContent = item.summary;
+            previewArticleSummaries.set(item.articleId, item.summary);
+          }}
         }}
+        articleSummarySourceRevision = payload.data.sourceRevision;
+        savePreviewPresentation();
         status.textContent = `AI 본문 요약 완료 · ${{payload.data.summaries.length}}건`;
       }} catch (error) {{
         status.classList.add('error');
@@ -696,7 +823,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article-link,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
-    <div class="toolbar"><a href="/">편집 화면</a>{summary_button}<button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
+    <div class="toolbar">{finalize_button}{summary_button}<button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
     <main>
     <section class="report-page analysis-page" data-fit-page><div class="page-inner">
     <header class="masthead">
@@ -734,6 +861,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
       }});
       button.setAttribute('aria-pressed', String(importanceMode));
       button.textContent = importanceMode ? '기사 편집순' : '기사 중요도순';
+      if (typeof savePreviewPresentation === 'function') savePreviewPresentation();
     }}
+    {finalize_script}
     {summary_script}
+    {'restorePreviewPresentation();' if preview else ''}
     </script></body></html>"""

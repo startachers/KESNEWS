@@ -42,7 +42,7 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260722-1" in response.text
+    assert "js/app.js?v=20260722-2" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
@@ -120,6 +120,25 @@ def test_index_html_is_served_at_root():
     assert preview_function.index("await flushDailyState()") < preview_function.index(
         "previewWindow.location.replace(previewUrl)"
     )
+    finalize_function = data_io_script.text.split(
+        "export async function finalizeCurrentBriefing()", 1
+    )[1].split("export async function reopenCurrentBriefing()", 1)[0]
+    assert "loadPreviewPresentation(state.date, previewRevision)" in finalize_function
+    assert "previewPresentation || {}" in finalize_function
+    assert "clearPreviewPresentation(state.date, previewRevision)" in finalize_function
+    final_report_function = data_io_script.text.split(
+        "export async function openFinalReport()", 1
+    )[1].split("export async function finalizeCurrentBriefing()", 1)[0]
+    assert "await api.listBriefingVersions(state.date)" in final_report_function
+    assert "item.version > current.version" in final_report_function
+    assert "?version=${encodeURIComponent(latest.version)}" in final_report_function
+    assert "reportWindow.location.replace(reportUrl)" in final_report_function
+
+    store_script = client.get("/js/state/store.js")
+    flush_function = store_script.text.split("export function flushDailyState()", 1)[1].split(
+        "export let settings", 1
+    )[0]
+    assert "if (!saveTimer) return savePromise;" in flush_function
 
     report_draft_script = client.get("/js/features/report-draft.js")
     assert 'chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" }' in report_draft_script.text
@@ -146,6 +165,8 @@ def test_index_html_is_served_at_root():
     assert "getAnalysisMarkdown" not in shortcut_function
 
     api_client = client.get("/js/api/client.js")
+    assert "finalizeBriefing(date, expectedRevision, presentation = {})" in api_client.text
+    assert "JSON.stringify({ expectedRevision, ...presentation })" in api_client.text
     assert 'confirmation: "RESET_TODAY"' in api_client.text
     assert "const MANAGEMENT_ANALYSIS_REQUEST_TIMEOUT_MS = 1230000;" in api_client.text
     assert "const ARTICLE_SELECTION_REQUEST_TIMEOUT_MS = 660000;" in api_client.text

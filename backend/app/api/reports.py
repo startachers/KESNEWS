@@ -34,6 +34,17 @@ class RevisionRequest(BaseModel):
     expectedRevision: int
 
 
+class FinalizeArticleSummary(BaseModel):
+    articleId: str
+    summary: str
+
+
+class FinalizeRequest(RevisionRequest):
+    articleOrder: list[str] | None = None
+    articleSummaries: list[FinalizeArticleSummary] | None = None
+    articleSummarySourceRevision: int | None = None
+
+
 class ArticleSummaryRequest(BaseModel):
     model: str
 
@@ -78,7 +89,7 @@ async def get_briefing_version(report_date: str, version: int) -> Any:
 
 
 @router.post("/api/briefings/{report_date}/finalize")
-async def finalize_briefing(report_date: str, request: RevisionRequest) -> Any:
+async def finalize_briefing(report_date: str, request: FinalizeRequest) -> Any:
     connection = get_connection()
     written_path: Path | None = None
     snapshot_path: Path | None = None
@@ -109,6 +120,47 @@ async def finalize_briefing(report_date: str, request: RevisionRequest) -> Any:
             snapshot = build_snapshot(
                 connection, briefing, version=version, finalized_at=finalized_at
             )
+            articles = snapshot.get("articles") or []
+            selected_ids = [str(item.get("id") or "") for item in articles]
+            selected_id_set = set(selected_ids)
+            if request.articleOrder is not None:
+                article_order = request.articleOrder
+                if (
+                    len(article_order) != len(selected_ids)
+                    or len(set(article_order)) != len(article_order)
+                    or set(article_order) != selected_id_set
+                ):
+                    return error_response(
+                        "FINALIZE_PRESENTATION_INVALID",
+                        "미리보기 기사 순서가 현재 선정 기사와 일치하지 않습니다.",
+                    )
+                articles_by_id = {str(item.get("id")): item for item in articles}
+                snapshot["articles"] = [articles_by_id[article_id] for article_id in article_order]
+                articles = snapshot["articles"]
+            if request.articleSummaries:
+                summaries = request.articleSummaries
+                summary_ids = [item.articleId for item in summaries]
+                if request.articleSummarySourceRevision != request.expectedRevision:
+                    return error_response(
+                        "AI_INPUT_STALE",
+                        "AI 기사 요약 이후 작업본이 변경됐습니다. 미리보기에서 다시 요약해 주세요.",
+                    )
+                if (
+                    len(summary_ids) != len(selected_ids)
+                    or len(set(summary_ids)) != len(summary_ids)
+                    or set(summary_ids) != selected_id_set
+                    or any(
+                        not item.summary.strip() or len(item.summary.strip()) > 2000
+                        for item in summaries
+                    )
+                ):
+                    return error_response(
+                        "FINALIZE_PRESENTATION_INVALID",
+                        "AI 기사 요약 구성이 현재 선정 기사와 일치하지 않습니다.",
+                    )
+                summaries_by_id = {item.articleId: item.summary.strip() for item in summaries}
+                for article in articles:
+                    article["reportSummary"] = summaries_by_id[str(article.get("id"))]
             html = render_report(snapshot)
             written_path = write_report(report_date, version, html)
             version_row = version_repo.create(
@@ -176,7 +228,9 @@ async def preview_report(report_date: str):
         snapshot = build_snapshot(connection, briefing, version=None, finalized_at=None)
     finally:
         connection.close()
-    return HTMLResponse(render_report(snapshot, preview=True))
+    return HTMLResponse(
+        render_report(snapshot, preview=True), headers={"Cache-Control": "no-store"}
+    )
 
 
 @router.post("/api/briefings/{report_date}/article-summaries")
@@ -259,5 +313,10 @@ async def final_report(report_date: str, version: int | None = Query(None)):
         return HTMLResponse(f"{report_date} 최종본이 없습니다.", status_code=404)
     path = Path(row["report_html_path"]) if row["report_html_path"] else None
     if path is not None and path.is_file():
-        return HTMLResponse(path.read_text(encoding="utf-8"))
-    return HTMLResponse(render_report(json.loads(row["snapshot_json"])))
+        return HTMLResponse(
+            path.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"}
+        )
+    return HTMLResponse(
+        render_report(json.loads(row["snapshot_json"])),
+        headers={"Cache-Control": "no-store"},
+    )

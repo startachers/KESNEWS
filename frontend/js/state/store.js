@@ -227,7 +227,8 @@ export function saveDailyState() {
 }
 
 export function flushDailyState() {
-  if (saveTimer) window.clearTimeout(saveTimer);
+  if (!saveTimer) return savePromise;
+  window.clearTimeout(saveTimer);
   saveTimer = null;
   return queueScalarSave();
 }

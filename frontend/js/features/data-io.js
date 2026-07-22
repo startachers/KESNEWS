@@ -13,6 +13,34 @@ import { renderAll } from "../ui/renderers.js";
 import { setRuleSummary, refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
 import { flushArticleChanges } from "./articles.js?v=20260721-3";
 
+const PREVIEW_PRESENTATION_PREFIX = "kesco-preview-presentation";
+
+function previewPresentationKey(date, revision) {
+  return `${PREVIEW_PRESENTATION_PREFIX}:${date}:${revision}`;
+}
+
+function loadPreviewPresentation(date, revision) {
+  const key = previewPresentationKey(date, revision);
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    if (!value || !Array.isArray(value.articleOrder) || !Array.isArray(value.articleSummaries)) {
+      return null;
+    }
+    return {
+      articleOrder: value.articleOrder,
+      articleSummaries: value.articleSummaries,
+      articleSummarySourceRevision: value.articleSummarySourceRevision ?? null,
+    };
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function clearPreviewPresentation(date, revision) {
+  localStorage.removeItem(previewPresentationKey(date, revision));
+}
+
 /** 실제 검색 전 화면 시연용 샘플이다. 운영 데이터(articles/briefings)와 분리된 순수 프런트엔드 픽스처이며 서버에 저장되지 않는다. */
 export function loadSample() {
   const base = new Date();
@@ -102,8 +130,27 @@ export async function openPreview() {
   }
 }
 
-export function openFinalReport() {
-  window.open(`/report/${encodeURIComponent(state.date)}`, "_blank", "noopener");
+export async function openFinalReport() {
+  const reportWindow = window.open("about:blank", "_blank");
+  if (!reportWindow) {
+    showToast("팝업이 차단되어 최종본을 열지 못했습니다.", "error");
+    return;
+  }
+  reportWindow.opener = null;
+  try {
+    const result = await api.listBriefingVersions(state.date);
+    const versions = result.data?.versions || [];
+    const latest = versions.reduce(
+      (current, item) => !current || item.version > current.version ? item : current,
+      null,
+    );
+    if (!latest) throw new Error(`${state.date} 최종 확정본이 없습니다.`);
+    const reportUrl = `/report/${encodeURIComponent(state.date)}?version=${encodeURIComponent(latest.version)}`;
+    reportWindow.location.replace(reportUrl);
+  } catch (error) {
+    reportWindow.close();
+    showToast(`최종본 보기 실패: ${friendlyError(error)}`, "error");
+  }
 }
 
 export async function finalizeCurrentBriefing() {
@@ -112,10 +159,20 @@ export async function finalizeCurrentBriefing() {
     return;
   }
   if (!window.confirm(`${state.date} 작업본을 최종 확정하시겠습니까? 확정 후에는 수정할 수 없습니다.`)) return;
+  const previewRevision = state.revision;
+  const previewPresentation = loadPreviewPresentation(state.date, previewRevision);
   try {
     await flushArticleChanges();
     await flushDailyState();
-    const result = await api.finalizeBriefing(state.date, state.revision);
+    if (previewPresentation && state.revision !== previewRevision) {
+      throw new Error("CEO 미리보기 이후 작업본이 변경됐습니다. 미리보기를 다시 열어 확인해 주세요.");
+    }
+    const result = await api.finalizeBriefing(
+      state.date,
+      state.revision,
+      previewPresentation || {},
+    );
+    clearPreviewPresentation(state.date, previewRevision);
     setState(await loadDailyState(state.date));
     renderAll();
     showToast(`최종본 v${result.data.version}을 확정했습니다.`, "success");
