@@ -31,7 +31,7 @@ def build_basis_prompt(report_date: str, prepared_by: str, articles: list[dict[s
 {guide}
 
 [중간 분석 필드]
-- section: core(오늘 한줄), implication(언론 동향 분석), reference(참고 동향)
+- section: core(오늘 한줄), implication(언론 동향 분석), reference(기타 동향)
 - articleFact: 기사에서 확인된 사실만 작성한다.
 - attributedClaim: 언론·전문가의 주장만 출처를 표시해 작성하며 없으면 빈 문자열로 둔다.
 - kescoInterpretation: 한국전기안전공사의 역할 범위 안에서 해석한다.

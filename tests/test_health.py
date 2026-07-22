@@ -57,10 +57,10 @@ def test_index_html_is_served_at_root():
     assert 'articles.js?v=20260721-3' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
-    assert 'report-draft.js?v=20260722-1' in app_script.text
+    assert 'report-draft.js?v=20260722-3' in app_script.text
     assert 'openExternalAi("chatgpt")' in app_script.text
     assert 'openExternalAi("claude")' in app_script.text
-    assert 'ai-analysis.js?v=20260721-1' in app_script.text
+    assert 'ai-analysis.js?v=20260722-1' in app_script.text
     assert 'auto-selection.js?v=20260721-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
     assert '$("resetTodayBtn").addEventListener("click", resetTodayWork)' in app_script.text
@@ -125,7 +125,16 @@ def test_index_html_is_served_at_root():
     assert 'chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" }' in report_draft_script.text
     assert 'claude: { label: "Claude", url: "https://claude.ai/new" }' in report_draft_script.text
     assert "export const EXTERNAL_ANALYSIS_PROMPT" in report_draft_script.text
-    assert "첨부한 KESCO CEO 일일 언론브리핑 AI 분석자료 Markdown 파일만 근거" in (
+    assert "첨부한 「KESCO CEO 일일 언론브리핑 AI 분석자료」 Markdown 파일만을 근거" in (
+        report_draft_script.text
+    )
+    assert "전체 문장의 약 30%만 사실 설명에 사용" in report_draft_script.text
+    assert "최대 2개 문단으로 작성하십시오." in report_draft_script.text
+    assert "전체 분량은 공백 포함 약 1,000~1,400자" in report_draft_script.text
+    assert "최대 1,600자를 넘지 마십시오." in report_draft_script.text
+    assert "④ 기타 동향" in report_draft_script.text
+    assert "④ 참고 동향" not in report_draft_script.text
+    assert "기사 ID, 이슈 ID, URL, 분석 적합도와 내부 분류값을 출력하지 마십시오." in (
         report_draft_script.text
     )
     assert 'window.open("about:blank", "_blank")' in report_draft_script.text

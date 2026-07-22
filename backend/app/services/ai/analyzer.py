@@ -330,5 +330,5 @@ def format_analysis(result: dict[str, Any]) -> str:
         "\n\n".join(management_references) if management_references else "직접적인 경영 현안은 제한적입니다.",
     ]
     if references:
-        lines.extend(("", "④ 참고 동향", "\n\n".join(references)))
+        lines.extend(("", "④ 기타 동향", "\n\n".join(references)))
     return "\n".join(lines)

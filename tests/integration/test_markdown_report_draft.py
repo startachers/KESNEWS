@@ -80,7 +80,7 @@ def test_new_plain_text_no_reference_phrase_does_not_create_reference_issue():
     content = content_from_plain_text(
         "① 오늘의 핵심\n현안을 확인합니다.\n\n"
         "② 경영 시사점\n업무 범위를 검토합니다.\n\n"
-        "③ 참고 동향\n별도 참고 동향 없음.",
+        "④ 기타 동향\n별도 기타 동향 없음.",
         ["A01"],
     )
 
@@ -94,7 +94,7 @@ def test_new_plain_text_splits_management_and_optional_monitoring_sections():
         "① 오늘 한줄\n현안을 확인합니다.\n\n"
         "② 언론 동향 분석\n공식 조사 결과를 기다립니다.\n\n"
         "③ 경영 참고사항\n관계기관과 전기적 요인을 확인합니다.\n\n"
-        "④ 참고 동향\n그리드코드 개정 동향을 모니터링합니다.",
+        "④ 기타 동향\n그리드코드 개정 동향을 모니터링합니다.",
         ["A01"],
     )
 
@@ -168,7 +168,8 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert "오늘 한줄" in preview.text
     assert "언론 동향 분석" in preview.text
     assert "경영 참고사항" in preview.text
-    assert "참고 동향" in preview.text
+    assert "기타 동향" in preview.text
+    assert "참고 동향" not in preview.text
     assert "관련 기사" in preview.text
     assert "분석 근거" not in preview.text
     assert "근거 기사 링크" not in preview.text

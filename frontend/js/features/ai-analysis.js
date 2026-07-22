@@ -322,6 +322,6 @@ export function formatAiAnalysis(analysis, evidenceMap = []) {
     "③ 경영 참고사항",
     managementReferences.length ? managementReferences.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
   ];
-  if (references.length) lines.push("", "④ 참고 동향", references.join("\n\n"));
+  if (references.length) lines.push("", "④ 기타 동향", references.join("\n\n"));
   return lines.join("\n");
 }

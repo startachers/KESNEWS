@@ -414,7 +414,7 @@ def validate_basis_items(
             item_warnings.append(
                 _warning(
                     "REFERENCE_SCOPE_INVALID",
-                    "참고 동향 근거가 내부 경영관리 범위와 직접 연결되지 않습니다.",
+                    "기타 동향 근거가 내부 경영관리 범위와 직접 연결되지 않습니다.",
                     article_ids=item.articleIds,
                     field=f"items[{index}].section",
                     text=item.articleFact,

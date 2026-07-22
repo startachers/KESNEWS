@@ -31,7 +31,7 @@ def test_format_analysis_uses_three_management_message_sections():
         "폭염과 전력사용 증가에 대비한 예방활동을 점검합니다.\n\n"
         "③ 경영 참고사항\n"
         "현장 예방활동을 점검합니다.\n\n"
-        "④ 참고 동향\n"
+        "④ 기타 동향\n"
         "공공시스템 취약점 점검이 확대되고 있습니다. 공사의 대응체계를 살펴볼 수 있겠습니다."
     )
 

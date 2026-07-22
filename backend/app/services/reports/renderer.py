@@ -619,7 +619,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <section class="section"><h2>① 오늘 한줄</h2>{_render_lead(analysis.get('managementMessage'))}</section>
     <section class="section"><h2>② 언론 동향 분석</h2>{_render_trend_analysis(analysis)}</section>
     <section class="section"><h2>③ 경영 참고사항</h2>{_render_management_reference(analysis)}</section>
-    {f'<section class="section"><h2>④ 참고 동향</h2>{monitoring_reference}</section>' if (monitoring_reference := _render_monitoring_reference(analysis)) else ''}
+    {f'<section class="section"><h2>④ 기타 동향</h2>{monitoring_reference}</section>' if (monitoring_reference := _render_monitoring_reference(analysis)) else ''}
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">

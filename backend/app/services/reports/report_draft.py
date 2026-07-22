@@ -118,7 +118,7 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
             r"(?im)^\s*(?:(?:③|3[.)]?)\s*)?경영\s*참고\s*사항\s*$"
         ),
         "reference": re.compile(
-            r"(?im)^\s*(?:(?:③|④|3[.)]?|4[.)]?)\s*)?참고\s*동향\s*$"
+            r"(?im)^\s*(?:(?:③|④|3[.)]?|4[.)]?)\s*)?(?:기타|참고)\s*동향\s*$"
         ),
     }
     matches = sorted(
@@ -140,7 +140,7 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     implication = sections.get("implication") or ""
     references = sections.get("reference") or ""
     management = sections.get("management") or ""
-    if references.rstrip(" .") == "별도 참고 동향 없음":
+    if references.rstrip(" .") in {"별도 기타 동향 없음", "별도 참고 동향 없음"}:
         references = ""
     if management.rstrip(" .") == "직접적인 경영 현안은 제한적입니다":
         management = ""
@@ -152,7 +152,7 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
         },
         "keyIssues": (
             [{
-                "title": "참고 동향",
+                "title": "기타 동향",
                 "urgency": "reference",
                 "summary": references,
                 "managementImpact": "",
@@ -164,7 +164,7 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
                 "certainty": "reported",
                 "electricalCauseStatus": "not_applicable",
                 "kescoJurisdiction": "MONITORING",
-                "jurisdictionReason": "외부 분석의 참고 동향으로 입력됨",
+                "jurisdictionReason": "외부 분석의 기타 동향으로 입력됨",
                 "excludedElements": [],
                 "recommendation": "",
                 "actionLevel": "policy_monitoring",
