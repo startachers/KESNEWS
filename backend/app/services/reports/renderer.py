@@ -480,7 +480,7 @@ def _article_cards(
     if not articles:
         return '<p class="empty">해당 기사가 없습니다.</p>'
     cards = []
-    for item in articles:
+    for editor_index, item in enumerate(articles):
         url = str(item.get("url") or "")
         title = _text(item.get("title"), "제목 없음")
         title_html = (
@@ -490,9 +490,17 @@ def _article_cards(
         )
         anchor = f' id="article-{_text(item.get("id"))}"' if include_anchors else ""
         risk_class = " critical" if item.get("risk") == "critical" else ""
+        risk_rank = {"critical": 0, "watch": 1, "routine": 2}.get(item.get("risk"), 3)
+        priority_score = item.get("priorityScore")
+        try:
+            priority_score = float(priority_score)
+        except (TypeError, ValueError):
+            priority_score = 0
         description = " ".join(str(item.get("description") or "핵심 요약 없음").split())
         cards.append(
-            f'<article class="article{risk_class}"{anchor}>'
+            f'<article class="article{risk_class}"{anchor} data-editor-index="{editor_index}" '
+            f'data-starred="{1 if item.get("starred") else 0}" data-risk-rank="{risk_rank}" '
+            f'data-priority-score="{priority_score}">'
             f'<div class="article-main"><div class="article-title-row"><h3>{title_html}</h3>'
             f'<p class="meta">{_text(item.get("source"), "출처 미상")} · '
             f'{_text(_datetime_label(item.get("pubDate"), "시각 미상"))}</p></div>'
@@ -540,6 +548,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     body{margin:0;background:#e8edef;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.65;font-size:14px}
     .toolbar{position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;gap:8px;padding:10px 20px;background:#10253cee}
     .toolbar a,.toolbar button{border:1px solid #ffffff55;border-radius:8px;padding:7px 14px;background:#fff;color:var(--navy);font-weight:700;font-size:13px;text-decoration:none;cursor:pointer}
+    .toolbar button[aria-pressed="true"]{border-color:#77d6cd;background:#dff3ef;color:#075f59}
     main{width:min(210mm,calc(100% - 28px));margin:24px auto 48px;display:grid;gap:24px}
     .report-page{position:relative;width:210mm;height:297mm;overflow:hidden;padding:12mm 7mm;background:#fff;box-shadow:0 14px 45px #10253c1c}
     .page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}
@@ -566,8 +575,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .sec-num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;font-weight:800}
     .sec-tag{border-radius:6px;padding:2px 8px;background:var(--navy);color:#fff;font-size:12px;font-weight:800}
     .analysis-lead{position:relative;padding:16px 18px;border:1px solid #badbd6;border-radius:4px 16px 16px 4px;background:linear-gradient(135deg,#effaf7,#f8fbfb);box-shadow:inset 5px 0 var(--teal)}
-    .analysis-lead:before{content:"CEO VIEW";display:block;margin-bottom:10px;color:var(--teal);font-size:10px;font-weight:900;letter-spacing:.16em}
-    .analysis-lead p{margin:0;white-space:pre-wrap;color:#172e3b;font-size:var(--copy-size);font-weight:700;line-height:1.65;letter-spacing:-.012em}
+    .analysis-lead p{margin:0;white-space:pre-wrap;color:#172e3b;font-size:15.4px;font-weight:700;line-height:1.6;letter-spacing:-.012em}
     .analysis-prose{padding:2px 2px 4px}.analysis-prose>p{margin:0;white-space:pre-wrap;font-size:var(--copy-size);line-height:1.65;color:#293943}
     .alert-box{margin-top:14px;padding:16px 18px;border:1px solid #e4b6b6;border-left:5px solid var(--red);border-radius:8px;background:#fdf3f3}
     .alert-box h3{margin:0 0 8px;color:var(--red);font-size:14px}
@@ -590,7 +598,9 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .badge.risk-critical{background:#fdeaea;color:var(--red)}.badge.risk-watch{background:#fff3e0;color:var(--amber)}
     .badge.tone-negative{background:#f3e8f5;color:#7b3f8a}.badge.tone-positive{background:#e3f3f0;color:#086b63}
     .badge.star{background:#fff3d3;color:#8a6410}
-    .appendix-head{padding:0 0 12px;border-bottom:2px solid var(--navy)}.appendix-head .eyebrow{color:var(--teal)}.appendix-head h2{margin:4px 0 2px;color:var(--navy);font-size:24px}.appendix-head p{margin:0;color:var(--muted);font-size:12px}
+    .appendix-masthead{position:relative;overflow:hidden;padding:20px 28px 22px;background:linear-gradient(125deg,#0d2138 0%,#173e52 72%,#0b756e 150%);color:#fff}
+    .appendix-masthead:after{content:"";position:absolute;right:-90px;bottom:-210px;width:340px;height:340px;border:1px solid #ffffff1f;border-radius:50%;box-shadow:0 0 0 55px #ffffff0a,0 0 0 110px #ffffff08}
+    .appendix-masthead .doc-meta{position:relative;z-index:1}.appendix-title{position:relative;z-index:1}.appendix-title .eyebrow{color:#7ed7ce}.appendix-title h2{margin:5px 0 1px;color:#fff;font-size:26px;letter-spacing:-.035em}.appendix-title p{margin:0;color:#c7d8df;font-size:11.5px}
     .articles{display:grid;gap:3px;margin-top:10px;min-width:0}
     .article{display:block;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:7px;break-inside:avoid}
     .article.critical{border-color:#e4b6b6;border-left:4px solid var(--red);background:#fdf9f9}
@@ -607,7 +617,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article h3 a,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
-    <div class="toolbar"><a href="/">편집 화면</a><button type="button" onclick="window.print()">인쇄·PDF</button></div>
+    <div class="toolbar"><a href="/">편집 화면</a><button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
     <main>
     <section class="report-page analysis-page" data-fit-page><div class="page-inner">
     <header class="masthead">
@@ -617,13 +627,30 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     </header>
     <div class="body">
     <section class="section"><h2>① 오늘 한줄</h2>{_render_lead(analysis.get('managementMessage'))}</section>
-    <section class="section"><h2>② 언론 동향 분석</h2>{_render_trend_analysis(analysis)}</section>
+    <section class="section trend-section"><h2>② 언론 동향 분석</h2>{_render_trend_analysis(analysis)}</section>
     <section class="section"><h2>③ 경영 참고사항</h2>{_render_management_reference(analysis)}</section>
     {f'<section class="section"><h2>④ 기타 동향</h2>{monitoring_reference}</section>' if (monitoring_reference := _render_monitoring_reference(analysis)) else ''}
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">
-    <header class="appendix-head" id="appendix-articles"><p class="eyebrow">RELATED NEWS</p><h2>관련 기사</h2><p>제목과 핵심 요약을 각각 한 줄로 정리했습니다. 제목을 누르면 원문으로 이동합니다.</p></header>
+    <header class="appendix-masthead" id="appendix-articles"><div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div><div class="appendix-title"><p class="eyebrow">RELATED NEWS</p><h2>관련기사</h2><p>제목과 핵심 요약을 각각 한 줄로 정리했습니다. 제목을 누르면 원문으로 이동합니다.</p></div></header>
     <div class="articles">{_article_cards(report_articles)}</div>
     <footer class="footer"><span>최종본은 확정 당시 기사·평가·메모·AI 분석을 보존합니다.</span><span>확정시각 {_text(_datetime_label(snapshot.get('finalizedAt'), '미확정', with_year=True))}</span></footer>
-    </div></section></main></body></html>"""
+    </div></section></main><script>
+    function toggleArticleSort() {{
+      const list = document.querySelector('.articles');
+      const button = document.getElementById('articleSortBtn');
+      if (!list || !button) return;
+      const importanceMode = button.getAttribute('aria-pressed') !== 'true';
+      const cards = Array.from(list.querySelectorAll('.article'));
+      cards.sort((left, right) => importanceMode
+        ? Number(right.dataset.starred) - Number(left.dataset.starred)
+          || Number(left.dataset.riskRank) - Number(right.dataset.riskRank)
+          || Number(right.dataset.priorityScore) - Number(left.dataset.priorityScore)
+          || Number(left.dataset.editorIndex) - Number(right.dataset.editorIndex)
+        : Number(left.dataset.editorIndex) - Number(right.dataset.editorIndex));
+      cards.forEach(card => list.appendChild(card));
+      button.setAttribute('aria-pressed', String(importanceMode));
+      button.textContent = importanceMode ? '기사 편집순' : '기사 중요도순';
+    }}
+    </script></body></html>"""

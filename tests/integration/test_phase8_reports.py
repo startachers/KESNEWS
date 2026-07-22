@@ -97,6 +97,9 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "padding:12mm 7mm" in preview.text
     assert "--report-scale:.93" in preview.text
     assert "--copy-size:14px" in preview.text
+    assert 'content:"CEO VIEW"' not in preview.text
+    assert ".analysis-lead p{margin:0;white-space:pre-wrap;color:#172e3b;font-size:15.4px;font-weight:700" in preview.text
+    assert ".trend-section .analysis-prose>p" not in preview.text
     assert ".page-inner{width:100%;transform:scale(var(--report-scale));transform-origin:top center}" in preview.text
     assert "-webkit-print-color-adjust:exact;print-color-adjust:exact" in preview.text
     assert "@media screen and (max-width:760px)" in preview.text
@@ -108,6 +111,16 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert ".article h3{min-width:0;margin:0;overflow:hidden;font-size:16px" in preview.text
     assert ".article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px" in preview.text
     assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." in preview.text
+    assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
+    assert "기사 중요도순" in preview.text
+    assert 'class="appendix-masthead" id="appendix-articles"' in preview.text
+    assert "<h2>관련기사</h2>" in preview.text
+    assert "data-editor-index=\"0\"" in preview.text
+    assert "data-starred=\"0\"" in preview.text
+    assert "data-risk-rank=\"" in preview.text
+    assert "Number(right.dataset.starred) - Number(left.dataset.starred)" in preview.text
+    assert "Number(left.dataset.riskRank) - Number(right.dataset.riskRank)" in preview.text
+    assert "Number(right.dataset.priorityScore) - Number(left.dataset.priorityScore)" in preview.text
     assert '<div class="kpis">' not in preview.text
     assert '<span class="number">' not in preview.text
 
@@ -221,7 +234,7 @@ def test_final_snapshot_preserves_ai_evidence_article_link():
     assert "확산 추이를 확인한다." not in report
     assert "실행 항목" not in report
     assert "사실관계를 점검한다." in report
-    assert "관련 기사" in report
+    assert "관련기사" in report
     assert "분석 근거" not in report
     assert "근거 기사 링크" not in report
     assert "관련 기사 모음" not in report

@@ -170,7 +170,7 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert "경영 참고사항" in preview.text
     assert "기타 동향" in preview.text
     assert "참고 동향" not in preview.text
-    assert "관련 기사" in preview.text
+    assert "관련기사" in preview.text
     assert "분석 근거" not in preview.text
     assert "근거 기사 링크" not in preview.text
     assert "RSS 요약입니다." in preview.text
