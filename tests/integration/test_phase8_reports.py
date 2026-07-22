@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.services.reports.renderer import render_report
 
 client = TestClient(app)
 
@@ -105,21 +106,23 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "@media screen and (max-width:760px)" in preview.text
     assert "const fitAll" not in preview.text
     assert "zoom:.68" not in preview.text
-    assert "grid-template-columns:minmax(0,1fr) auto" in preview.text
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in preview.text
     assert '<a class="article-link" href="https://example.com/report/2026-09-02"' in preview.text
     assert '<div class="article-main"><div class="article-title-row"><h3>' in preview.text
     assert '</p></div><p class="desc">' in preview.text
-    assert '.article-link{display:block;min-width:0;color:inherit;text-decoration:none}' in preview.text
-    assert ".article h3{min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:16px" in preview.text
-    assert ".article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px" in preview.text
+    assert '.article-link{display:block;height:100%;min-width:0;color:inherit;text-decoration:none}' in preview.text
+    assert ".article h3{display:-webkit-box;min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:14.8px" in preview.text
+    assert ".article .desc{display:-webkit-box;min-width:0;margin:0;padding-top:8px" in preview.text
     assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." not in preview.text
     assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
     assert "기사 중요도순" in preview.text
     assert 'class="appendix-masthead" id="appendix-articles"' in preview.text
-    assert 'padding:8px 20px 10px;border-top:4px solid var(--navy);border-left:5px solid #35b8aa' in preview.text
-    assert 'grid-template-columns:auto auto;justify-content:start' in preview.text
-    assert '.appendix-title h2{margin:0;color:var(--navy);font-size:20px' in preview.text
-    assert '.articles{display:grid;gap:5px;margin-top:28px;min-width:0}' in preview.text
+    assert 'padding:13px 20px 14px;border-top:5px solid #35b8aa' in preview.text
+    assert 'grid-template-columns:auto auto 1fr' in preview.text
+    assert '.appendix-title h2{margin:0;color:#fff;font-size:24px' in preview.text
+    assert 'grid-template-columns:repeat(2,minmax(0,1fr))' in preview.text
+    assert '<span class="article-number" aria-hidden="true">01</span>' in preview.text
+    assert '<div class="appendix-count"><strong>1</strong>' in preview.text
     assert '최종본은 확정 당시 기사·평가·메모·AI 분석을 보존합니다.' not in preview.text
     assert '확정시각' not in preview.text
     assert '<footer class="footer">' not in preview.text
@@ -131,7 +134,7 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "Number(left.dataset.riskRank) - Number(right.dataset.riskRank)" in preview.text
     assert "Number(right.dataset.priorityScore) - Number(left.dataset.priorityScore)" in preview.text
     assert '<div class="kpis">' not in preview.text
-    assert '<span class="number">' not in preview.text
+    assert "number.textContent = String(index + 1).padStart(2, '0')" in preview.text
 
     assert client.get(f"/report/{report_date}").status_code == 404
     briefing = client.get(f"/api/briefings/{report_date}").json()["data"]
@@ -168,6 +171,69 @@ def test_preview_rebuild_excludes_article_deselected_after_previous_preview():
     refreshed_preview = client.get(f"/preview/{report_date}")
     assert refreshed_preview.status_code == 200
     assert article_anchor not in refreshed_preview.text
+
+
+def test_preview_appendix_does_not_restore_unselected_ai_evidence():
+    selected_article = {
+        "id": "selected-article",
+        "title": "현재 브리핑 선정 기사",
+        "source": "테스트일보",
+        "description": "현재 선택 상태를 유지해야 한다.",
+    }
+    unselected_evidence = {
+        "id": "unselected-evidence",
+        "title": "과거 AI 근거지만 선택 해제한 기사",
+        "source": "과거일보",
+        "description": "분석 이후 선택에서 해제됐다.",
+    }
+    snapshot = {
+        "reportDate": "2026-09-21",
+        "version": None,
+        "briefing": {},
+        "articles": [selected_article],
+        "evidence": {
+            "A01": {"articleId": selected_article["id"], "article": selected_article},
+            "A02": {
+                "articleId": unselected_evidence["id"],
+                "article": unselected_evidence,
+            },
+        },
+    }
+
+    preview = render_report(snapshot, preview=True)
+
+    assert preview.count('<article class="article') == 1
+    assert "현재 브리핑 선정 기사" in preview
+    assert "과거 AI 근거지만 선택 해제한 기사" not in preview
+
+
+def test_twelve_article_preview_uses_balanced_two_column_layout():
+    articles = [
+        {
+            "id": f"article-{index:02d}",
+            "title": f"브리핑 기사 {index:02d}",
+            "source": "테스트일보",
+            "description": "CEO 브리핑용 핵심 요약",
+        }
+        for index in range(1, 13)
+    ]
+    preview = render_report(
+        {
+            "reportDate": "2026-09-22",
+            "version": None,
+            "briefing": {},
+            "articles": articles,
+        },
+        preview=True,
+    )
+
+    assert preview.count('<article class="article') == 12
+    assert '<div class="articles is-twelve">' in preview
+    assert '<div class="appendix-count"><strong>12</strong>' in preview
+    assert "grid-template-rows:repeat(6,minmax(0,1fr))" in preview
+    assert preview.count('class="article-number"') == 12
+    assert "grid-template-rows:64px minmax(0,1fr)" in preview
+    assert ".article.critical" not in preview
 
 
 def test_final_snapshot_preserves_ai_evidence_article_link():

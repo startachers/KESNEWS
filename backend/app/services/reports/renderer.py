@@ -485,7 +485,6 @@ def _article_cards(
         title = _text(item.get("title"), "제목 없음")
         has_external_url = url.startswith(("http://", "https://"))
         anchor = f' id="article-{_text(item.get("id"))}"' if include_anchors else ""
-        risk_class = " critical" if item.get("risk") == "critical" else ""
         risk_rank = {"critical": 0, "watch": 1, "routine": 2}.get(item.get("risk"), 3)
         priority_score = item.get("priorityScore")
         try:
@@ -506,27 +505,13 @@ def _article_cards(
             else article_main
         )
         cards.append(
-            f'<article class="article{risk_class}"{anchor} data-editor-index="{editor_index}" '
+            f'<article class="article"{anchor} data-editor-index="{editor_index}" '
             f'data-starred="{1 if item.get("starred") else 0}" data-risk-rank="{risk_rank}" '
             f'data-priority-score="{priority_score}">'
+            f'<span class="article-number" aria-hidden="true">{editor_index + 1:02d}</span>'
             f'{linked_main}</article>'
         )
     return "".join(cards)
-
-
-def _report_articles(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-    """선정 기사와 과거 AI 근거 기사를 한 링크 목록으로 합친다."""
-    articles = [dict(item) for item in snapshot.get("articles") or []]
-    known_ids = {str(item.get("id") or "") for item in articles}
-    for item in (snapshot.get("evidence") or {}).values():
-        article_id = str(item.get("articleId") or "")
-        if not article_id or article_id in known_ids:
-            continue
-        article = dict(item.get("article") or {})
-        article["id"] = article_id
-        articles.append(article)
-        known_ids.add(article_id)
-    return articles
 
 
 def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
@@ -546,7 +531,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
         report_draft.get("content") or ((ai_run.get("response") or {}).get("analysis") or {})
     )
     weather_html = _render_weather(snapshot)
-    report_articles = {**snapshot, "articles": _report_articles(snapshot)}
+    article_count = len(snapshot.get("articles") or [])
+    article_layout_class = " is-twelve" if article_count == 12 else ""
     styles = """
     :root{color-scheme:light;--navy:#12243a;--navy2:#173b51;--teal:#087f76;--mint:#dff3ef;--red:#b02a2a;--amber:#b06a12;--line:#d7dfe3;--soft:#f4f7f7;--ink:#22303a;--muted:#66757f;--copy-size:14px;--report-scale:.93}
     *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -603,20 +589,21 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .badge.risk-critical{background:#fdeaea;color:var(--red)}.badge.risk-watch{background:#fff3e0;color:var(--amber)}
     .badge.tone-negative{background:#f3e8f5;color:#7b3f8a}.badge.tone-positive{background:#e3f3f0;color:#086b63}
     .badge.star{background:#fff3d3;color:#8a6410}
-    .appendix-masthead{position:relative;overflow:hidden;padding:8px 20px 10px;border-top:4px solid var(--navy);border-left:5px solid #35b8aa;background:linear-gradient(105deg,#f7faf9 0%,#edf6f4 100%);color:var(--navy)}
-    .appendix-masthead:after{content:"";position:absolute;right:-42px;bottom:-84px;width:145px;height:145px;border:1px solid #087f7626;border-radius:50%;box-shadow:0 0 0 27px #087f7609,0 0 0 54px #087f7606}
-    .appendix-masthead .doc-meta{position:relative;z-index:1;padding-bottom:4px;margin-bottom:6px;border-bottom-color:#173b5126;color:#687a84;font-size:9.5px}.appendix-title{position:relative;z-index:1;display:grid;grid-template-columns:auto auto;justify-content:start;align-items:baseline;gap:0 12px}.appendix-title .eyebrow{color:var(--teal);font-size:9.5px}.appendix-title h2{margin:0;color:var(--navy);font-size:20px;line-height:1.15;letter-spacing:-.035em}
-    .articles{display:grid;gap:5px;margin-top:28px;min-width:0}
-    .article{display:block;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:7px;break-inside:avoid}
-    .article.critical{border-color:#e4b6b6;border-left:4px solid var(--red);background:#fdf9f9}
-    .article-link{display:block;min-width:0;color:inherit;text-decoration:none}.article-main{min-width:0}.article-title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}.article h3{min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:16px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
-    .article .meta{margin:0;color:#74828b;font-size:10.5px;white-space:nowrap}
+    .appendix-masthead{position:relative;overflow:hidden;padding:13px 20px 14px;border-top:5px solid #35b8aa;border-left:0;background:linear-gradient(118deg,#0d2138 0%,#173e52 74%,#0b756e 145%);color:#fff;box-shadow:0 6px 16px #10253c20}
+    .appendix-masthead:after{content:"";position:absolute;right:-42px;bottom:-84px;width:145px;height:145px;border:1px solid #ffffff24;border-radius:50%;box-shadow:0 0 0 27px #ffffff0a,0 0 0 54px #ffffff08}
+    .appendix-masthead .doc-meta{position:relative;z-index:1;padding-bottom:6px;margin-bottom:9px;border-bottom-color:#ffffff38;color:#cfdae1;font-size:10px}.appendix-title{position:relative;z-index:1;display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;gap:0 13px}.appendix-title .eyebrow{color:#7ed7ce;font-size:10px}.appendix-title h2{margin:0;color:#fff;font-size:24px;line-height:1.15;letter-spacing:-.035em}.appendix-count{justify-self:end;display:flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid #ffffff70;border-radius:999px;background:#ffffffed;color:#08756e;box-shadow:0 3px 10px #0718272e}.appendix-count strong{font-size:19px;line-height:1}.appendix-count span{font-size:8.5px;line-height:1.15;letter-spacing:.09em;font-weight:900}
+    .articles{counter-reset:article-card;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(108px,auto);gap:10px 11px;margin-top:18px;min-width:0}
+    .articles.is-twelve{grid-template-rows:repeat(6,minmax(0,1fr));grid-auto-rows:unset;height:238mm}
+    .article{position:relative;display:block;min-width:0;overflow:hidden;padding:12px 13px 11px 50px;border:1px solid #ccd8dd;border-top:3px solid var(--navy);border-radius:4px 12px 12px 4px;background:linear-gradient(145deg,#fff 0%,#fbfdfd 100%);box-shadow:0 4px 13px #10253c0a;break-inside:avoid}
+    .article-number{position:absolute;left:12px;top:12px;display:grid;place-items:center;width:27px;height:27px;border-radius:8px 2px 8px 2px;background:var(--navy);color:#fff;font-size:10.5px;font-weight:900;letter-spacing:.04em}.article:after{content:"";position:absolute;right:-16px;top:-18px;width:44px;height:44px;border-radius:50%;background:#35b8aa18}
+    .article-link{display:block;height:100%;min-width:0;color:inherit;text-decoration:none}.article-main{display:grid;height:100%;min-width:0;grid-template-rows:64px minmax(0,1fr)}.article-title-row{display:flex;min-width:0;height:64px;flex-direction:column}.article h3{display:-webkit-box;min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:14.8px;line-height:1.38;letter-spacing:-.02em;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .article .meta{order:-1;margin:0 0 5px;color:var(--teal);font-size:10.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap}
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
-    .article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
+    .article .desc{display:-webkit-box;min-width:0;margin:0;padding-top:8px;overflow:hidden;border-top:1px solid #cfd9dd;color:#4e5e67;font-size:12px;line-height:1.48;-webkit-box-orient:vertical;-webkit-line-clamp:2}
     .empty{color:#7c8991}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
-    @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.weather-forecast{grid-template-columns:1fr;gap:2px}}
+    @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.weather-forecast{grid-template-columns:1fr;gap:2px}.articles,.articles.is-twelve{grid-template-columns:1fr;grid-template-rows:none;height:auto}.article{min-height:112px}.appendix-title{grid-template-columns:auto auto}.appendix-count{grid-column:1/-1;justify-self:start;margin-top:7px}}
     @page{size:A4;margin:0}
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article-link,.issue-rep a{color:var(--navy)}}
     """
@@ -637,8 +624,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">
-    <header class="appendix-masthead" id="appendix-articles"><div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div><div class="appendix-title"><p class="eyebrow">RELATED NEWS</p><h2>관련기사</h2></div></header>
-    <div class="articles">{_article_cards(report_articles)}</div>
+    <header class="appendix-masthead" id="appendix-articles"><div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div><div class="appendix-title"><p class="eyebrow">RELATED NEWS</p><h2>관련기사</h2><div class="appendix-count"><strong>{article_count}</strong><span>BRIEFING<br>ARTICLES</span></div></div></header>
+    <div class="articles{article_layout_class}">{_article_cards(snapshot)}</div>
     </div></section></main><script>
     function toggleArticleSort() {{
       const list = document.querySelector('.articles');
@@ -652,7 +639,11 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
           || Number(right.dataset.priorityScore) - Number(left.dataset.priorityScore)
           || Number(left.dataset.editorIndex) - Number(right.dataset.editorIndex)
         : Number(left.dataset.editorIndex) - Number(right.dataset.editorIndex));
-      cards.forEach(card => list.appendChild(card));
+      cards.forEach((card, index) => {{
+        const number = card.querySelector('.article-number');
+        if (number) number.textContent = String(index + 1).padStart(2, '0');
+        list.appendChild(card);
+      }});
       button.setAttribute('aria-pressed', String(importanceMode));
       button.textContent = importanceMode ? '기사 편집순' : '기사 중요도순';
     }}
