@@ -11,7 +11,7 @@ import { importFile, exportJson, exportCsv, copySummary, changeReportDate, final
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
-import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260721-5";
+import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260722-1";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260721-1";
 import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
 
@@ -102,6 +102,8 @@ function bindEvents() {
   els.ruleSummaryBtn.addEventListener("click", () => { setRuleSummary(true); persistAndRender(); showToast("선정 기사 기준 기본 요약을 만들었습니다.", "success"); });
   els.generateAiSummaryBtn.addEventListener("click", handleAiAnalysisAction);
   $("markdownExportBtn").addEventListener("click", downloadAnalysisMarkdown);
+  $("chatGptShortcutBtn").addEventListener("click", () => openExternalAi("chatgpt"));
+  $("claudeShortcutBtn").addEventListener("click", () => openExternalAi("claude"));
   $("reportDraftBtn").addEventListener("click", openReportDraftEditor);
   $("validateExternalAnalysisBtn").addEventListener("click", validateExternalAnalysis);
   $("loadGemmaDraftBtn").addEventListener("click", loadGemmaDraft);

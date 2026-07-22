@@ -1189,6 +1189,8 @@ PUT /api/briefings/{date}/report-draft
 - `/report/{date}`는 최신 최종 snapshot만 제공하며 최종본이 없으면 404다.
 - JSON은 정식 백업, CSV는 손실형 목록 교환 포맷이다.
 - Markdown은 선정 기사 전문·태그와 고정 근거 ID를 외부 AI에 전달하는 분석 교환 포맷이다.
+- ChatGPT·Claude 바로가기는 브라우저에서 분석 프롬프트를 복사하고 외부 서비스 화면만 연다.
+  API 키·외부 AI API 호출·Markdown 자동 생성·파일 자동 첨부·자동 전송은 수행하지 않는다.
 - 외부 AI 결과는 검증 후 별도 CEO 보고 편집본으로 저장하며 Gemma 실행 이력을 덮어쓰지 않는다.
 
 

@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
   <link rel="icon" href="assets/kesco-symbol.png" type="image/png">
-  <link rel="stylesheet" href="css/app.css?v=20260720-2">
+  <link rel="stylesheet" href="css/app.css?v=20260722-1">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -135,6 +135,8 @@
             <div class="summary-heading-actions no-print">
               <button class="mini-action" id="ruleSummaryBtn">기본 요약</button>
               <button class="mini-action" id="markdownExportBtn">AI 분석용 MD</button>
+              <button class="mini-action external-ai-shortcut" id="chatGptShortcutBtn" type="button" title="분석 프롬프트를 복사하고 ChatGPT 새 대화를 엽니다. MD 파일은 직접 첨부하세요.">ChatGPT 바로가기</button>
+              <button class="mini-action external-ai-shortcut" id="claudeShortcutBtn" type="button" title="분석 프롬프트를 복사하고 Claude 새 대화를 엽니다. MD 파일은 직접 첨부하세요.">Claude 바로가기</button>
               <button class="mini-action" id="reportDraftBtn">CEO 보고 편집</button>
               <button class="btn btn-primary ai-generate-btn" id="generateAiSummaryBtn">Gemma 4 경영메시지 생성</button>
             </div>
@@ -488,6 +490,6 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
   <script src="js/restart-guard.js?v=20260720-1"></script>
-  <script type="module" src="js/app.js?v=20260721-6"></script>
+  <script type="module" src="js/app.js?v=20260722-1"></script>
 </body>
 </html>

@@ -42,11 +42,13 @@ def test_index_html_is_served_at_root():
     assert 'id="restartServerBtn"' in response.text
     assert response.text.index('id="restartServerBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260721-6" in response.text
+    assert "js/app.js?v=20260722-1" in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
-    assert "css/app.css?v=20260720-2" in response.text
+    assert "css/app.css?v=20260722-1" in response.text
+    assert 'id="chatGptShortcutBtn" type="button"' in response.text
+    assert 'id="claudeShortcutBtn" type="button"' in response.text
     assert 'id="autoSelectBtn" type="button" aria-busy="false"' in response.text
     assert response.text.index('value="gemma4:31b"') < response.text.index('value="gemma4:26b"')
 
@@ -55,7 +57,9 @@ def test_index_html_is_served_at_root():
     assert 'articles.js?v=20260721-3' in app_script.text
     assert 'collection.js?v=20260716-19' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
-    assert 'report-draft.js?v=20260721-5' in app_script.text
+    assert 'report-draft.js?v=20260722-1' in app_script.text
+    assert 'openExternalAi("chatgpt")' in app_script.text
+    assert 'openExternalAi("claude")' in app_script.text
     assert 'ai-analysis.js?v=20260721-1' in app_script.text
     assert 'auto-selection.js?v=20260721-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
@@ -116,6 +120,21 @@ def test_index_html_is_served_at_root():
     assert preview_function.index("await flushDailyState()") < preview_function.index(
         "previewWindow.location.replace(previewUrl)"
     )
+
+    report_draft_script = client.get("/js/features/report-draft.js")
+    assert 'chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" }' in report_draft_script.text
+    assert 'claude: { label: "Claude", url: "https://claude.ai/new" }' in report_draft_script.text
+    assert "export const EXTERNAL_ANALYSIS_PROMPT" in report_draft_script.text
+    assert "첨부한 KESCO CEO 일일 언론브리핑 AI 분석자료 Markdown 파일만 근거" in (
+        report_draft_script.text
+    )
+    assert 'window.open("about:blank", "_blank")' in report_draft_script.text
+    assert "navigator.clipboard.writeText(EXTERNAL_ANALYSIS_PROMPT)" in report_draft_script.text
+    assert 'document.execCommand("copy")' in report_draft_script.text
+    shortcut_function = report_draft_script.text.split(
+        "export async function openExternalAi", 1
+    )[1].split("function emptyContent", 1)[0]
+    assert "getAnalysisMarkdown" not in shortcut_function
 
     api_client = client.get("/js/api/client.js")
     assert 'confirmation: "RESET_TODAY"' in api_client.text
