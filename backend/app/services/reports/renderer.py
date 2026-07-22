@@ -483,11 +483,7 @@ def _article_cards(
     for editor_index, item in enumerate(articles):
         url = str(item.get("url") or "")
         title = _text(item.get("title"), "제목 없음")
-        title_html = (
-            f'<a href="{_text(url)}" target="_blank" rel="noopener noreferrer">{title}</a>'
-            if url.startswith(("http://", "https://"))
-            else title
-        )
+        has_external_url = url.startswith(("http://", "https://"))
         anchor = f' id="article-{_text(item.get("id"))}"' if include_anchors else ""
         risk_class = " critical" if item.get("risk") == "critical" else ""
         risk_rank = {"critical": 0, "watch": 1, "routine": 2}.get(item.get("risk"), 3)
@@ -497,14 +493,23 @@ def _article_cards(
         except (TypeError, ValueError):
             priority_score = 0
         description = " ".join(str(item.get("description") or "핵심 요약 없음").split())
+        article_main = (
+            f'<div class="article-main"><div class="article-title-row"><h3>{title}</h3>'
+            f'<p class="meta">{_text(item.get("source"), "출처 미상")} · '
+            f'{_text(_datetime_label(item.get("pubDate"), "시각 미상"))}</p></div>'
+            f'<p class="desc">{_text(description)}</p></div>'
+        )
+        linked_main = (
+            f'<a class="article-link" href="{_text(url)}" target="_blank" '
+            f'rel="noopener noreferrer">{article_main}</a>'
+            if has_external_url
+            else article_main
+        )
         cards.append(
             f'<article class="article{risk_class}"{anchor} data-editor-index="{editor_index}" '
             f'data-starred="{1 if item.get("starred") else 0}" data-risk-rank="{risk_rank}" '
             f'data-priority-score="{priority_score}">'
-            f'<div class="article-main"><div class="article-title-row"><h3>{title_html}</h3>'
-            f'<p class="meta">{_text(item.get("source"), "출처 미상")} · '
-            f'{_text(_datetime_label(item.get("pubDate"), "시각 미상"))}</p></div>'
-            f'<p class="desc">{_text(description)}</p></div></article>'
+            f'{linked_main}</article>'
         )
     return "".join(cards)
 
@@ -598,23 +603,22 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .badge.risk-critical{background:#fdeaea;color:var(--red)}.badge.risk-watch{background:#fff3e0;color:var(--amber)}
     .badge.tone-negative{background:#f3e8f5;color:#7b3f8a}.badge.tone-positive{background:#e3f3f0;color:#086b63}
     .badge.star{background:#fff3d3;color:#8a6410}
-    .appendix-masthead{position:relative;overflow:hidden;padding:20px 28px 22px;background:linear-gradient(125deg,#0d2138 0%,#173e52 72%,#0b756e 150%);color:#fff}
-    .appendix-masthead:after{content:"";position:absolute;right:-90px;bottom:-210px;width:340px;height:340px;border:1px solid #ffffff1f;border-radius:50%;box-shadow:0 0 0 55px #ffffff0a,0 0 0 110px #ffffff08}
-    .appendix-masthead .doc-meta{position:relative;z-index:1}.appendix-title{position:relative;z-index:1}.appendix-title .eyebrow{color:#7ed7ce}.appendix-title h2{margin:5px 0 1px;color:#fff;font-size:26px;letter-spacing:-.035em}.appendix-title p{margin:0;color:#c7d8df;font-size:11.5px}
-    .articles{display:grid;gap:3px;margin-top:10px;min-width:0}
+    .appendix-masthead{position:relative;overflow:hidden;padding:8px 20px 10px;border-top:4px solid var(--navy);border-left:5px solid #35b8aa;background:linear-gradient(105deg,#f7faf9 0%,#edf6f4 100%);color:var(--navy)}
+    .appendix-masthead:after{content:"";position:absolute;right:-42px;bottom:-84px;width:145px;height:145px;border:1px solid #087f7626;border-radius:50%;box-shadow:0 0 0 27px #087f7609,0 0 0 54px #087f7606}
+    .appendix-masthead .doc-meta{position:relative;z-index:1;padding-bottom:4px;margin-bottom:6px;border-bottom-color:#173b5126;color:#687a84;font-size:9.5px}.appendix-title{position:relative;z-index:1;display:grid;grid-template-columns:auto auto;justify-content:start;align-items:baseline;gap:0 12px}.appendix-title .eyebrow{color:var(--teal);font-size:9.5px}.appendix-title h2{margin:0;color:var(--navy);font-size:20px;line-height:1.15;letter-spacing:-.035em}
+    .articles{display:grid;gap:5px;margin-top:28px;min-width:0}
     .article{display:block;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:7px;break-inside:avoid}
     .article.critical{border-color:#e4b6b6;border-left:4px solid var(--red);background:#fdf9f9}
-    .article-main{min-width:0}.article-title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}.article h3{min-width:0;margin:0;overflow:hidden;font-size:16px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}.article h3 a{color:var(--navy)}
+    .article-link{display:block;min-width:0;color:inherit;text-decoration:none}.article-main{min-width:0}.article-title-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}.article h3{min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:16px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
     .article .meta{margin:0;color:#74828b;font-size:10.5px;white-space:nowrap}
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
     .article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
     .empty{color:#7c8991}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
-    .footer{margin-top:16px;padding-top:9px;border-top:1px solid var(--line);color:#77858e;font-size:9.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.weather-forecast{grid-template-columns:1fr;gap:2px}}
     @page{size:A4;margin:0}
-    @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article h3 a,.issue-rep a{color:var(--navy)}}
+    @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article-link,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
     <div class="toolbar"><a href="/">편집 화면</a><button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
@@ -633,9 +637,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">
-    <header class="appendix-masthead" id="appendix-articles"><div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div><div class="appendix-title"><p class="eyebrow">RELATED NEWS</p><h2>관련기사</h2><p>제목과 핵심 요약을 각각 한 줄로 정리했습니다. 제목을 누르면 원문으로 이동합니다.</p></div></header>
+    <header class="appendix-masthead" id="appendix-articles"><div class="doc-meta"><span>한국전기안전공사</span><span>대외 언론동향 · CEO 보고</span></div><div class="appendix-title"><p class="eyebrow">RELATED NEWS</p><h2>관련기사</h2></div></header>
     <div class="articles">{_article_cards(report_articles)}</div>
-    <footer class="footer"><span>최종본은 확정 당시 기사·평가·메모·AI 분석을 보존합니다.</span><span>확정시각 {_text(_datetime_label(snapshot.get('finalizedAt'), '미확정', with_year=True))}</span></footer>
     </div></section></main><script>
     function toggleArticleSort() {{
       const list = document.querySelector('.articles');

@@ -106,14 +106,23 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert "const fitAll" not in preview.text
     assert "zoom:.68" not in preview.text
     assert "grid-template-columns:minmax(0,1fr) auto" in preview.text
+    assert '<a class="article-link" href="https://example.com/report/2026-09-02"' in preview.text
     assert '<div class="article-main"><div class="article-title-row"><h3>' in preview.text
     assert '</p></div><p class="desc">' in preview.text
-    assert ".article h3{min-width:0;margin:0;overflow:hidden;font-size:16px" in preview.text
+    assert '.article-link{display:block;min-width:0;color:inherit;text-decoration:none}' in preview.text
+    assert ".article h3{min-width:0;margin:0;overflow:hidden;color:var(--navy);font-size:16px" in preview.text
     assert ".article .desc{min-width:0;margin:2px 0 0;overflow:hidden;color:#42505a;font-size:14.5px" in preview.text
-    assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." in preview.text
+    assert "제목과 핵심 요약을 각각 한 줄로 정리했습니다." not in preview.text
     assert '<button id="articleSortBtn" type="button" aria-pressed="false"' in preview.text
     assert "기사 중요도순" in preview.text
     assert 'class="appendix-masthead" id="appendix-articles"' in preview.text
+    assert 'padding:8px 20px 10px;border-top:4px solid var(--navy);border-left:5px solid #35b8aa' in preview.text
+    assert 'grid-template-columns:auto auto;justify-content:start' in preview.text
+    assert '.appendix-title h2{margin:0;color:var(--navy);font-size:20px' in preview.text
+    assert '.articles{display:grid;gap:5px;margin-top:28px;min-width:0}' in preview.text
+    assert '최종본은 확정 당시 기사·평가·메모·AI 분석을 보존합니다.' not in preview.text
+    assert '확정시각' not in preview.text
+    assert '<footer class="footer">' not in preview.text
     assert "<h2>관련기사</h2>" in preview.text
     assert "data-editor-index=\"0\"" in preview.text
     assert "data-starred=\"0\"" in preview.text
