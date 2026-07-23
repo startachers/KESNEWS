@@ -619,8 +619,11 @@ def _article_for_quality(connection: sqlite3.Connection, article_id: str) -> dic
     row = connection.execute(
         """
         SELECT a.*, ao.raw_url AS observation_url, ao.raw_source AS observation_source,
-               ao.provider AS observation_provider
+               ao.provider AS observation_provider, abo.raw_text AS override_body_text,
+               abo.source_url AS override_source_url, abo.updated_at AS override_updated_at,
+               CASE WHEN abo.article_id IS NOT NULL THEN 1 ELSE 0 END AS manual_body_override
         FROM articles a
+        LEFT JOIN article_body_overrides abo ON abo.article_id = a.id
         LEFT JOIN article_observations ao ON ao.id = (
             SELECT id FROM article_observations
             WHERE article_id = a.id ORDER BY observed_at DESC LIMIT 1
@@ -633,10 +636,13 @@ def _article_for_quality(connection: sqlite3.Connection, article_id: str) -> dic
         return None
     return {
         "id": row["id"], "title": row["title"], "source": row["source"],
-        "url": row["observation_url"] or row["canonical_url"] or "",
+        "url": row["override_source_url"] or row["observation_url"] or row["canonical_url"] or "",
         "pubDate": row["published_at"], "description": row["description"] or "",
-        "bodyText": row["body_text"] or "", "bodyStatus": row["body_status"] or "missing",
-        "bodyFetchedAt": row["body_fetched_at"], "bodyError": row["body_error"] or "",
+        "bodyText": row["override_body_text"] or row["body_text"] or "",
+        "bodyStatus": "full_text" if row["manual_body_override"] else (row["body_status"] or "missing"),
+        "bodyFetchedAt": row["override_updated_at"] or row["body_fetched_at"],
+        "bodyError": "" if row["manual_body_override"] else (row["body_error"] or ""),
+        "manualBodyOverride": bool(row["manual_body_override"]),
         "publisherId": row["publisher_id"],
         "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
         "canonicalUrl": row["canonical_url"] or "", "sourceDomain": row["source_domain"] or "",

@@ -517,7 +517,7 @@ def test_schema_v4_backup_round_trip_preserves_final_version():
         json={"expectedRevision": briefing["revision"]},
     )
     payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert len(payload["briefingVersions"]) == 1
 
     target_date = "2026-09-05"

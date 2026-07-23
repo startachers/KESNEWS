@@ -36,6 +36,7 @@ EXPECTED_TABLES = {
     "article_extractions",
     "publisher_extraction_events",
     "briefing_analysis_markdown",
+    "article_body_overrides",
 }
 
 EXPECTED_MIGRATIONS = [
@@ -66,6 +67,7 @@ EXPECTED_MIGRATIONS = [
     "0025_analysis_markdown_manifest.sql",
     "0026_issue_evidence_quality.sql",
     "0027_selected_evidence_validation.sql",
+    "0028_manual_article_body_override.sql",
 ]
 
 
@@ -586,6 +588,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
             "0025_analysis_markdown_manifest.sql",
             "0026_issue_evidence_quality.sql",
             "0027_selected_evidence_validation.sql",
+            "0028_manual_article_body_override.sql",
         ]
     upgraded = get_connection(db_path)
     try:

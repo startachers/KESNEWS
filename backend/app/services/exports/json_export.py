@@ -16,14 +16,15 @@ from backend.app.repositories import report_draft_repository as report_draft_rep
 from backend.app.repositories import weather_repository as weather_repo
 from backend.app.repositories.database import backup_database
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
+from backend.app.services.analysis_markdown.service import save_manual_body
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.dates import since_bound_iso
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.report_draft import build_exchange_context, validate_content
 from backend.app.services.reports.storage import write_report
 
-SCHEMA_VERSION = 12
-SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+SCHEMA_VERSION = 13
+SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
 
 _BRIEFING_EXPORT_FIELDS = {
     "preparedBy": "prepared_by",
@@ -311,7 +312,28 @@ def import_export(
         }
         if final_patch:
             article_repo.patch_final_assessment(connection, article_id, final_patch)
-        if any(
+        if article.get("manualBodyOverride") and article.get("bodyText"):
+            stored = article_repo.get_article(connection, article_id)
+            save_manual_body(
+                connection,
+                {
+                    "id": article_id,
+                    "title": stored["title"],
+                    "source": stored["source"],
+                    "rawSource": article.get("rawSource") or stored["source"] or "",
+                    "url": article.get("url") or stored["canonical_url"] or "",
+                    "canonicalUrl": article.get("canonicalUrl") or stored["canonical_url"] or "",
+                    "pubDate": stored["published_at"],
+                    "publisherId": stored["publisher_id"],
+                    "publisherAllowed": (
+                        bool(stored["publisher_allowed"])
+                        if stored["publisher_allowed"] is not None else None
+                    ),
+                },
+                body_text=article["bodyText"],
+                source_url=article.get("canonicalUrl") or article.get("url") or "",
+            )
+        elif any(
             key in article
             for key in ("bodyText", "bodyStatus", "bodyFetchedAt", "bodyError")
         ):

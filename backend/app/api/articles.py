@@ -14,7 +14,7 @@ from backend.app.repositories import run_repository as runs_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.classification.service import CLASSIFIER_VERSION, classify_article
 from backend.app.services.normalization.dates import since_bound_iso
-from backend.app.services.analysis_markdown.service import reextract_article
+from backend.app.services.analysis_markdown.service import reextract_article, save_manual_body
 from backend.app.repositories import issue_repository as issues_repo
 
 router = APIRouter()
@@ -56,6 +56,82 @@ class AssessmentPatchRequest(BaseModel):
     finalTone: Literal["positive", "neutral", "negative"] | None = None
 
 
+class ManualBodyRequest(BaseModel):
+    reportDate: str
+    bodyText: str = Field(min_length=1, max_length=200_000)
+    sourceUrl: str = Field(default="", max_length=4_000)
+
+
+def _article_payload(connection, row) -> dict[str, Any]:
+    observation = connection.execute(
+        "SELECT raw_url, raw_source, provider FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
+        (row["id"],),
+    ).fetchone()
+    return {
+        "id": row["id"], "title": row["title"], "source": row["source"],
+        "url": (observation["raw_url"] if observation else None) or row["canonical_url"] or "",
+        "pubDate": row["published_at"], "description": row["description"] or "",
+        "bodyText": row["body_text"] or "", "bodyStatus": row["body_status"] or "missing",
+        "publisherId": row["publisher_id"],
+        "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
+        "canonicalUrl": row["canonical_url"] or "", "sourceDomain": row["source_domain"] or "",
+        "rawSource": (observation["raw_source"] if observation else None) or row["source"] or "",
+        "provider": (observation["provider"] if observation else None) or "",
+    }
+
+
+@router.put("/api/articles/{article_id}/manual-body")
+async def put_manual_article_body(article_id: str, request: ManualBodyRequest) -> Any:
+    connection = get_connection()
+    try:
+        briefing = briefings_repo.get_by_date(connection, request.reportDate)
+        if briefing is None:
+            return error_response("BRIEFING_NOT_FOUND", f"{request.reportDate} 작업본이 없습니다.")
+        if briefing["status"] == "final":
+            return error_response("BRIEFING_FINALIZED", "최종 확정된 작업본의 기사 본문은 수정할 수 없습니다.")
+        if article_id not in articles_repo.list_candidate_article_ids(connection, request.reportDate):
+            return error_response("ARTICLE_NOT_FOUND", "해당 보고일의 기사를 찾을 수 없습니다.")
+        row = articles_repo.get_article(connection, article_id)
+        if row is None:
+            return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
+        article = _article_payload(connection, row)
+        with connection:
+            prepared = save_manual_body(
+                connection,
+                article,
+                body_text=request.bodyText,
+                source_url=request.sourceUrl,
+            )
+            changed_issue_ids = issues_repo.refresh_auto_representatives_for_article(
+                connection, article_id
+            )
+        result = {
+            "articleId": article_id,
+            "manualBodyOverride": True,
+            "extractionStatus": prepared["status"],
+            "contentQualityScore": prepared["contentQualityScore"],
+            "qualityGrade": prepared["qualityGrade"],
+            "analysisEligible": prepared["analysisEligible"],
+            "qualityReasons": prepared["qualityReasons"],
+            "rawCharacterCount": prepared["rawCharacterCount"],
+            "cleanedCharacterCount": prepared["cleanedCharacterCount"],
+            "completeSentenceCount": prepared["completeSentenceCount"],
+            "contaminationFlags": prepared["contaminationFlags"],
+            "lastExtractedAt": now_iso(),
+            "extractionMethod": prepared["extractionMethod"],
+            "cleanedText": prepared["cleanedText"],
+            "validationErrors": prepared["validationErrors"],
+            "source": prepared["normalizedSource"],
+            "resolvedUrl": prepared["resolvedUrl"],
+            "canonicalUrl": prepared["canonicalUrl"],
+            "sourceDomain": prepared["sourceDomain"],
+            "changedIssueIds": changed_issue_ids,
+        }
+    finally:
+        connection.close()
+    return ok_envelope(result)
+
+
 @router.post("/api/articles/{article_id}/reextract")
 async def reextract_one_article(article_id: str) -> Any:
     connection = get_connection()
@@ -63,21 +139,7 @@ async def reextract_one_article(article_id: str) -> Any:
         row = articles_repo.get_article(connection, article_id)
         if row is None:
             return error_response("ARTICLE_NOT_FOUND", "기사를 찾을 수 없습니다.")
-        observation = connection.execute(
-            "SELECT raw_url, raw_source, provider FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
-            (article_id,),
-        ).fetchone()
-        article = {
-            "id": row["id"], "title": row["title"], "source": row["source"],
-            "url": (observation["raw_url"] if observation else None) or row["canonical_url"] or "",
-            "pubDate": row["published_at"], "description": row["description"] or "",
-            "bodyText": row["body_text"] or "", "bodyStatus": row["body_status"] or "missing",
-            "publisherId": row["publisher_id"],
-            "publisherAllowed": bool(row["publisher_allowed"]) if row["publisher_allowed"] is not None else None,
-            "canonicalUrl": row["canonical_url"] or "", "sourceDomain": row["source_domain"] or "",
-            "rawSource": (observation["raw_source"] if observation else None) or row["source"] or "",
-            "provider": (observation["provider"] if observation else None) or "",
-        }
+        article = _article_payload(connection, row)
         with connection:
             prepared = reextract_article(connection, article)
             changed_issue_ids = issues_repo.refresh_auto_representatives_for_article(

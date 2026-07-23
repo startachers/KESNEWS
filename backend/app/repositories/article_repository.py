@@ -209,6 +209,32 @@ def update_article_body(
     )
 
 
+def upsert_manual_body_override(
+    connection: sqlite3.Connection,
+    article_id: str,
+    *,
+    extraction_id: str,
+    raw_text: str,
+    cleaned_text: str,
+    source_url: str,
+) -> None:
+    now = now_iso()
+    connection.execute(
+        """
+        INSERT INTO article_body_overrides (
+            article_id, extraction_id, raw_text, cleaned_text, source_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(article_id) DO UPDATE SET
+            extraction_id = excluded.extraction_id,
+            raw_text = excluded.raw_text,
+            cleaned_text = excluded.cleaned_text,
+            source_url = excluded.source_url,
+            updated_at = excluded.updated_at
+        """,
+        (article_id, extraction_id, raw_text, cleaned_text, source_url, now, now),
+    )
+
+
 def update_verified_source(
     connection: sqlite3.Connection,
     article_id: str,
@@ -458,15 +484,16 @@ SELECT
     a.published_at AS published_at,
     a.first_observed_at AS first_observed_at,
     a.description AS description,
-    a.body_text AS body_text,
-    a.body_status AS body_status,
-    a.body_fetched_at AS body_fetched_at,
-    a.body_error AS body_error,
+    COALESCE(abo.raw_text, a.body_text) AS body_text,
+    CASE WHEN abo.article_id IS NOT NULL THEN 'full_text' ELSE a.body_status END AS body_status,
+    CASE WHEN abo.article_id IS NOT NULL THEN abo.updated_at ELSE a.body_fetched_at END AS body_fetched_at,
+    CASE WHEN abo.article_id IS NOT NULL THEN '' ELSE a.body_error END AS body_error,
+    CASE WHEN abo.article_id IS NOT NULL THEN 1 ELSE 0 END AS manual_body_override,
     a.category_hint AS category_hint,
     a.manual AS manual,
     a.publisher_id AS publisher_id,
     a.publisher_allowed AS publisher_allowed,
-    lo.raw_url AS url,
+    COALESCE(NULLIF(abo.source_url, ''), lo.raw_url, a.canonical_url) AS url,
     lo.raw_source AS raw_source,
     lo.provider AS provider,
     COALESCE(go.is_government_press_release, 0) AS is_government_press_release,
@@ -513,6 +540,7 @@ SELECT
     ba.sort_order AS sort_order
 FROM candidate_ids ci
 JOIN articles a ON a.id = ci.article_id
+LEFT JOIN article_body_overrides abo ON abo.article_id = a.id
 LEFT JOIN latest_observation lo ON lo.article_id = a.id
 LEFT JOIN government_observations go ON go.article_id = a.id
 LEFT JOIN article_assessments aa ON aa.article_id = a.id
@@ -601,6 +629,7 @@ def list_candidates(
                 "bodyStatus": row["body_status"] or "missing",
                 "bodyFetchedAt": row["body_fetched_at"],
                 "bodyError": row["body_error"] or "",
+                "manualBodyOverride": bool(row["manual_body_override"]),
                 "category": effective_category,
                 "manual": bool(row["manual"]),
                 "publisherId": row["publisher_id"],

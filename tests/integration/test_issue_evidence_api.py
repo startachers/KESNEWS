@@ -202,6 +202,51 @@ def test_reextract_updates_quality_and_enables_evidence_selection(monkeypatch):
     assert f"기사 ID: `{target}`" in regenerated
 
 
+def test_manual_body_enables_representative_and_survives_later_auto_reextract(monkeypatch):
+    issue, article_ids = _setup_issue("2096-11-13", count=2)
+    target = article_ids[-1]
+    manual_body = (
+        "정부는 전기설비 안전점검 40곳의 결과와 피해 수치, 후속 조사 일정 및 재발 방지 대책을 "
+        "관계기관과 함께 확인해 발표했다고 밝혔다. " * 12
+    )
+    saved = client.put(
+        f"/api/articles/{target}/manual-body",
+        json={
+            "reportDate": "2096-11-13",
+            "bodyText": manual_body,
+            "sourceUrl": "https://evidence.example.com/2096-11-13/manual-original",
+        },
+    )
+    assert saved.status_code == 200, saved.json()
+    result = saved.json()["data"]
+    assert result["manualBodyOverride"] is True
+    assert result["extractionMethod"] == "manual_paste"
+    assert result["analysisEligible"] is True
+
+    listed = client.get(f"/api/issues/{issue['id']}/articles").json()["data"]
+    manual = next(item for item in listed["articles"] if item["articleId"] == target)
+    assert manual["extractionMethod"] == "manual_paste"
+    assert manual["cleanedText"]
+
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.service.fetch_article_body_with_retries",
+        lambda url, **kwargs: BodyFetchResult("", "failed", "접근 차단", url),
+    )
+    reextracted = client.post(f"/api/articles/{target}/reextract")
+    assert reextracted.status_code == 200
+    after = client.get(f"/api/issues/{issue['id']}/articles").json()["data"]
+    preserved = next(item for item in after["articles"] if item["articleId"] == target)
+    assert preserved["extractionMethod"] == "manual_paste"
+    assert preserved["analysisEligible"] is True
+
+    selected = client.patch(
+        f"/api/issues/{issue['id']}/evidence",
+        json={"expectedRevision": 0, "representativeArticleId": target},
+    )
+    assert selected.status_code == 200, selected.json()
+    assert selected.json()["data"]["representativeArticleId"] == target
+
+
 def test_reextract_all_issue_articles_runs_concurrently_and_scores_each_body(monkeypatch):
     issue, article_ids = _setup_issue("2096-11-04", count=3)
     connection = get_connection()

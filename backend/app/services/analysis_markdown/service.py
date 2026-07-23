@@ -158,7 +158,8 @@ def _issue_maps(connection: sqlite3.Connection, report_date: str) -> tuple[dict[
 def _save_extraction(
     connection: sqlite3.Connection, article: dict, *, replacement_article_id: str | None = None,
     replaces_article_id: str | None = None, same_issue_id: str | None = None,
-) -> None:
+) -> str:
+    extraction_id = make_id()
     connection.execute(
         """INSERT INTO article_extractions (
                id, article_id, source_url, resolved_url, raw_text, cleaned_text,
@@ -171,7 +172,7 @@ def _save_extraction(
                normalization_reason, validation_errors_json
            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            make_id(), article["id"], article.get("url"), article.get("resolvedUrl"),
+            extraction_id, article["id"], article.get("url"), article.get("resolvedUrl"),
             article.get("rawText"), article.get("cleanedText"), article["status"],
             article.get("failureReason") or None, int(article["analysisEligible"]),
             article["rawCharacterCount"], article["cleanedCharacterCount"],
@@ -189,6 +190,87 @@ def _save_extraction(
             json.dumps(article.get("validationErrors") or [], ensure_ascii=False),
         ),
     )
+    return extraction_id
+
+
+def save_manual_body(
+    connection: sqlite3.Connection,
+    article: dict[str, Any],
+    *,
+    body_text: str,
+    source_url: str,
+) -> dict[str, Any]:
+    """담당자 확인 본문을 자동 원문과 분리해 저장하고 동일 품질 규칙으로 평가한다."""
+    config = load_config()
+    raw = body_text.strip()
+    cleaning = clean_article_text(raw, title=article.get("title") or "")
+    verified_url = source_url.strip() or article.get("canonicalUrl") or article.get("url") or ""
+    source_validation = validate_source(
+        raw_source=article.get("rawSource") or article.get("source") or "",
+        displayed_source=article.get("source") or "",
+        source_url=verified_url,
+        resolved_url=verified_url,
+        canonical_url=verified_url,
+    )
+    quality_result = assess(
+        {
+            **article,
+            "source": source_validation.source,
+            "rawText": raw,
+            "url": source_validation.canonical_url or source_validation.resolved_url,
+            "sourceValidationErrors": list(source_validation.errors),
+        },
+        cleaning,
+        status="success_full",
+        method="manual_paste",
+        config=config,
+    )
+    prepared = {
+        **article,
+        "rawText": raw,
+        "cleanedText": cleaning.text,
+        "status": "success_full",
+        "url": verified_url,
+        "resolvedUrl": source_validation.resolved_url,
+        "canonicalUrl": source_validation.canonical_url,
+        "pagePublisher": source_validation.page_publisher,
+        "sourceDomain": source_validation.source_domain,
+        "rawSource": source_validation.raw_source,
+        "normalizedSource": source_validation.source,
+        "normalizationReason": "manual_body_and_url" if source_url.strip() else "manual_body",
+        "failureReason": "" if quality_result["analysisEligible"] else (
+            (quality_result.get("validationErrors") or ["quality_below_threshold"])[0]
+        ),
+        "analysisEligible": quality_result["analysisEligible"],
+        "rawCharacterCount": len(raw),
+        "cleanedCharacterCount": len(cleaning.text),
+        "attempts": [{"stage": "manual_paste", "status": "success"}],
+        "noiseDetected": cleaning.noise_detected,
+        "aiContentDetected": cleaning.ai_content_detected,
+        "cleaningRuleVersion": config["cleaning_rule_version"],
+        **quality_result,
+    }
+    extraction_id = _save_extraction(connection, prepared)
+    quality.record_event(connection, prepared, prepared)
+    article_repo.upsert_manual_body_override(
+        connection,
+        article["id"],
+        extraction_id=extraction_id,
+        raw_text=raw,
+        cleaned_text=cleaning.text,
+        source_url=verified_url,
+    )
+    if not set(prepared.get("validationErrors") or []).intersection(
+        {"publisher_identity_mismatch", "canonical_url_unresolved"}
+    ):
+        article_repo.update_verified_source(
+            connection,
+            article["id"],
+            source=prepared.get("normalizedSource") or article.get("source") or "",
+            source_domain=prepared.get("sourceDomain") or "",
+            canonical_url=prepared.get("canonicalUrl") or prepared.get("resolvedUrl") or "",
+        )
+    return prepared
 
 
 def reextract_article(connection: sqlite3.Connection, article: dict[str, Any]) -> dict[str, Any]:

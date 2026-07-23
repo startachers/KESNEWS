@@ -172,6 +172,13 @@ export function reextractArticle(articleId) {
   }, 120000);
 }
 
+export function putManualArticleBody(articleId, payload) {
+  return request(`/articles/${encodeURIComponent(articleId)}/manual-body`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function reextractIssueArticles(issueId) {
   return request(`/issues/${encodeURIComponent(issueId)}/articles/reextract`, {
     method: "POST",

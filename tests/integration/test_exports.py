@@ -46,7 +46,7 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     exported = client.get(f"/api/exports/{report_date}.json")
     assert exported.status_code == 200
     payload = exported.json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert payload["briefing"]["actionNote"] == "지시사항"
     assert len(payload["articles"]) == 1
     assert payload["articles"][0]["starred"] is True
@@ -61,6 +61,53 @@ def test_json_export_import_round_trip_preserves_selection_and_notes():
     assert reexported["articles"][0]["note"] == "중요 메모"
     assert reexported["articles"][0]["starred"] is True
     assert reexported["articles"][0]["included"] == payload["articles"][0]["included"]
+
+
+def test_json_round_trip_restores_manual_article_body_override():
+    source_date = "2025-02-26"
+    article_id = _setup_briefing_with_article(source_date)
+    body = (
+        "관계기관은 전기설비 30곳의 안전점검 결과와 피해 수치, 후속 조사 일정 및 재발 방지 "
+        "대책을 공식 발표했다고 밝혔다. " * 12
+    )
+    saved = client.put(
+        f"/api/articles/{article_id}/manual-body",
+        json={
+            "reportDate": source_date,
+            "bodyText": body,
+            "sourceUrl": "https://example.com/exports/manual-body-original",
+        },
+    )
+    assert saved.status_code == 200, saved.json()
+    payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
+    exported = next(item for item in payload["articles"] if item["id"] == article_id)
+    assert exported["manualBodyOverride"] is True
+    assert exported["bodyText"] == body.strip()
+
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "DELETE FROM article_body_overrides WHERE article_id = ?", (article_id,)
+            )
+    finally:
+        connection.close()
+
+    target_date = "2025-02-27"
+    imported = client.post(f"/api/exports/{target_date}.json", json=payload)
+    assert imported.status_code == 200, imported.json()
+    restored = client.get(f"/api/exports/{target_date}.json").json()["data"]
+    restored_article = next(item for item in restored["articles"] if item["id"] == article_id)
+    assert restored_article["manualBodyOverride"] is True
+    assert restored_article["bodyText"] == body.strip()
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "DELETE FROM article_body_overrides WHERE article_id = ?", (article_id,)
+            )
+    finally:
+        connection.close()
 
 
 def test_json_schema_v7_round_trip_preserves_kesco_press_origin():
@@ -96,7 +143,7 @@ def test_json_schema_v7_round_trip_preserves_kesco_press_origin():
         connection.close()
 
     payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert payload["articles"][0]["origin"]["pressRelease"]["bodyText"].startswith(
         "정식 백업"
     )
@@ -176,7 +223,7 @@ def test_json_schema_v6_round_trip_preserves_incident_and_accepts_v5():
     )
 
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert payload["articles"][0]["incident"]["incident_type"] == "fire"
     assert payload["articles"][0]["incident"]["cause_status"] == "unknown"
     assert payload["articles"][0]["incident"]["cause_certainty"] == "under_investigation"
@@ -228,7 +275,7 @@ def test_json_round_trip_preserves_issue_editor_and_membership_override():
         },
     )
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
 
     target_date = "2025-02-10"
     imported = client.post(f"/api/exports/{target_date}.json", json=payload)
@@ -278,7 +325,7 @@ def test_json_round_trip_preserves_direct_coverage_manual_override():
     assert selected.status_code == 200
 
     payload = client.get(f"/api/exports/{source_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert payload["issues"][0]["editorDirectCoverage"] is False
     assert payload["issues"][0]["directCoverage"] is False
 
@@ -399,7 +446,7 @@ def test_json_schema_v5_round_trip_preserves_ai_run_and_article_body(monkeypatch
     )
     assert analyzed.status_code == 200
     payload = client.get(f"/api/exports/{report_date}.json").json()["data"]
-    assert payload["schemaVersion"] == 12
+    assert payload["schemaVersion"] == 13
     assert payload["aiRuns"][0]["evidence"]
     assert payload["articles"][0]["bodyText"] == full_text
 

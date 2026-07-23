@@ -334,6 +334,7 @@ GET   /api/issues/{issue_id}/articles
 PATCH /api/issues/{issue_id}/evidence
 POST  /api/articles/{article_id}/reextract
 POST  /api/issues/{issue_id}/articles/reextract
+PUT   /api/articles/{article_id}/manual-body
 ```
 
 - 품질 조회는 최신 `article_extractions` 이력의 추출 상태, 결정론적 품질 점수·등급,
@@ -355,6 +356,11 @@ POST  /api/issues/{issue_id}/articles/reextract
   분석 제외 기사 목록을 받는다. 현재 유효 membership에 없는 ID는 거부한다.
 - 대표기사와 보조근거는 `analysisEligible=true`인 기사만 허용한다. 분석 제외는 그룹과
   기사 원본을 삭제하지 않으며 이후 자동 추출·그룹화가 수동 제외를 해제하지 않는다.
+- 수동 본문 저장은 `reportDate`, `bodyText`, 선택적인 실제 언론사 `sourceUrl`을 받는다.
+  본문은 자동 수집 `articles.body_text`와 분리된 `article_body_overrides`에 저장하고 동일한
+  정제·완결성·오염·출처 검증을 거친 `manual_paste` 추출 이력을 남긴다. 검증을 통과한 경우만
+  대표기사로 지정할 수 있다. 이후 자동 재수집·재추출은 수동 본문의 우선 사용을 해제하거나
+  덮어쓰지 않으며, 담당자가 다시 저장할 때만 교체된다. 최종 확정 작업본에서는 거부한다.
 - `issues.evidence_revision` 불일치는 `ISSUE_EVIDENCE_REVISION_CONFLICT`(409)로 반환하고
   저장된 수동 상태를 덮어쓰지 않는다.
 - 자동 재그룹화는 동일 이슈가 유지되는 동안 `manual_representative_article_id`,
@@ -1128,7 +1134,7 @@ JSON은 정식 백업 형식이다.
 - `schemaVersion` 필수
 - 작업본, 기사 선정 상태, 중요 표시, 개별 기사 Top 이슈 태그, 메모, 수동 판정, 수집된 기사 전문과 수집 상태,
   보도자료 원문과 기사 출처 판정, 이슈 편집값, AI run, action note를 포함한다.
-- 기상 컨텍스트를 포함하는 현재 형식은 `schemaVersion=12`이다. 1~11 형식은 계속
+- 수동 기사 본문 override를 포함하는 현재 형식은 `schemaVersion=13`이다. 1~12 형식은 계속
   읽을 수 있고, 신규 필드가 없는 과거 데이터는 자동 판정값을 사용한다.
 - 가져오기 전 schema 검증을 수행한다.
 - 내보내기→새 DB 가져오기→다시 내보내기의 의미상 동등성을 통합 테스트한다.

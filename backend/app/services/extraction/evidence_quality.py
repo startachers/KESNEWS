@@ -116,11 +116,7 @@ def assess(
     }
 
 
-def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[str, Any] | None:
-    row = connection.execute(
-        "SELECT * FROM article_extractions WHERE article_id = ? ORDER BY created_at DESC LIMIT 1",
-        (article_id,),
-    ).fetchone()
+def _extraction_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     keys = set(row.keys())
@@ -147,6 +143,21 @@ def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[
         "normalizationReason": row["normalization_reason"] if "normalization_reason" in keys else "",
         "validationErrors": json.loads(row["validation_errors_json"] or "[]") if "validation_errors_json" in keys else [],
     }
+
+
+def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[str, Any] | None:
+    # 수동 본문은 이후 자동 재수집 이력보다 우선한다. 담당자가 다시 저장할 때만 교체된다.
+    override = connection.execute(
+        """SELECT ae.* FROM article_body_overrides abo
+           JOIN article_extractions ae ON ae.id = abo.extraction_id
+           WHERE abo.article_id = ?""",
+        (article_id,),
+    ).fetchone()
+    row = override or connection.execute(
+        "SELECT * FROM article_extractions WHERE article_id = ? ORDER BY created_at DESC LIMIT 1",
+        (article_id,),
+    ).fetchone()
+    return _extraction_to_dict(row)
 
 
 def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any]) -> dict[str, Any]:

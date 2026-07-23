@@ -14,6 +14,7 @@ import { getTopIssueEntries, MAX_TOP_ISSUES } from "./issues.js?v=20260720-2";
 
 const expandedIssueIds = new Set();
 const expandedPreviewKeys = new Set();
+const manualBodyEditingKeys = new Set();
 const collapsedRepresentativePreviewKeys = new Set();
 const qualitySortedIssueIds = new Set();
 const reextractingIssueIds = new Set();
@@ -216,7 +217,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
 function renderRelatedArticle(a, issue) {
   const quality = (issue.evidenceArticles || []).find(item => item.articleId === a.id) || {};
   const evidenceFailure = evidenceFailureFor(a.id, issue.id);
-  const href = safeUrl(a.url);
+  const href = safeUrl(quality.canonicalUrl || a.url);
   const titleEl = href
     ? `<a class="related-article-title" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a>`
     : `<span class="related-article-title">${escapeHtml(a.title)}</span>`;
@@ -234,21 +235,29 @@ function renderRelatedArticle(a, issue) {
     ? ""
     : (validationText.length ? validationText : (quality.qualityReasons || ["유효한 기사 본문을 확보하지 못했습니다."])).join(" · ");
   const sourceVerified = !!quality.sourceDomain && !validationErrors.some(item => ["publisher_identity_mismatch", "canonical_url_unresolved"].includes(item));
+  const manualEditorOpen = manualBodyEditingKeys.has(previewKey);
+  const manualBodyEditor = manualEditorOpen ? `<div class="manual-body-editor">
+    <label>실제 기사 원문 주소 <span>Google 뉴스 주소라면 언론사 원문 주소로 바꿔 주세요.</span><input type="url" data-manual-body-url value="${escapeAttr(quality.canonicalUrl || href || "")}" placeholder="https://언론사.example/article"></label>
+    <label>기사 본문 <span>제목·기자명·추천기사 영역은 제외하고 기사 문장이 끝나는 곳까지 붙여넣어 주세요.</span><textarea data-manual-body-text rows="10" placeholder="복사한 기사 본문을 붙여넣으세요.">${escapeHtml(quality.cleanedText || "")}</textarea></label>
+    <div class="manual-body-editor-actions"><button type="button" data-action="cancel-manual-body">취소</button><button type="button" class="manual-body-save" data-action="save-manual-body">수동 본문 저장·평가</button></div>
+  </div>` : "";
   return `<li class="related-article-row related-role-${escapeAttr(quality.role || "related")}" data-id="${escapeAttr(a.id)}" data-issue-id="${escapeAttr(issue.id)}">
     <input class="include-check related-include-check" type="checkbox" data-action="include" aria-label="브리핑 선정" title="${directCoverage ? "선정하면 공사 직접 보도 태그를 수동 해제하고 브리핑 기사로 반영합니다" : "브리핑 선정"}" ${a.included ? "checked" : ""} ${state.status === "final" ? "disabled" : ""}>
     <div class="related-article-content">
       <div class="related-article-heading">${titleEl}<span class="related-article-meta"><strong>${escapeHtml(quality.normalizedSource || a.source || "출처 미상")}</strong> · ${formatDateTime(a.pubDate)}</span></div>
-      <div class="related-quality-badges">${evidenceFailure ? `<span class="badge badge-evidence-error" title="${escapeAttr(evidenceFailureReason(evidenceFailure))}">MD 생성 차단</span>` : ""}<span class="evidence-role role-${escapeAttr(quality.role || "related")}">${roleLabel}</span><span class="quality-status status-${escapeAttr(quality.extractionStatus || "not_attempted")}">${statusLabel}</span><span class="quality-grade grade-${escapeAttr(quality.qualityGrade || "unavailable")}">${gradeLabel} ${Number(quality.contentQualityScore || 0)}</span></div>
+      <div class="related-quality-badges">${evidenceFailure ? `<span class="badge badge-evidence-error" title="${escapeAttr(evidenceFailureReason(evidenceFailure))}">MD 생성 차단</span>` : ""}${quality.extractionMethod === "manual_paste" ? '<span class="badge badge-manual">수동 본문</span>' : ""}<span class="evidence-role role-${escapeAttr(quality.role || "related")}">${roleLabel}</span><span class="quality-status status-${escapeAttr(quality.extractionStatus || "not_attempted")}">${statusLabel}</span><span class="quality-grade grade-${escapeAttr(quality.qualityGrade || "unavailable")}">${gradeLabel} ${Number(quality.contentQualityScore || 0)}</span></div>
       <div class="related-quality-meta">최초 수집 언론사 ${escapeHtml(quality.rawSource || a.source || "미확인")} · 실제 원문 도메인 ${escapeHtml(quality.sourceDomain || "미확인")} · 정제 ${Number(quality.cleanedCharacterCount || 0).toLocaleString("ko-KR")}자 · ${quality.lastExtractedAt ? formatDateTime(quality.lastExtractedAt) : "추출 전"}</div>
       <div class="source-validation ${sourceVerified ? "verified" : "invalid"}">${sourceVerified ? "출처 확인 완료" : (quality.lastExtractedAt ? "출처 확인 필요" : "출처 확인 전")}${quality.normalizationReason && quality.normalizationReason !== "raw_source" ? ` · 언론사명 정상화(${escapeHtml(quality.normalizationReason)})` : ""}</div>
       ${validationErrors.length ? `<div class="evidence-validation-errors"><strong>대표기사 지정 불가</strong><span>${escapeHtml(validationText.join(" · "))}</span></div>` : ""}
       <div class="related-quality-meta">${escapeHtml((quality.qualityReasons || []).join(" · ") || "품질 평가 전")}</div>
       ${previewOpen ? `<div class="article-body-preview"><dl><div><dt>정제 전</dt><dd>${Number(quality.rawCharacterCount || 0).toLocaleString("ko-KR")}자</dd></div><div><dt>정제 후</dt><dd>${Number(quality.cleanedCharacterCount || 0).toLocaleString("ko-KR")}자</dd></div><div><dt>추출 시각</dt><dd>${quality.lastExtractedAt ? formatDateTime(quality.lastExtractedAt) : "없음"}</dd></div></dl><p>${escapeHtml(quality.cleanedText || "확인할 정제 본문이 없습니다.")}</p></div>` : ""}
+      ${manualBodyEditor}
     </div>
     <div class="related-evidence-actions no-print">
       <button data-action="preview-body">${previewOpen ? "미리보기 닫기" : "본문 미리보기"}</button>
       ${href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">원문 열기</a>` : ""}
       <button data-action="reextract-body" ${state.status === "final" ? "disabled" : ""}>본문 다시 추출</button>
+      <button data-action="edit-manual-body" ${state.status === "final" ? "disabled" : ""}>${quality.extractionMethod === "manual_paste" ? "수동 본문 수정" : "본문 직접 입력"}</button>
       <button data-action="set-representative" title="${escapeAttr(disabledReason)}" ${state.status === "final" || !quality.analysisEligible || quality.role === "representative" ? "disabled" : ""}>대표기사로 지정</button>
       <button data-action="toggle-supplemental" title="${escapeAttr(disabledReason)}" ${state.status === "final" || (!quality.analysisEligible && quality.role !== "supplemental") || quality.role === "representative" ? "disabled" : ""}>${quality.role === "supplemental" ? "보조근거 해제" : "보조근거로 지정"}</button>
       <button data-action="toggle-analysis-excluded" ${state.status === "final" ? "disabled" : ""}>${quality.role === "excluded" ? "분석 제외 해제" : "분석 제외"}</button>
@@ -652,6 +661,20 @@ export function handleArticleClick(e) {
     if (card) searchRelatedArticles(card.dataset.id);
     return;
   }
+  if (evidenceRow && ["edit-manual-body", "cancel-manual-body", "save-manual-body"].includes(action)) {
+    const key = `${evidenceRow.dataset.issueId}:${evidenceRow.dataset.id}`;
+    if (action === "edit-manual-body") {
+      manualBodyEditingKeys.add(key);
+      renderArticles();
+      requestAnimationFrame(() => document.querySelector(`.related-article-row[data-issue-id="${CSS.escape(evidenceRow.dataset.issueId)}"][data-id="${CSS.escape(evidenceRow.dataset.id)}"] [data-manual-body-text]`)?.focus());
+    } else if (action === "cancel-manual-body") {
+      manualBodyEditingKeys.delete(key);
+      renderArticles();
+    } else {
+      saveManualBody(evidenceRow.dataset.issueId, evidenceRow.dataset.id, evidenceRow);
+    }
+    return;
+  }
   if (evidenceRow && ["reextract-body", "set-representative", "toggle-supplemental", "toggle-analysis-excluded"].includes(action)) {
     handleEvidenceAction(action, evidenceRow.dataset.issueId, evidenceRow.dataset.id);
     return;
@@ -698,6 +721,33 @@ export function handleArticleClick(e) {
     afterArticleMutation();
     trackArticlePatch(article.id, { dismissed: true });
     showToast("기사를 브리핑에서 삭제했습니다(휴지통으로 이동, 메모·중요 표시는 보존됩니다).");
+  }
+}
+
+async function saveManualBody(issueId, articleId, row) {
+  const bodyText = row.querySelector("[data-manual-body-text]")?.value.trim() || "";
+  const sourceUrl = row.querySelector("[data-manual-body-url]")?.value.trim() || "";
+  if (!bodyText) {
+    showToast("붙여넣을 기사 본문을 입력해 주세요.", "error");
+    return;
+  }
+  const saveButton = row.querySelector('[data-action="save-manual-body"]');
+  if (saveButton) { saveButton.disabled = true; saveButton.textContent = "저장·평가 중…"; }
+  try {
+    const result = await api.putManualArticleBody(articleId, { reportDate: state.date, bodyText, sourceUrl });
+    manualBodyEditingKeys.delete(`${issueId}:${articleId}`);
+    const issuesResult = await api.listIssues(state.date);
+    state.issues = issuesResult.data.issues || [];
+    renderAll();
+    showToast(
+      result.data.analysisEligible
+        ? `수동 본문 저장 완료 · 대표기사 지정 가능 (${result.data.contentQualityScore}점)`
+        : `수동 본문은 저장했지만 아직 대표기사 지정 불가 · ${(result.data.qualityReasons || []).join(" · ")}`,
+      result.data.analysisEligible ? "success" : "",
+    );
+  } catch (error) {
+    if (saveButton) { saveButton.disabled = false; saveButton.textContent = "수동 본문 저장·평가"; }
+    showToast(`수동 본문 저장 실패: ${friendlyError(error)}`, "error");
   }
 }
 
