@@ -12,8 +12,10 @@ from backend.app.services.extraction.cleaner import clean_text
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.dates import parse_date
 
-# 문화체육관광부_정책브리핑_보도자료_API (data.go.kr, 서비스ID 1371000/pressReleaseService).
-BASE_URL = "http://apis.data.go.kr/1371000/pressReleaseService/pressReleaseList"
+# 문화체육관광부_정책브리핑_정책뉴스_API (data.go.kr, 서비스ID 1371000/policyNewsService,
+# 데이터 15095335). 기존 pressReleaseService(보도자료) 카탈로그는 포털에서 폐지돼 신규
+# 활용신청이 불가능하고, 승인 가능한 정책뉴스 API가 같은 필드 스키마를 제공한다.
+BASE_URL = "http://apis.data.go.kr/1371000/policyNewsService/policyNewsList"
 PROVIDER = "정책브리핑 API"
 
 _TITLE_KEYS = ("Title", "title", "artcTitle", "sj")
@@ -58,10 +60,12 @@ def _extract_xml_items(text: str) -> list[dict[str, Any]]:
             "정책브리핑 API 오류",
         )
         raise CollectionHttpError(f"정책브리핑 API 오류({result_code}): {result_message}")
+    # 정책뉴스 API는 <body>의 직접 자식으로 <NewsItem>을 반복한다. 과거 pressRelease
+    # 계약의 <item>도 계속 허용하도록 지역명이 "item"으로 끝나는 노드를 모두 아이템으로 본다.
     return [
         {child.tag.rsplit("}", 1)[-1]: child.text or "" for child in node}
         for node in root.iter()
-        if node.tag.rsplit("}", 1)[-1].lower() == "item"
+        if node.tag.rsplit("}", 1)[-1].lower().endswith("item")
     ]
 
 
