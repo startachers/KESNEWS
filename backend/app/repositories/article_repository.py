@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from backend.app.core.clock import now_iso
+from backend.app.core.clock import SEOUL_TZ, now_iso
 from backend.app.repositories.press_release_repository import serialize_origin_row
 from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.ids import make_id
@@ -68,6 +69,7 @@ def find_matching_article(
     since_iso: str,
     provider: str | None = None,
     provider_item_key: str | None = None,
+    allow_fuzzy: bool = True,
 ) -> sqlite3.Row | None:
     """(provider, source_id) 완전일치 우선, 다음 canonical URL, 없으면 최근 후보 중 제목 fuzzy 매칭
     (services.deduplication.service.same_article와 동일 규칙)."""
@@ -83,6 +85,9 @@ def find_matching_article(
         ).fetchone()
         if row is not None:
             return row
+
+    if not allow_fuzzy:
+        return None
 
     normalized_title = normalized_article_title(title)
     if not normalized_title:
@@ -421,6 +426,22 @@ latest_observation AS (
     )
     WHERE rn = 1
 ),
+government_observations AS (
+    SELECT
+        article_id,
+        1 AS is_government_press_release,
+        MAX(CASE WHEN provider IN (
+            '국무조정실 보도자료',
+            '기후에너지환경부 보도자료'
+        ) THEN 1 ELSE 0 END) AS is_date_only_government
+    FROM article_observations
+    WHERE provider IN (
+        '국무조정실 보도자료',
+        '기후에너지환경부 보도자료',
+        '정책브리핑 API'
+    )
+    GROUP BY article_id
+),
 matched_queries AS (
     SELECT article_id, GROUP_CONCAT(DISTINCT query_group_id) AS query_group_ids
     FROM article_observations
@@ -448,6 +469,8 @@ SELECT
     lo.raw_url AS url,
     lo.raw_source AS raw_source,
     lo.provider AS provider,
+    COALESCE(go.is_government_press_release, 0) AS is_government_press_release,
+    COALESCE(go.is_date_only_government, 0) AS is_date_only_government,
     aa.auto_risk AS auto_risk,
     aa.auto_risk_score AS auto_risk_score,
     aa.auto_sentiment AS auto_sentiment,
@@ -491,6 +514,7 @@ SELECT
 FROM candidate_ids ci
 JOIN articles a ON a.id = ci.article_id
 LEFT JOIN latest_observation lo ON lo.article_id = a.id
+LEFT JOIN government_observations go ON go.article_id = a.id
 LEFT JOIN article_assessments aa ON aa.article_id = a.id
 LEFT JOIN article_origin_assessments aoa ON aoa.article_id = a.id
 LEFT JOIN kesco_press_releases kpr ON kpr.id = COALESCE(
@@ -525,14 +549,27 @@ def list_candidates(
         )
         if not has_editor_state and not bool(row["manual"]):
             published_value = date_value(row["published_at"])
-            if published_since and (
-                not published_value or published_value < date_value(published_since)
-            ):
-                continue
-            if published_until and (
-                not published_value or published_value > date_value(published_until)
-            ):
-                continue
+            if bool(row["is_date_only_government"]) and published_value:
+                try:
+                    target_date = date.fromisoformat(report_date)
+                except ValueError:
+                    target_date = None
+                published_date = datetime.fromtimestamp(
+                    published_value / 1000, SEOUL_TZ
+                ).date()
+                if target_date is None or not (
+                    target_date - timedelta(days=1) <= published_date <= target_date
+                ):
+                    continue
+            else:
+                if published_since and (
+                    not published_value or published_value < date_value(published_since)
+                ):
+                    continue
+                if published_until and (
+                    not published_value or published_value > date_value(published_until)
+                ):
+                    continue
         dismissed = bool(row["dismissed"])
         if not include_dismissed and dismissed:
             continue
@@ -572,6 +609,7 @@ def list_candidates(
                     if row["publisher_allowed"] is not None
                     else None
                 ),
+                "governmentPressRelease": bool(row["is_government_press_release"]),
                 "risk": {"required": "critical", "review": "watch", "reference": "routine"}.get(effective_priority, row["auto_risk"]),
                 "riskScore": row["auto_severity_score"] if row["auto_severity_score"] is not None else row["auto_risk_score"],
                 "sentiment": effective_tone,

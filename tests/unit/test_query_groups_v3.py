@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from backend.app.services.collection.collector import (
+    _within_date_only_government_window,
     _within_lookback,
     fetch_naver_query,
     query_max_records,
@@ -88,6 +89,14 @@ def test_collection_window_is_exactly_previous_24_hours_without_future_grace():
     assert _within_lookback("2025-01-14T14:59:59Z", report_date, 24) is True
     assert _within_lookback("2025-01-14T14:59:58Z", report_date, 24) is False
     assert _within_lookback("2025-01-15T15:00:00Z", report_date, 24) is False
+
+
+def test_date_only_government_window_keeps_report_date_and_previous_seoul_date():
+    report_date = "2026-07-23"
+
+    assert _within_date_only_government_window("2026-07-23T00:00:00Z", report_date) is True
+    assert _within_date_only_government_window("2026-07-22T00:00:00Z", report_date) is True
+    assert _within_date_only_government_window("2026-07-21T00:00:00Z", report_date) is False
 
 
 def test_naver_query_applies_the_same_per_query_limit(monkeypatch):

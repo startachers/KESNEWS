@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.app.services.collection import me_press, opm_press, policy_briefing
+from backend.app.services.collection.http import CollectionHttpError
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "gov"
 
@@ -77,6 +80,7 @@ def test_policy_briefing_parses_standard_envelope(monkeypatch):
     assert items[0]["title"] == "전기안전 대책 발표"
     assert items[0]["sourceId"] == "policy-briefing:123456"
     assert items[0]["description"] == "기후에너지환경부"
+    assert items[0]["source"] == "기후에너지환경부"
 
 
 def test_policy_briefing_accepts_single_item_dict(monkeypatch):
@@ -85,3 +89,48 @@ def test_policy_briefing_accepts_single_item_dict(monkeypatch):
     result = policy_briefing.fetch_policy_briefing("test-key", "", 10)
     assert len(result["items"]) == 1
     assert result["items"][0]["title"] == "단일 아이템"
+
+
+def test_policy_briefing_explains_403_as_portal_access_denial(monkeypatch):
+    monkeypatch.setattr(policy_briefing, "http_get", lambda *a, **k: (403, "Forbidden"))
+
+    with pytest.raises(CollectionHttpError) as exc_info:
+        policy_briefing.fetch_policy_briefing("test-key", "", 10)
+
+    assert exc_info.value.status == 403
+    assert "활용신청 승인 상태와 인증키" in str(exc_info.value)
+
+
+def test_policy_briefing_parses_official_xml_fields_and_uses_report_date(monkeypatch):
+    payload = """<?xml version="1.0" encoding="UTF-8"?>
+    <response><header><resultCode>0</resultCode><resultMsg>NORMAL SERVICE</resultMsg></header>
+      <body><items><item>
+        <NewsItemId>156472565</NewsItemId>
+        <ApproveDate>07/22/2026 09:30:00</ApproveDate>
+        <Title>정부 전기안전 대책 발표</Title>
+        <DataContents><![CDATA[<p>전기설비 안전관리 대책 본문</p>]]></DataContents>
+        <MinisterCode>산업통상자원부</MinisterCode>
+        <OriginalUrl>https://www.korea.kr/briefing/pressReleaseView.do?newsId=156472565</OriginalUrl>
+      </item></items></body>
+    </response>"""
+    requested = {}
+
+    def fake_get(url, *_args):
+        requested["url"] = url
+        return 200, payload
+
+    monkeypatch.setattr(policy_briefing, "http_get", fake_get)
+    result = policy_briefing.fetch_policy_briefing("decoded+/key=", "", 10, "2026-07-22")
+
+    assert "startDate=20260721&endDate=20260722" in requested["url"]
+    assert "serviceKey=decoded%2B%2Fkey%3D" in requested["url"]
+    assert result["items"][0] == {
+        "id": result["items"][0]["id"],
+        "sourceId": "policy-briefing:156472565",
+        "title": "정부 전기안전 대책 발표",
+        "source": "산업통상자원부",
+        "url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156472565",
+        "pubDate": "2026-07-22T00:30:00Z",
+        "description": "전기설비 안전관리 대책 본문",
+        "provider": "정책브리핑 API",
+    }

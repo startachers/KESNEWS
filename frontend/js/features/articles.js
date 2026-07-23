@@ -71,6 +71,12 @@ function isKescoPressIssue(issue) {
   return issue?.autoReasons?.origin?.type === "kesco_press_release";
 }
 
+function matchesSourceType(article) {
+  if (filters.sourceType === "government_press_release") return article.governmentPressRelease === true;
+  if (filters.sourceType === "media_article") return article.governmentPressRelease !== true;
+  return true;
+}
+
 function starsText(value) {
   const stars = Math.max(1, Math.min(5, Number(value) || 1));
   return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
@@ -133,6 +139,7 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     }[a.incident?.cause_status];
   if (a.incident?.incident_type === "fire" && causeBadge) badges.unshift(`<span class="badge badge-incident">${causeBadge}</span>`);
   if (isYonhapArticle(a)) badges.unshift('<span class="badge badge-yonhap">연합뉴스 우선</span>');
+  if (a.governmentPressRelease) badges.unshift('<span class="badge badge-press-origin">정부부처 보도자료</span>');
   if (isKescoPressArticle(a)) {
     const originLabel = a.origin.effectiveType === "kesco_republication" ? "보도자료 전재" : "보도자료 기반";
     const releaseTitle = a.origin.pressRelease?.title || "공사 보도자료";
@@ -252,9 +259,10 @@ function renderRelatedArticle(a, issue) {
 
 export function focusRelatedEvidence(issueId, articleId) {
   expandedIssueIds.add(issueId);
-  setFilters({ ...filters, text: "", category: "all", risk: "all", selection: "all" });
+  setFilters({ ...filters, text: "", category: "all", sourceType: "all", risk: "all", selection: "all" });
   els.articleSearch.value = "";
   els.categoryFilter.value = "all";
+  els.sourceTypeFilter.value = "all";
   els.riskFilter.value = "all";
   els.selectionFilter.value = "all";
   renderAll();
@@ -342,7 +350,7 @@ export function renderArticles() {
     const hay = `${a.title} ${a.source} ${a.description || ""} ${(a.matchedKeywords || []).join(" ")} ${issue?.effectiveTitle || ""}`.toLowerCase();
     const selectionMatch = filters.selection === "all" || (filters.selection === "selected" && a.included) || (filters.selection === "starred" && a.starred) || (filters.selection === "unselected" && !a.included);
     const reviewMatch = filters.risk === "all" || Number(filters.risk) === Number(issue?.effectiveReviewStars);
-    return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && reviewMatch && selectionMatch;
+    return (!filters.text || hay.includes(filters.text)) && (filters.category === "all" || a.category === filters.category) && matchesSourceType(a) && reviewMatch && selectionMatch;
   });
   if (filters.sort === "relevance") items.sort(relevanceSort);
   else if (filters.sort === "collection") {
@@ -609,8 +617,8 @@ export function handleArticleClick(e) {
   if (action === "search") return runSearch(false);
   if (action === "sample") return loadSample();
   if (action === "clear-filters") {
-    setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "review" });
-    els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderArticles(); return;
+    setFilters({ text: "", category: "all", sourceType: "all", risk: "all", selection: "all", sort: "review" });
+    els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.sourceTypeFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderArticles(); return;
   }
   if (!action) return;
   const evidenceRow = e.target.closest("[data-issue-id][data-id]");

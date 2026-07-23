@@ -140,9 +140,13 @@ def reset_settings() -> tuple[CollectionSettings, dict[str, Any]]:
 
 
 def collection_payload(
-    settings: CollectionSettings, report_date: str | None, lookback_hours: int
+    settings: CollectionSettings,
+    report_date: str | None,
+    lookback_hours: int,
+    *,
+    scope: str = "all",
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "reportDate": report_date,
         "lookbackHours": min(24, lookback_hours),
         "maxRecordsPerQuery": settings.maxRecords,
@@ -161,3 +165,22 @@ def collection_payload(
         "excludeKeywords": settings.excludeKeywords,
         "endpoint": settings.endpoint,
     }
+    if scope == "article":
+        payload.update(
+            {
+                "enablePolicyBriefing": False,
+                "enableMediaFallback": True,
+            }
+        )
+    elif scope == "government":
+        payload.update(
+            {
+                "enableYonhap": False,
+                "enableOpmPress": False,
+                "enableMePress": False,
+                "enablePolicyBriefing": True,
+                "enableMediaFallback": False,
+                "queries": [],
+            }
+        )
+    return payload

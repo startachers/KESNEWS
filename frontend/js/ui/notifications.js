@@ -2,9 +2,15 @@ import { els } from "../state/store.js";
 
 let progressHideTimer = null;
 
-export function setSearchButton(busy, label = "기사 수집 중") {
+export function setSearchButton(busy, label = "기사 수집 중", scope = "media") {
   els.refreshBtn.disabled = busy;
-  els.refreshBtn.innerHTML = busy ? `<span class="spinner"></span><span>${label}</span>` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>';
+  els.governmentPressBtn.disabled = busy;
+  els.refreshBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>';
+  els.governmentPressBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V9h14v12M3 9l9-6 9 6M8 12v5m4-5v5m4-5v5"/></svg><span>정부 보도자료 수집</span>';
+  if (busy) {
+    const target = scope === "government" ? els.governmentPressBtn : els.refreshBtn;
+    target.innerHTML = `<span class="spinner"></span><span>${label}</span>`;
+  }
 }
 
 export function setSearchProgress(percent, label) {

@@ -287,6 +287,63 @@ def test_repeat_collection_merges_same_article_without_duplicating(monkeypatch):
     assert len(matching) == 1
 
 
+def test_collection_reuses_content_key_when_legacy_canonical_url_is_missing(monkeypatch):
+    report_date = "2025-01-31"
+    url = "https://www.yna.co.kr/view/AKR202501310001-content-key"
+    connection = get_connection()
+    try:
+        with connection:
+            existing_id = article_repo.create_article(
+                connection,
+                url=url,
+                title="과거 저장 제목",
+                source="연합뉴스",
+                published_at=f"{report_date}T09:00:00Z",
+                description="기존 설명",
+                category_hint="kesco_direct",
+                manual=False,
+                publisher_id="yonhap",
+                publisher_allowed=True,
+            )
+            # 과거 import/정규화 데이터처럼 content_key는 URL 기반이지만 canonical_url이
+            # 비어 있는 경계 사례를 재현한다.
+            connection.execute(
+                "UPDATE articles SET canonical_url = NULL WHERE id = ?", (existing_id,)
+            )
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: _yonhap_result(
+            url,
+            f"{report_date}T09:00:00Z",
+            title="한국전기안전공사 국정감사 새 제목",
+        ),
+    )
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+
+    response = client.post("/api/collections", json=_base_payload(reportDate=report_date))
+
+    assert response.status_code == 200
+    assert response.json()["data"]["matchedCount"] == 1
+    connection = get_connection()
+    try:
+        matching = connection.execute(
+            "SELECT id FROM articles WHERE content_key = (SELECT content_key FROM articles WHERE id = ?)",
+            (existing_id,),
+        ).fetchall()
+        observation = connection.execute(
+            "SELECT dedup_method FROM article_observations WHERE article_id = ? ORDER BY observed_at DESC LIMIT 1",
+            (existing_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert [row["id"] for row in matching] == [existing_id]
+    assert observation["dedup_method"] == "content_key"
+
+
 def test_collection_links_media_article_to_kesco_press_release(monkeypatch):
     report_date = "2025-01-29"
     title = "복지 사각지대도 전기안전 지킨다 한국전기안전공사 협력"
@@ -504,11 +561,27 @@ def test_direct_government_sources_default_on_and_bypass_relevance_filter(monkey
         "title": "채용공고 안내",
         "url": "https://www.opm.go.kr/opm/news/press-release.do?mode=view&articleNo=123457",
     }
+    expired_item = {
+        **gov_item,
+        "id": "raw-opm-3",
+        "sourceId": "opm:123458",
+        "title": "24시간이 지난 정례 브리핑",
+        "url": "https://www.opm.go.kr/opm/news/press-release.do?mode=view&articleNo=123458",
+        "pubDate": "2025-01-20T09:00:00Z",
+    }
+    previous_date_item = {
+        **gov_item,
+        "id": "raw-opm-4",
+        "sourceId": "opm:123459",
+        "title": "전일 등록 정례 브리핑",
+        "url": "https://www.opm.go.kr/opm/news/press-release.do?mode=view&articleNo=123459",
+        "pubDate": "2025-01-25T00:00:00Z",
+    }
     monkeypatch.setattr(
         collector_module,
         "fetch_opm_press",
         lambda *a, **k: {
-            "items": [gov_item, excluded_item],
+            "items": [gov_item, excluded_item, expired_item, previous_date_item],
             "provider": "국무조정실 보도자료",
         },
     )
@@ -518,7 +591,7 @@ def test_direct_government_sources_default_on_and_bypass_relevance_filter(monkey
         lambda *a, **k: {"items": [], "provider": "기후에너지환경부 보도자료"},
     )
 
-    # 요청 바디에 provider 설정을 보내지 않아도 서버 설정의 직접 수집이 적용된다.
+    # 기존 기사 검색은 서버 설정의 정부기관 직접 수집원을 계속 사용한다.
     payload = _base_payload(
         reportDate=report_date,
         enableYonhap=False,
@@ -529,15 +602,98 @@ def test_direct_government_sources_default_on_and_bypass_relevance_filter(monkey
     response = client.post("/api/collections", json=payload)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["rawCollectedCount"] == 2
-    assert data["uniqueCount"] == 1
+    assert data["rawCollectedCount"] == 4
+    assert data["uniqueCount"] == 3
 
     listed = _articles(report_date)["data"]["articles"]
     article = next(item for item in listed if item["url"] == gov_item["url"])
+    assert article["governmentPressRelease"] is True
     assert article["assessment"]["effectivePriority"] == "review"
     assert article["assessment"]["autoReasons"]["relevanceRank"] == 99
     assert "official_government_source" in article["assessment"]["autoReasons"]["appliedFloors"]
-    assert all(item["url"] != excluded_item["url"] for item in listed)
+    excluded_article = next(item for item in listed if item["url"] == excluded_item["url"])
+    assert excluded_article["governmentPressRelease"] is True
+    previous_article = next(item for item in listed if item["url"] == previous_date_item["url"])
+    assert previous_article["governmentPressRelease"] is True
+    assert all(item["url"] != expired_item["url"] for item in listed)
+
+
+def test_government_collection_does_not_fall_back_to_media_provider(monkeypatch):
+    report_date = "2025-01-27"
+    monkeypatch.setenv("POLICY_BRIEFING_SERVICE_KEY", "test-key")
+
+    def fail_government(*args, **kwargs):
+        raise CollectionHttpError("정부 수집원 장애")
+
+    gdelt_called = False
+
+    def track_gdelt(*args, **kwargs):
+        nonlocal gdelt_called
+        gdelt_called = True
+        return []
+
+    monkeypatch.setattr(collector_module, "fetch_policy_briefing", fail_government)
+    monkeypatch.setattr(collector_module, "fetch_gdelt_combined", track_gdelt)
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=False,
+        enableOpmPress=False,
+        enableMePress=False,
+        queries=[],
+    )
+
+    response = client.post("/api/government-press-releases/collections", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "failed"
+    assert gdelt_called is False
+
+
+def test_policy_briefing_button_saves_and_displays_every_returned_item(monkeypatch):
+    report_date = "2025-01-28"
+    monkeypatch.setenv("POLICY_BRIEFING_SERVICE_KEY", "test-key")
+    items = [
+        {
+            "id": "raw-policy-1",
+            "sourceId": "policy-briefing:900001",
+            "title": "산업부 보도자료",
+            "source": "산업통상자원부",
+            "url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=900001",
+            "pubDate": f"{report_date}T01:00:00Z",
+            "description": "산업 정책 발표",
+            "provider": "정책브리핑 API",
+        },
+        {
+            "id": "raw-policy-2",
+            "sourceId": "policy-briefing:900002",
+            "title": "고용부 보도자료",
+            "source": "고용노동부",
+            "url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=900002",
+            "pubDate": f"{report_date}T02:00:00Z",
+            "description": "고용 정책 발표",
+            "provider": "정책브리핑 API",
+        },
+    ]
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_policy_briefing",
+        lambda *a, **k: {"items": items, "provider": "정책브리핑 API"},
+    )
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=False,
+        enableOpmPress=False,
+        enableMePress=False,
+        queries=[],
+    )
+
+    response = client.post("/api/government-press-releases/collections", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["uniqueCount"] == 2
+    listed = _articles(report_date)["data"]["articles"]
+    government = [item for item in listed if item["governmentPressRelease"]]
+    assert {item["title"] for item in government} == {"산업부 보도자료", "고용부 보도자료"}
 
 
 def test_legacy_unclassified_article_is_hidden_unless_editor_state_exists(monkeypatch):

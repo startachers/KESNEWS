@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -84,9 +85,32 @@ async def create_collection(request: CollectionRequest) -> dict[str, Any]:
         settings.enableYonhap or settings.enableOpmPress or settings.enableMePress
     ):
         return error_response(
-            "COLLECTION_NO_SOURCE", "활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요."
+            "COLLECTION_NO_SOURCE", "활성화된 검색식이나 언론기사 수집원이 없습니다. 설정을 확인해 주세요."
         )
-    payload = collection_payload(settings, request.report_date, request.lookback_hours)
+    payload = collection_payload(
+        settings, request.report_date, request.lookback_hours, scope="article"
+    )
+    return await _execute_collection(payload)
+
+
+@router.post("/api/government-press-releases/collections")
+async def create_government_press_release_collection(
+    request: CollectionRequest,
+) -> dict[str, Any]:
+    settings, _ = get_effective_settings()
+    policy_configured = bool(os.environ.get("POLICY_BRIEFING_SERVICE_KEY", "").strip())
+    if not policy_configured:
+        return error_response(
+            "COLLECTION_NO_SOURCE",
+            "공공데이터포털 정책브리핑 API 서비스키가 설정되지 않았습니다.",
+        )
+    payload = collection_payload(
+        settings, request.report_date, request.lookback_hours, scope="government"
+    )
+    return await _execute_collection(payload)
+
+
+async def _execute_collection(payload: dict[str, Any]) -> dict[str, Any]:
 
     if _collection_lock.locked():
         return error_response(

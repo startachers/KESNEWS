@@ -197,6 +197,10 @@ DELETE /api/articles/{article_id}
 3. 해당 날짜에 수동 추가된 기사
 
 - 각 기사에는 해당 날짜의 편집 상태(`selected`, `starred`, `topIssue`, `note`, `dismissed`)를 join해 반환한다. row가 없으면 기본 상태를 반환한다.
+- 정부부처 직접 수집 observation(`국무조정실 보도자료`, `기후에너지환경부 보도자료`,
+  `정책브리핑 API`)이 하나라도 연결된 기사는 `governmentPressRelease=true`를 반환한다. 최신
+  observation이 다른 provider여도 이 값은 유지하며, 화면의 자료 유형 필터에만 사용하고 기사
+  선정·메모·평가 데이터를 별도로 복제하지 않는다.
 - `firstObservedAt`은 기사가 로컬 수집기에 최초로 들어온 UTC 시각이다. 화면의
   `관련기사 수집순`은 적용된 이슈의 관련기사 수(대표 기사 제외)를 내림차순으로 사용한다.
   같은 건수이면 `firstObservedAt` 오름차순, 다시 같으면 공사 관련도순으로 정렬한다.
@@ -517,6 +521,7 @@ provider 일부만 성공한 실행의 status는 `partial`이다.
 
 ```text
 POST /api/collections
+POST /api/government-press-releases/collections
 ```
 
 ```json
@@ -527,6 +532,13 @@ POST /api/collections
 ```
 
 - `report_date` 생략 시 `Asia/Seoul` 기준 오늘 날짜를 사용한다.
+- `POST /api/collections`는 기존 기사 검색 계약을 유지한다. 언론기사 provider와 검색식,
+  국무조정실·기후에너지환경부 직접 수집을 실행하며 정책브리핑 API는 실행하지 않는다.
+- `POST /api/government-press-releases/collections`는 공공데이터포털 정책브리핑 API만 실행한다.
+  직접 수집과 언론기사 provider는 실행하지 않으며 실패를 다른 provider 결과로 대체하지 않는다.
+  두 요청은 같은 collection lock과 저장 파이프라인을 사용한다.
+- 정책브리핑 API에서 정상 수집·저장된 모든 자료는 `governmentPressRelease=true`로 조회되며
+  Media Coverage의 `정부부처 보도자료` 필터에서 모두 표시한다.
 - `collection_runs.report_date`는 실행 시각이 아니라 **요청의 `report_date`**에 귀속한다. 자정 전후 실행이 어제·오늘 어느 보고일에 속하는지 서버가 추측하지 않는다.
 - 일일 브리핑의 자동수집 범위는 수집 실행 시각 기준 최근 24시간으로 고정한다. 구버전
   클라이언트가 더 큰 `lookback_hours`를 보내더라도 서버는 24시간으로 제한한다.
@@ -536,7 +548,8 @@ POST /api/collections
 
 수집 요청의 검색식·키워드·provider 사용 여부는 요청 바디에서 받지 않는다. 구버전 클라이언트가
 해당 필드를 보내도 무시하고, 서버의 유효 설정만 사용한다. 수동 화면과 2시간 자동수집은 동일한
-설정 snapshot을 사용한다.
+설정 snapshot을 사용한다. 2시간 자동수집과 `오늘 기사 검색`은 언론기사 수집 범위이며 정부
+보도자료는 화면의 별도 버튼으로 요청한다.
 
 ### 3.5.1 검색 설정
 
@@ -560,7 +573,16 @@ POST /api/settings/reset
 
 - 일반 언론기사는 `config/trusted_media.yaml`의 원문 도메인 허용목록을 통과해야 저장한다.
 - 정부·국회·공공기관 공식 도메인은 일반 언론사 허용목록과 별도로 허용한다.
-- 국무조정실·기후에너지환경부 직접 수집과 정책브리핑 API 자료는 공식 도메인 검증을 통과하면 일반 관련도 탈락 규칙을 적용하지 않는다. 단, 보고일 기간 범위와 전체 제외 규칙은 그대로 적용한다.
+- 국무조정실·기후에너지환경부 직접 수집과 정책브리핑 API 자료는 공식 도메인 검증을 통과하면
+  일반 관련도와 전체 제외어를 적용하지 않고 24시간 후보 범위 안의 수집 자료를 모두 저장·표시한다.
+  시각이 제공되는 자료는 정확한 24시간을 적용한다. 국무조정실·기후에너지환경부 목록처럼 게시일만
+  제공되는 자료는 정확한 경계를 알 수 없으므로 서울 기준 보고일과 전일을 허용하고 2일 전부터
+  제외한다. 같은 provider의 동일 `sourceId`만 같은 보도자료로 병합하며, 서로 다른 `sourceId`는
+  제목이 유사해도 별도 자료로 보존한다.
+- 정책브리핑 API는 보고일과 전일의 서울 날짜를 `startDate`, `endDate`(`YYYYMMDD`)로 요청하고,
+  XML의 `NewsItemId`, `ApproveDate`, `Title`, `DataContents`, `MinisterCode`, `OriginalUrl`을
+  기사·observation으로 정규화한다. 서비스키는 서버 환경변수
+  `POLICY_BRIEFING_SERVICE_KEY`에서만 읽으며 응답·로그·프런트엔드에 노출하지 않는다.
 - Google 뉴스 RSS는 중계 기사 URL이 아니라 `<source url>` 도메인으로 판별하며, 값이 없으면 `unknown_publisher`로 제외한다.
 - 판별 결과는 `articles.publisher_id`, `articles.publisher_allowed`에 저장한다. 수동 추가 기사는 출처 필터 대상이 아니므로 두 값이 `null`일 수 있다.
 - 실행별 `source_filter_stats_json`은 `raw_results`, `official_sources`, `trusted_media`, `rejected_untrusted_media`, `unknown_publisher`를 보존한다. `unknown_publisher`는 제외 건수의 부분집합이다.

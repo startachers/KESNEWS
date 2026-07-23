@@ -115,6 +115,43 @@ def test_collection_uses_server_settings_and_ignores_legacy_body(monkeypatch):
     assert captured["queries"] == [server_query]
     assert captured["coreKeywords"] == ["서버 핵심어"]
     assert captured["enableYonhap"] is False
+    assert captured["enableOpmPress"] is False
+    assert captured["enableMePress"] is False
+    assert captured["enablePolicyBriefing"] is False
+    assert captured["enableMediaFallback"] is True
+
+
+def test_government_collection_uses_only_government_sources(monkeypatch):
+    monkeypatch.setenv("POLICY_BRIEFING_SERVICE_KEY", "test-key")
+    defaults = _defaults()
+    configured = {
+        **defaults,
+        "enableYonhap": True,
+        "enableOpmPress": True,
+        "enableMePress": True,
+    }
+    assert client.put("/api/settings", json=configured).status_code == 200
+    captured = {}
+
+    async def fake_collection(payload):
+        captured.update(payload)
+        return {"status": "success"}
+
+    monkeypatch.setattr(collections_api, "run_collection", fake_collection)
+    response = client.post(
+        "/api/government-press-releases/collections",
+        json={"report_date": "2026-07-21", "lookback_hours": 72},
+    )
+
+    assert response.status_code == 200
+    assert captured["reportDate"] == "2026-07-21"
+    assert captured["lookbackHours"] == 24
+    assert captured["enableYonhap"] is False
+    assert captured["enableOpmPress"] is False
+    assert captured["enableMePress"] is False
+    assert captured["enablePolicyBriefing"] is True
+    assert captured["enableMediaFallback"] is False
+    assert captured["queries"] == []
 
 
 def test_collection_rejects_server_configuration_without_any_source():

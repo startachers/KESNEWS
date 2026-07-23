@@ -52,6 +52,40 @@ def test_same_article_rejects_unrelated_titles():
     assert same_article(a, b) is False
 
 
+def test_same_government_provider_keeps_distinct_source_ids():
+    a = _article(
+        provider="국무조정실 보도자료",
+        sourceId="opm:100",
+        _official_government=True,
+        url="https://www.opm.go.kr/press/100",
+    )
+    b = _article(
+        provider="국무조정실 보도자료",
+        sourceId="opm:101",
+        _official_government=True,
+        url="https://www.opm.go.kr/press/101",
+        title="한국전기안전공사 전기화재 예방 캠페인 실시 계획",
+    )
+    assert same_article(a, b) is False
+
+
+def test_same_government_source_id_merges_after_url_change():
+    a = _article(
+        provider="정책브리핑 API",
+        sourceId="policy-briefing:100",
+        _official_government=True,
+        url="https://www.korea.kr/press/old",
+    )
+    b = _article(
+        provider="정책브리핑 API",
+        sourceId="policy-briefing:100",
+        _official_government=True,
+        url="https://www.korea.kr/press/new",
+        title="수정된 보도자료 제목",
+    )
+    assert same_article(a, b) is True
+
+
 def test_bigram_similarity_identical_strings_is_one():
     assert bigram_similarity("전기화재예방", "전기화재예방") == 1.0
 

@@ -235,7 +235,7 @@ export function flushDailyState() {
 
 export let settings = loadSettings();
 export let state = makeEmptyState(localDateKey());
-export let filters = { text: "", category: "all", risk: "all", selection: "all", sort: "review" };
+export let filters = { text: "", category: "all", sourceType: "all", risk: "all", selection: "all", sort: "review" };
 export let isSearching = false;
 export let isAnalyzingSummary = false;
 export let aiRequestSerial = 0;

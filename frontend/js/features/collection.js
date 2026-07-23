@@ -1,8 +1,8 @@
 import { els, state, settings, LAST_AUTO_KEY, setSearching, isSearching, saveDailyState } from "../state/store.js";
 import { localDateKey, dateValue } from "../utils/dates.js";
 import { cleanText, shortText, friendlyError, safeUrl } from "../utils/strings.js";
-import * as api from "../api/client.js?v=20260716-15";
-import { finishSearchProgress, setSearchProgress, showToast, setStatus, setSearchButton } from "../ui/notifications.js?v=20260716-1";
+import * as api from "../api/client.js?v=20260722-16";
+import { finishSearchProgress, setSearchProgress, showToast, setStatus, setSearchButton } from "../ui/notifications.js?v=20260722-2";
 import { renderSidePanel, renderAll } from "../ui/renderers.js";
 import { refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
 
@@ -18,20 +18,21 @@ export async function refreshArticles() {
   }
 }
 
-export async function runSearch(auto = false) {
+export async function runSearch(auto = false, scope = "media") {
+  const government = scope === "government";
   if (state.status === "final") {
-    if (!auto) showToast("최종 확정된 작업본입니다. 수정 재개 후 기사를 검색해 주세요.", "error");
+    if (!auto) showToast(`최종 확정된 작업본입니다. 수정 재개 후 ${government ? "정부 보도자료를 수집" : "기사를 검색"}해 주세요.`, "error");
     return;
   }
   if (isSearching) return;
   if (state.date !== localDateKey() && auto) return;
   const enabled = settings.queries.filter(q => q.enabled && q.query.trim());
-  if (!enabled.length && !settings.enableYonhap && !settings.enableOpmPress && !settings.enableMePress) { showToast("활성화된 검색식이나 뉴스 수집원이 없습니다. 설정을 확인해 주세요.", "error"); return; }
+  if (!government && !enabled.length && !settings.enableYonhap) { showToast("활성화된 검색식이나 언론기사 수집원이 없습니다. 설정을 확인해 주세요.", "error"); return; }
   setSearching(true);
   state.demo = false;
-  setSearchButton(true);
+  setSearchButton(true, government ? "정부자료 수집 중" : "기사 수집 중", scope);
   els.reclusterBtn.disabled = true;
-  setSearchProgress(5, `연합뉴스 우선 · ${enabled.length}개 검색식으로 기사를 찾는 중…`);
+  setSearchProgress(5, government ? "최근 24시간 정부부처 보도자료를 찾는 중…" : `연합뉴스 우선 · ${enabled.length}개 검색식으로 기사를 찾는 중…`);
   renderSidePanel();
 
   state.lastAttemptAt = new Date().toISOString();
@@ -39,8 +40,8 @@ export async function runSearch(auto = false) {
     const result = await requestCollection({
       report_date: state.date,
       lookback_hours: Number(settings.lookback)
-    });
-    setSearchProgress(58, "기사 수집 완료 · 중복과 검색 기간을 정리하는 중…");
+    }, scope);
+    setSearchProgress(58, `${government ? "정부 보도자료" : "기사"} 수집 완료 · 중복과 검색 기간을 정리하는 중…`);
 
     state.fetchedAt = result.fetchedAt || state.lastAttemptAt;
     state.provider = result.provider || "";
@@ -56,12 +57,12 @@ export async function runSearch(auto = false) {
       state.demo = false;
       state.lastRunStatus = "success";
       state.errors = [];
-      localStorage.setItem(LAST_AUTO_KEY, localDateKey());
+      if (!government) localStorage.setItem(LAST_AUTO_KEY, localDateKey());
       state.summaryError = "";
       let clusteringError = "";
       let issueCount = 0;
       if (state.articles.length) {
-        setSearchButton(true, "이슈 묶는 중");
+        setSearchButton(true, "이슈 묶는 중", scope);
         try {
           issueCount = await automaticallyRecluster();
         } catch (error) {
@@ -88,7 +89,7 @@ export async function runSearch(auto = false) {
     } else {
       state.lastRunStatus = "error";
       state.errors = result.errors?.length ? result.errors : ["데이터 제공 경로에서 응답을 받지 못했습니다."];
-      localStorage.removeItem(LAST_AUTO_KEY);
+      if (!government) localStorage.removeItem(LAST_AUTO_KEY);
       setStatus("error", "기사 수집 실패 · 오류 상세를 확인하세요");
       showToast(`수집 실패: ${shortText(state.errors[0], 120)}`, "error");
       finishSearchProgress(true);
@@ -97,20 +98,22 @@ export async function runSearch(auto = false) {
   } catch (error) {
     state.lastRunStatus = "error";
     state.errors = [friendlyError(error)];
-    localStorage.removeItem(LAST_AUTO_KEY);
+    if (!government) localStorage.removeItem(LAST_AUTO_KEY);
     saveDailyState();
-    setStatus("error", "기사 검색을 완료하지 못했습니다");
+    setStatus("error", `${government ? "정부 보도자료 수집" : "기사 검색"}을 완료하지 못했습니다`);
     showToast(friendlyError(error), "error");
     finishSearchProgress(true);
   } finally {
     setSearching(false);
-    setSearchButton(false);
+    setSearchButton(false, undefined, scope);
     renderAll();
   }
 }
 
-async function requestCollection(payload) {
-  const response = await api.runCollection(payload);
+async function requestCollection(payload, scope) {
+  const response = scope === "government"
+    ? await api.runGovernmentPressReleaseCollection(payload)
+    : await api.runCollection(payload);
   return response.data;
 }
 

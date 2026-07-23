@@ -22,6 +22,20 @@ def article_preference(article: Article) -> float:
 
 
 def same_article(a: Article, b: Article) -> bool:
+    # 공식 수집기의 sourceId는 각 부처가 부여한 보도자료 식별자다. 같은 수집기에서
+    # 식별자가 다른 자료는 제목이 매우 비슷해도 서로 다른 보도자료로 보존한다.
+    if a.get("_official_government") is True and b.get("_official_government") is True:
+        left_provider = str(a.get("provider") or "")
+        right_provider = str(b.get("provider") or "")
+        left_source_id = str(a.get("sourceId") or "")
+        right_source_id = str(b.get("sourceId") or "")
+        if (
+            left_provider
+            and left_provider == right_provider
+            and left_source_id
+            and right_source_id
+        ):
+            return left_source_id == right_source_id
     left_url = canonical_article_url(a.get("url"))
     right_url = canonical_article_url(b.get("url"))
     if left_url and right_url and left_url == right_url:

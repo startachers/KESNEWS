@@ -36,12 +36,15 @@
         <button class="btn btn-ghost hide-mobile" id="importBtn" title="이전에 내보낸 브리핑 JSON 백업 또는 CSV 기사목록을 불러옵니다">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3"/></svg>JSON·CSV 불러오기
         </button>
+        <button class="btn btn-ghost" id="governmentPressBtn" data-testid="refresh-government-press" title="공공데이터포털 정책브리핑 API에서 최근 24시간 전 부처 보도자료를 수집합니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V9h14v12M3 9l9-6 9 6M8 12v5m4-5v5m4-5v5"/></svg><span>정부 보도자료 수집</span>
+        </button>
         <button class="btn btn-primary" id="refreshBtn" data-testid="refresh-news">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>
         </button>
       </nav>
     </div>
-    <div id="searchProgress" class="search-progress" role="progressbar" aria-label="오늘 기사 검색 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+    <div id="searchProgress" class="search-progress" role="progressbar" aria-label="자료 수집 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
       <span id="searchProgressBar"></span>
     </div>
   </header>
@@ -187,6 +190,8 @@
             </div>
             <label class="sr-only" for="categoryFilter">분류 필터</label>
             <select id="categoryFilter" class="control-select"><option value="all">전체 분류</option></select>
+            <label class="sr-only" for="sourceTypeFilter">자료 유형 필터</label>
+            <select id="sourceTypeFilter" class="control-select"><option value="all">전체 자료</option><option value="government_press_release">정부부처 보도자료</option><option value="media_article">언론기사</option></select>
             <label class="sr-only" for="riskFilter">검토별점 필터</label>
             <select id="riskFilter" class="control-select">
               <option value="all">모든 검토별점</option><option value="5">★★★★★</option><option value="4">★★★★</option><option value="3">★★★</option><option value="2">★★</option><option value="1">★</option>
@@ -386,7 +391,7 @@
 
         <section class="settings-section">
           <h3>데이터 연결</h3>
-          <p>연합뉴스 공식 RSS를 먼저 읽고 Google 뉴스 RSS로 보완하며, 수집 경로가 실패하면 GDELT 공개 기사 색인을 시도합니다.</p>
+          <p>기사 검색은 연합뉴스 공식 RSS와 검색식, 국무조정실·기후부 직접 수집을 실행합니다. 별도의 ‘정부 보도자료 수집’ 버튼은 공공데이터포털 정책브리핑 API만 호출합니다.</p>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingYonhap" type="checkbox"><div><strong>연합뉴스 공식 RSS 우선 수집</strong><small>최근 종합 뉴스에서 지정 관련도 기준과 일치하는 기사만 반영합니다.</small></div></div>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingOpmPress" type="checkbox"><div><strong>국무조정실(총리실) 보도자료 직접 수집</strong><small>opm.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
           <div class="setting-box toggle-line" style="margin-bottom:11px"><input id="settingMePress" type="checkbox"><div><strong>기후에너지환경부 보도자료 직접 수집</strong><small>me.go.kr 보도자료 목록을 직접 읽어옵니다.</small></div></div>
@@ -489,6 +494,6 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
   <script src="js/restart-guard.js?v=20260720-1"></script>
-  <script type="module" src="js/app.js?v=20260722-3"></script>
+  <script type="module" src="js/app.js?v=20260723-5"></script>
 </body>
 </html>

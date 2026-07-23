@@ -204,6 +204,10 @@ export function runCollection(payload) {
   return request(`/collections`, { method: "POST", body: JSON.stringify(payload) }, 120000);
 }
 
+export function runGovernmentPressReleaseCollection(payload) {
+  return request(`/government-press-releases/collections`, { method: "POST", body: JSON.stringify(payload) }, 120000);
+}
+
 export function getLatestCollection(date) {
   return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
 }

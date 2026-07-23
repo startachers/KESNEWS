@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +38,7 @@ from backend.app.services.deduplication.service import deduplicate_detailed
 from backend.app.services.extraction.cleaner import clean_text
 from backend.app.services.media import identify_trusted_publisher, load_trusted_media_config
 from backend.app.services.normalization.dates import date_value, since_bound_iso
+from backend.app.services.normalization.content_key import make_content_key
 from backend.app.services.normalization.url import canonical_article_url
 
 Article = dict[str, Any]
@@ -47,6 +48,10 @@ GOVERNMENT_DIRECT_PROVIDERS = {
     "국무조정실 보도자료",
     "기후에너지환경부 보도자료",
     "정책브리핑 API",
+}
+DATE_ONLY_GOVERNMENT_PROVIDERS = {
+    "국무조정실 보도자료",
+    "기후에너지환경부 보도자료",
 }
 
 
@@ -103,6 +108,23 @@ def _within_lookback(pub_date: str | None, report_date: str, lookback_hours: int
     else:
         target = datetime.fromisoformat(f"{report_date}T23:59:59").replace(tzinfo=SEOUL_TZ).timestamp() * 1000
     return target - lookback_hours * 3600000 <= value <= target
+
+
+def _within_date_only_government_window(pub_date: str | None, report_date: str) -> bool:
+    """시각을 제공하지 않는 정부 게시판은 보고일·전일의 서울 날짜만 허용한다.
+
+    날짜만으로는 정확한 24시간 경계를 계산할 수 없으므로 전일 자료가 오전 9시에 일괄
+    만료되는 오판을 피하고, 2일 전 자료부터 제외한다.
+    """
+    value = date_value(pub_date)
+    if not value:
+        return True
+    try:
+        target_date = date.fromisoformat(report_date)
+    except ValueError:
+        return False
+    published_date = datetime.fromtimestamp(value / 1000, SEOUL_TZ).date()
+    return target_date - timedelta(days=1) <= published_date <= target_date
 
 
 def fetch_query(
@@ -190,7 +212,18 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
         since_iso=since,
         provider=provider_label,
         provider_item_key=item.get("sourceId"),
+        allow_fuzzy=not (
+            item.get("_official_government") is True and bool(item.get("sourceId"))
+        ),
     )
+    dedup_method = ""
+    if match is None:
+        content_key = make_content_key(
+            item.get("url"), item.get("title"), item.get("source"), pub_date
+        )
+        match = article_repo.find_by_content_key(connection, content_key)
+        if match is not None:
+            dedup_method = "content_key"
     if match is not None:
         article_id = match["id"]
         new_description = item.get("description") or ""
@@ -209,8 +242,13 @@ def _upsert_article_for_item(connection, item: Article) -> tuple[str, str, bool]
                 publisher_id=item.get("publisherId"),
                 publisher_allowed=item.get("publisherAllowed"),
             )
-        canonical = canonical_article_url(item.get("url"))
-        dedup_method = "canonical_url" if canonical and canonical == match["canonical_url"] else "fuzzy_same_copy"
+        if not dedup_method:
+            canonical = canonical_article_url(item.get("url"))
+            dedup_method = (
+                "canonical_url"
+                if canonical and canonical == match["canonical_url"]
+                else "fuzzy_same_copy"
+            )
         return article_id, dedup_method, True
 
     article_id = article_repo.create_article(
@@ -289,6 +327,8 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     # 명시적으로 false를 보낸 경우에만 끈다.
     enable_opm_press = payload.get("enableOpmPress") is not False
     enable_me_press = payload.get("enableMePress") is not False
+    enable_policy_briefing = payload.get("enablePolicyBriefing") is not False
+    enable_media_fallback = payload.get("enableMediaFallback") is not False
     # 자격정보는 프런트·요청 바디에 노출하지 않는다(NC-004와 동일 원칙). 서버 환경변수로만 읽는다.
     policy_briefing_service_key = os.environ.get("POLICY_BRIEFING_SERVICE_KEY", "").strip()
     naver_client_id = os.environ.get("NAVER_CLIENT_ID", "").strip()
@@ -303,8 +343,13 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     exclude_keywords = payload.get("excludeKeywords") or []
     endpoint = payload.get("endpoint") or ""
 
-    def within_lookback(pub_date: str | None) -> bool:
-        return _within_lookback(pub_date, report_date, lookback_hours)
+    def within_lookback(article: Article) -> bool:
+        if (
+            article.get("_official_government") is True
+            and article.get("provider") in DATE_ONLY_GOVERNMENT_PROVIDERS
+        ):
+            return _within_date_only_government_window(article.get("pubDate"), report_date)
+        return _within_lookback(article.get("pubDate"), report_date, lookback_hours)
 
     started_at = now_iso()
 
@@ -323,12 +368,18 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             {"key": "me_press", "label": "기후에너지환경부 보도자료", "category": "auto"}
         )
         coros.append(asyncio.to_thread(fetch_me_press, max_records))
-    if policy_briefing_service_key:
+    if enable_policy_briefing and policy_briefing_service_key:
         tasks.append(
             {"key": "policy_briefing", "label": "정책브리핑 API", "category": "auto"}
         )
         coros.append(
-            asyncio.to_thread(fetch_policy_briefing, policy_briefing_service_key, "", max_records)
+            asyncio.to_thread(
+                fetch_policy_briefing,
+                policy_briefing_service_key,
+                "",
+                max_records,
+                report_date,
+            )
         )
     for query in queries:
         query_id = str(query.get("id") or "direct")
@@ -436,7 +487,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         )
 
     network_succeeded = bool(providers)
-    if not collected and failures:
+    if enable_media_fallback and not collected and failures:
         try:
             gdelt_items = await asyncio.to_thread(fetch_gdelt_combined, core_keywords, lookback_hours, max_records)
             for item in gdelt_items:
@@ -493,7 +544,11 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     eligible = [
         article
         for article in relevant
-        if not should_exclude(article, exclude_keywords) and within_lookback(article.get("pubDate"))
+        if (
+            article.get("_official_government") is True
+            or not should_exclude(article, exclude_keywords)
+        )
+        and within_lookback(article)
     ]
     first_pass_items, duplicates_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
 

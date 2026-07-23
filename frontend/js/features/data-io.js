@@ -192,9 +192,10 @@ export async function resetTodayWork() {
     await flushDailyState();
     const result = await api.resetTodayWork(state.date, state.revision);
     setState(await loadDailyState(state.date));
-    setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "review" });
+    setFilters({ text: "", category: "all", sourceType: "all", risk: "all", selection: "all", sort: "review" });
     els.articleSearch.value = "";
     els.categoryFilter.value = "all";
+    els.sourceTypeFilter.value = "all";
     els.riskFilter.value = "all";
     els.selectionFilter.value = "all";
     els.sortOrder.value = "review";
@@ -225,7 +226,7 @@ export async function changeReportDate() {
     showToast(`날짜 전환 실패: ${friendlyError(error)}`, "error");
     return;
   }
-  setFilters({ text: "", category: "all", risk: "all", selection: "all", sort: "relevance" });
-  els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderAll();
+  setFilters({ text: "", category: "all", sourceType: "all", risk: "all", selection: "all", sort: "relevance" });
+  els.articleSearch.value = ""; els.categoryFilter.value = "all"; els.sourceTypeFilter.value = "all"; els.riskFilter.value = "all"; els.selectionFilter.value = "all"; els.sortOrder.value = "review"; renderAll();
   setStatus(state.articles.length ? "live" : "idle", state.articles.length ? `${next} 저장본 ${state.articles.length}건` : `${next} 저장본이 없습니다`);
 }
