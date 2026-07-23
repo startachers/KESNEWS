@@ -21,9 +21,12 @@ from backend.app.services.analysis_markdown.replacement_finder import (
 from backend.app.services.analysis_markdown.signature import content_hash, input_signature
 from backend.app.services.analysis_markdown.source import build_source_context
 from backend.app.services.extraction.article_body import fetch_article_body_with_retries
-from backend.app.services.extraction.cleaner import clean_article_text
+from backend.app.services.extraction.cleaner import (
+    clean_article_text,
+    clean_automatic_article_text,
+)
 from backend.app.services.extraction.evidence_quality import assess
-from backend.app.services.extraction.evidence_validation import serialize_errors, validate_source
+from backend.app.services.extraction.evidence_validation import validate_source
 from backend.app.services.ids import make_id
 from backend.app.services.normalization.url import canonical_article_url
 
@@ -42,6 +45,15 @@ class GenerationOutput:
     result: dict[str, Any]
 
 
+def _clean_for_article(article: dict, value: str) -> Any:
+    cleaner = (
+        clean_article_text
+        if article.get("manualBodyOverride")
+        else clean_automatic_article_text
+    )
+    return cleaner(value, title=article.get("title") or "")
+
+
 def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
     # 담당자가 직접 확인·입력한 수동 본문은 사람이 검증한 근거다. RSS 요약으로 대체하거나
     # 네트워크로 재추출해 덮어쓰지 않고, 자동 품질 판정과 무관하게 분석 근거로 통과시킨다.
@@ -57,13 +69,11 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
         raw = article["description"]
         status = "success_summary"
         attempts = ({"stage": "official_rss", "status": "success"},)
-    cleaning = clean_article_text(raw, title=article.get("title") or "")
+    cleaning = _clean_for_article(article, raw)
     eligibility = evaluate(cleaning, status=status, url=resolved_url, config=config)
     if not manual_override and not eligibility.eligible and article.get("description"):
         summary_raw = article["description"]
-        summary_cleaning = clean_article_text(
-            summary_raw, title=article.get("title") or ""
-        )
+        summary_cleaning = _clean_for_article(article, summary_raw)
         summary_eligibility = evaluate(
             summary_cleaning,
             status="success_summary",
@@ -78,7 +88,7 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
             attempts = ({"stage": "official_rss", "status": "success"},)
     if not manual_override and allow_network and (not eligibility.eligible or status != "success_full") and article.get("url"):
         def acceptable_body(body: str, body_url: str) -> bool:
-            candidate_cleaning = clean_article_text(body, title=article.get("title") or "")
+            candidate_cleaning = _clean_for_article(article, body)
             return evaluate(
                 candidate_cleaning, status="success_full", url=body_url, config=config
             ).eligible
@@ -88,7 +98,7 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
         )
         attempts = fetched.attempts
         if fetched.body_text:
-            fetched_cleaning = clean_article_text(fetched.body_text, title=article.get("title") or "")
+            fetched_cleaning = _clean_for_article(article, fetched.body_text)
             fetched_eligibility = evaluate(
                 fetched_cleaning, status=fetched.status, url=fetched.resolved_url or resolved_url,
                 config=config,
@@ -556,40 +566,6 @@ def generate(
             article["analysisEligible"] = False
             article["failureReason"] = "publisher_quarantined"
 
-    invalid_selected = []
-    for article in prepared:
-        if article["analysisEligible"]:
-            continue
-        validation_errors = article.get("validationErrors") or []
-        if validation_errors:
-            errors = serialize_errors(validation_errors)
-        elif article.get("failureReason") == "publisher_quarantined":
-            errors = [{
-                "code": "PUBLISHER_QUARANTINED", "status": "analysis_ineligible",
-                "message": (
-                    f"'{article.get('source') or '해당'}' 언론사가 추출 품질 저하로 격리되어 "
-                    "자동 근거로 사용할 수 없습니다. 본문을 직접 확인·입력하면 사용할 수 있습니다."
-                ),
-            }]
-        else:
-            errors = [{
-                "code": "ARTICLE_ANALYSIS_INELIGIBLE", "status": "analysis_ineligible",
-                "message": "기사 근거가 현재 분석 정책을 통과하지 못했습니다.",
-            }]
-        invalid_selected.append({
-            "articleId": article["id"], "title": article.get("title") or "",
-            "issueId": article.get("issueId") or None,
-            "source": article.get("source") or "", "url": article.get("url") or "",
-            "errors": errors,
-            "availableActions": ["관련기사 선택", "본문 다시 추출", "원문 확인"],
-        })
-    if invalid_selected:
-        raise GenerationError(
-            "SELECTED_EVIDENCE_INVALID",
-            f"선택한 기사 중 근거 상태를 확인해야 하는 기사가 {len(invalid_selected)}건 있습니다.",
-            invalid_selected,
-        )
-
     included: list[dict] = []
     excluded: list[dict] = []
     replacements: list[dict] = []
@@ -600,9 +576,17 @@ def generate(
             original["issues"] = issue_details.get(original["id"], [])
             included.append(original)
             continue
-        replacement = find_replacement(original, all_prepared, issue_ids_by_article=issue_ids)
+        replacement = None
         searched_summaries: list[dict] = []
-        if replacement is None and allow_network:
+        if original.get("priority") == "required":
+            replacement = find_replacement(
+                original, all_prepared, issue_ids_by_article=issue_ids
+            )
+        if (
+            original.get("priority") == "required"
+            and replacement is None
+            and allow_network
+        ):
             try:
                 searched = search_trusted_candidates(original)
             except Exception:  # 검색 실패는 원 기사 실패 정보와 분리하고 생성 가능 여부를 계속 판정한다.

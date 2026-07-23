@@ -83,6 +83,19 @@ _PAGE_UI_LINE = re.compile(
 _PHOTO_CAPTION_LINE = re.compile(r"^\s*(?:\[\s*)?사진\s*=\s*[^\]\n]+(?:\s*\])?\s*$", re.I)
 _RESALE_DB_TAIL = re.compile(r"(?:ⓒ\s*)?재판매\s*및\s*DB\s*금지", re.I)
 _SPACE = re.compile(r"[ \t\u00a0]+")
+_AUTOMATIC_TAIL_SECTION = re.compile(
+    r"(?:영문기사\s*보기(?:\s*\(View\s+English\s+Article\))?|"
+    r"View\s+English\s+Article|이\s*시각\s*주요뉴스|오늘의\s*핫뉴스|"
+    r"NEWS\s*많이\s*본\s*기사|많이\s*본\s*기사|다음\s*광고|"
+    r"(?:^|\s)▲\s*[^.\n]{0,160}(?:사진(?:제공)?|기자간담회)|"
+    r"(?:【|\[)[^】\]\n]{0,60}(?:기자|특파원)[^】\]\n]*(?:】|\]))",
+    re.I,
+)
+_AUTOMATIC_PROFILE_SECTION = re.compile(
+    r"[^.\n]{0,100}\bHe\s+is\b|"
+    r"\bHe\s+is\.\.\.|(?:기자\s*)?(?:약력|프로필)\b",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -159,4 +172,33 @@ def clean_article_text(value: str | None, *, title: str = "") -> CleaningResult:
         ),
         ai_content_detected=bool(ai_match),
         removed_sections=tuple(dict.fromkeys(removed)),
+    )
+
+
+def clean_automatic_article_text(
+    value: str | None, *, title: str = ""
+) -> CleaningResult:
+    """자동 수집 본문에만 후행 뉴스·프로필 영역을 추가 제거한다.
+
+    담당자가 확인한 수동 본문은 이 함수를 사용하지 않는다. 일반 기사 문장에 등장한
+    단어를 지우지 않도록 충분한 본문 뒤에 나타난 명시적 후행 섹션만 절단한다.
+    """
+    raw = str(value or "").replace("\x00", "")
+    minimum_tail_start = max(120, int(len(raw) * 0.25))
+    matches = [
+        match
+        for pattern in (_AUTOMATIC_TAIL_SECTION, _AUTOMATIC_PROFILE_SECTION)
+        if (match := pattern.search(raw)) and match.start() >= minimum_tail_start
+    ]
+    cut_at = min((match.start() for match in matches), default=None)
+    result = clean_article_text(raw[:cut_at] if cut_at is not None else raw, title=title)
+    if cut_at is None:
+        return result
+    return CleaningResult(
+        text=result.text,
+        noise_detected=True,
+        ai_content_detected=result.ai_content_detected,
+        removed_sections=tuple(
+            dict.fromkeys((*result.removed_sections, "automatic_tail_section"))
+        ),
     )

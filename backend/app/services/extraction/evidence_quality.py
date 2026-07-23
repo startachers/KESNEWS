@@ -9,7 +9,11 @@ from urllib.parse import urlsplit
 from backend.app.services.analysis_markdown.config import load_config
 from backend.app.services.analysis_markdown.eligibility import evaluate
 from backend.app.services.analysis_markdown.quality import publisher_statistics
-from backend.app.services.extraction.cleaner import CleaningResult, clean_article_text
+from backend.app.services.extraction.cleaner import (
+    CleaningResult,
+    clean_article_text,
+    clean_automatic_article_text,
+)
 from backend.app.services.extraction.evidence_validation import body_errors
 
 _SENTENCE_END = re.compile(r"(?:[.!?]|(?:다|요|임|됨|함))(?:(?:[\"'’”)]*)\s|$)")
@@ -162,10 +166,17 @@ def latest_for_article(connection: sqlite3.Connection, article_id: str) -> dict[
 
 def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any]) -> dict[str, Any]:
     latest = latest_for_article(connection, article["id"])
+    cleaner = (
+        clean_article_text
+        if article.get("manualBodyOverride")
+        else clean_automatic_article_text
+    )
     if latest and latest.get("contentQualityScore") is not None:
         # 추출 이력은 당시 판정을 보존하되, 화면과 대표 선정은 현재 정책으로 다시 평가한다.
         # 정제 완료된 부가 콘텐츠 때문에 과거 점수가 낮았던 기사도 실제 정제 본문으로 판정한다.
-        cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
+        cleaning = cleaner(
+            latest.get("cleanedText") or "", title=article.get("title") or ""
+        )
         current = assess(
             {**article, "rawText": latest.get("cleanedText") or "", "sourceValidationErrors": latest.get("validationErrors") or []}, cleaning,
             status=latest["extractionStatus"], method=latest.get("extractionMethod") or "legacy",
@@ -183,7 +194,9 @@ def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any])
             connection, article, {**latest, **current, "cleanedText": cleaning.text}
         )
     if latest:
-        cleaning = clean_article_text(latest.get("cleanedText") or "", title=article.get("title") or "")
+        cleaning = cleaner(
+            latest.get("cleanedText") or "", title=article.get("title") or ""
+        )
         derived = assess(
             {**article, "rawText": latest.get("cleanedText") or "", "sourceValidationErrors": latest.get("validationErrors") or []}, cleaning,
             status=latest["extractionStatus"], method=latest.get("extractionMethod") or "legacy",
@@ -191,7 +204,7 @@ def quality_for_article(connection: sqlite3.Connection, article: dict[str, Any])
         return _apply_publisher_status(connection, article, {**latest, **derived})
     status = "success_full" if article.get("bodyText") else "not_attempted"
     raw = article.get("bodyText") or ""
-    cleaning = clean_article_text(raw, title=article.get("title") or "")
+    cleaning = cleaner(raw, title=article.get("title") or "")
     derived = assess({**article, "rawText": raw}, cleaning, status=status, method="stored_body" if raw else "none")
     return _apply_publisher_status(
         connection,

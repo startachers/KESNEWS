@@ -367,12 +367,12 @@ PUT   /api/articles/{article_id}/manual-body
   `manual_supplemental_article_ids_json`, `manual_excluded_article_ids_json`을 보존한다.
   수동 대표 ID가 현재 membership에서 사라지면 자동 대표를 임시 표시하되
   `manualRepresentativeMissing=true`로 손실을 알린다.
-- AI 분석용 MD는 선정된 그룹의 확정 대표와 수동 보조근거만 포함한다. 생성 직전에 선택 근거
-  전체의 출처·canonical/resolved URL·본문 완전성·오염·AI 잔존을 다시 검사한다. 한 건이라도
-  절대 오류가 있으면 정상 기사도 부분 출력하지 않고 `SELECTED_EVIDENCE_INVALID`(422)로 전체
-  생성을 중단한다. 응답의 `failedArticles[]`는 `articleId`, `title`, `issueId`, `errors[]`와
-  재선택·재추출·원문 확인 작업을 제공한다. 서버는 다른 기사를 자동 선택·대체하지 않으며 기존
-  담당자 선택 상태도 해제하지 않는다.
+- AI 분석용 MD는 생성 직전에 선택 근거 전체의 출처·canonical/resolved URL·본문 완전성·
+  오염·AI 잔존을 다시 검사한다. 절대 오류가 있는 `review`·`reference` 기사는 MD 본문에서
+  제외하고 제외 내역에 사유를 남긴다. `required` 기사는 확정 가능한 동일 사건 대체 근거를
+  탐색하며, 원 기사와 대체 근거를 모두 확보하지 못한 경우에만
+  `REQUIRED_ARTICLE_EVIDENCE_MISSING`(422)으로 전체 생성을 중단한다. 적격 기사가 한 건도
+  없으면 `NO_ELIGIBLE_ARTICLES`로 중단한다. 서버는 기존 담당자 선택 상태를 해제하지 않는다.
 - 단건 재추출은 원 기사 원문을 삭제하지 않고 새 `article_extractions` 이력을 추가한다.
   성공 후 자동 대표 후보만 다시 계산하며 수동 역할은 조용히 해제하지 않는다.
 - 이슈 전체 재추출은 현재 유효 membership의 모든 기사를 동시에 추출·평가한다. 기사별 결과는

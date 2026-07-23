@@ -80,7 +80,8 @@ def test_discovered_issues_empty_when_no_pool():
 
 
 def test_discovered_issue_articles_can_be_imported_grouped_and_trimmed():
-    report_date = "2026-07-24"
+    # 실행 당일 작업본을 만드는 daily-reset 회귀와 순서 의존 충돌하지 않는 고정 미래 날짜다.
+    report_date = "2096-07-24"
     briefing = client.put(
         f"/api/briefings/{report_date}",
         json={"expectedRevision": 0, "patch": {}},

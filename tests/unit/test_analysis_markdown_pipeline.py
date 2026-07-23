@@ -9,7 +9,10 @@ from backend.app.services.analysis_markdown.replacement_finder import (
     search_related_candidates,
 )
 from backend.app.services.analysis_markdown.service import _prepare
-from backend.app.services.extraction.cleaner import clean_article_text
+from backend.app.services.extraction.cleaner import (
+    clean_article_text,
+    clean_automatic_article_text,
+)
 from backend.app.services.extraction.evidence_quality import _apply_publisher_status, assess
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
 
@@ -76,6 +79,44 @@ def test_cleaner_does_not_remove_ui_words_inside_article_sentences():
     assert clean_article_text(text).text == text
 
 
+def test_automatic_cleaner_removes_trailing_news_ranking_and_reporter_profile():
+    facts = (
+        "관계기관은 물류창고 473곳의 화재안전점검 계획을 발표했다. "
+        "점검 결과와 후속 제도 개선 일정도 공개할 예정이라고 밝혔다. "
+    ) * 6
+    ranking = (
+        " NEWS 많이 본 기사 1 창고시설 화재안전기준 강화 "
+        "2 지하주차장 단열재 불연화 법안 통과 3 전혀 다른 지역 사건"
+    )
+    profiled = (
+        facts
+        + " 현 씽크에이티 대표, 지앤톡 이사회 의장 He is... "
+        "메이지학원대학교 법학부 정치학과 졸업 잉카인터넷 부사장"
+    )
+
+    ranking_result = clean_automatic_article_text(facts + ranking)
+    profile_result = clean_automatic_article_text(profiled)
+
+    assert ranking_result.text == facts.strip()
+    assert profile_result.text == facts.strip()
+    assert "automatic_tail_section" in ranking_result.removed_sections
+    assert "automatic_tail_section" in profile_result.removed_sections
+
+
+def test_automatic_tail_rules_are_not_applied_to_manual_cleaner():
+    text = (
+        "담당자가 확인한 수동 본문이다. " * 8
+        + " 영문기사 보기 뒤의 문장도 담당자가 입력한 내용이다."
+    )
+
+    manual_result = clean_article_text(text).text
+    automatic_result = clean_automatic_article_text(text).text
+
+    assert "영문기사 보기" in manual_result
+    assert "뒤의 문장도 담당자가 입력한 내용이다." in manual_result
+    assert "영문기사 보기" not in automatic_result
+
+
 def test_eligibility_rejects_navigation_and_short_text_but_accepts_factual_rss():
     navigation = clean_article_text(("많이 본 뉴스 로그인 메뉴 기사목록 좋아요 응원해요 " * 20))
     assert evaluate(navigation, status="success_full", url="https://kbs.co.kr/a", config=CONFIG).reason == "navigation_only"
@@ -135,6 +176,9 @@ def test_manual_body_override_always_passes_without_replacement(monkeypatch):
     assert prepared["analysisEligible"] is True
     assert prepared["failureReason"] == ""
     assert prepared["rawText"] == article["bodyText"]
+    assert prepared["cleanedText"] == clean_article_text(
+        article["bodyText"], title=article["title"]
+    ).text
 
 
 def test_clean_full_text_remains_eligible_after_page_extras_are_removed():

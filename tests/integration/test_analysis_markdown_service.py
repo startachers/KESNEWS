@@ -65,13 +65,13 @@ def test_required_article_failure_blocks_generation(monkeypatch):
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
     assert response.status_code == 422
-    assert response.json()["error"]["code"] == "SELECTED_EVIDENCE_INVALID"
+    assert response.json()["error"]["code"] == "REQUIRED_ARTICLE_EVIDENCE_MISSING"
     failed = response.json()["error"]["details"]["failedArticles"]
     assert failed[0]["articleId"] == article_id
-    assert failed[0]["errors"][0]["code"] == "ARTICLE_BODY_UNAVAILABLE"
+    assert failed[0]["reason"] == "body_unavailable"
 
 
-def test_any_selected_failure_blocks_all_markdown_without_ollama(monkeypatch):
+def test_invalid_review_is_excluded_without_blocking_valid_reference(monkeypatch):
     report_date = "2097-07-02"
     client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {"preparedBy": "홍보실"}})
     failed_id = _add_selected(report_date, "failed", "", "review")
@@ -93,15 +93,19 @@ def test_any_selected_failure_blocks_all_markdown_without_ollama(monkeypatch):
         "backend.app.services.analysis_markdown.service.search_trusted_candidates", lambda article: []
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
-    assert response.status_code == 422
-    result = response.json()["error"]
-    assert result["code"] == "SELECTED_EVIDENCE_INVALID"
-    assert [item["articleId"] for item in result["details"]["failedArticles"]] == [failed_id]
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert result["selectedCount"] == 2
+    assert result["eligibleCount"] == 1
+    assert [item["articleId"] for item in result["excludedArticles"]] == [failed_id]
+    article_results = {item["articleId"]: item for item in result["articles"]}
+    assert article_results[failed_id]["analysisEligible"] is False
+    assert article_results[valid_id]["analysisEligible"] is True
     assert valid_id != failed_id
     assert calls["ollama"] == 0
 
 
-def test_2026_07_20_regression_reports_every_invalid_selected_article(monkeypatch):
+def test_2026_07_20_regression_cleans_contamination_and_excludes_other_invalid_articles(monkeypatch):
     report_date = "2097-07-20"
     client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
     truncated_id = _add_selected(
@@ -125,13 +129,17 @@ def test_2026_07_20_regression_reports_every_invalid_selected_article(monkeypatc
     )
 
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
-    assert response.status_code == 422
-    failed = response.json()["error"]["details"]["failedArticles"]
-    assert {item["articleId"] for item in failed} == {truncated_id, contaminated_id, unavailable_id}
-    codes = {item["articleId"]: {error["code"] for error in item["errors"]} for item in failed}
-    assert "ARTICLE_BODY_TRUNCATED" in codes[truncated_id]
-    assert "ARTICLE_BODY_CONTAMINATED" in codes[contaminated_id]
-    assert "ARTICLE_BODY_UNAVAILABLE" in codes[unavailable_id]
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert result["eligibleCount"] == 1
+    article_results = {item["articleId"]: item for item in result["articles"]}
+    assert article_results[contaminated_id]["analysisEligible"] is True
+    assert {item["articleId"] for item in result["excludedArticles"]} == {
+        truncated_id, unavailable_id,
+    }
+    markdown = client.post(f"/api/exports/{report_date}.md")
+    assert markdown.status_code == 200
+    assert "전혀 다른 사건" not in markdown.text
     selected = client.get("/api/articles", params={"report_date": report_date}).json()["data"]["articles"]
     assert {item["id"] for item in selected if item["included"]} == {
         truncated_id, contaminated_id, unavailable_id,
@@ -164,7 +172,7 @@ def test_generation_is_reproducible_and_note_changes_signature(monkeypatch):
     assert changed["fileHash"] != first["fileHash"]
 
 
-def test_invalid_selected_article_is_not_automatically_replaced(monkeypatch):
+def test_invalid_required_article_uses_verified_replacement(monkeypatch):
     report_date = "2097-07-04"
     client.put(f"/api/briefings/{report_date}", json={"expectedRevision": 0, "patch": {}})
     original_id = _add_selected(report_date, "replacement", "", "required")
@@ -194,8 +202,8 @@ def test_invalid_selected_article_is_not_automatically_replaced(monkeypatch):
         }],
     )
     response = client.post(f"/api/briefings/{report_date}/analysis-markdown")
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "SELECTED_EVIDENCE_INVALID"
+    assert response.status_code == 200
+    assert response.json()["data"]["replacementCount"] == 1
     connection = get_connection()
     try:
         original = connection.execute("SELECT body_text FROM articles WHERE id = ?", (original_id,)).fetchone()
@@ -204,7 +212,7 @@ def test_invalid_selected_article_is_not_automatically_replaced(monkeypatch):
             (original_id,),
         ).fetchone()["count"]
         assert not original["body_text"]
-        assert replacement_count == 0
+        assert replacement_count >= 1
     finally:
         connection.close()
 
