@@ -10,9 +10,11 @@ from fastapi import APIRouter, Query
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from backend.app.api.envelope import error_response, ok_envelope
+from backend.app.repositories import dropped_article_repository as dropped_repo
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
 from backend.app.services.collection.collector import run_collection
+from backend.app.services.collection.dropped_issue import discover_issues
 from backend.app.services.settings import collection_payload, get_effective_settings
 
 logger = logging.getLogger("kesco.collections")
@@ -139,6 +141,24 @@ async def get_latest_collection(report_date: str = Query(...)) -> Any:
     data = _serialize_run(row)
     data["providers"] = [_serialize_provider(p) for p in providers]
     return ok_envelope(data)
+
+
+@router.get("/api/collections/discovered-issues")
+async def get_discovered_issues(report_date: str = Query(...)) -> Any:
+    """관련도 미달로 제외됐던 기사에서 '많이 다뤄진 사건'을 묶어 돌려준다."""
+    connection = get_connection()
+    try:
+        rows = dropped_repo.list_for_report_date(connection, report_date)
+    finally:
+        connection.close()
+    issues = discover_issues(rows)
+    return ok_envelope(
+        {
+            "reportDate": report_date,
+            "pooledCount": len(rows),
+            "issues": issues,
+        }
+    )
 
 
 @router.get("/api/collections/{collection_run_id}")

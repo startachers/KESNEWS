@@ -14,12 +14,14 @@ import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal,
 import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260723-7";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260721-1";
 import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
+import { openDiscoveredIssues } from "./features/discovered-issues.js?v=20260723-30";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
 async function init() {
   ["report", "statusDot", "globalStatus", "searchProgress", "searchProgressBar", "searchProgressPercent", "refreshBtn", "reportDate", "preparedBy", "mastheadDate", "mastheadDay", "kpiTotal", "kpiRisk", "kpiPositive", "kpiSources", "kpiTotalNote", "kpiSourceNote", "weatherPanel", "weatherSourceMeta", "weatherRegionSelect", "weatherRefreshBtn", "weatherReviewBtn", "weatherOverviewCard", "weatherLevelLabel", "weatherLevel", "weatherAlertCount", "weatherDays", "weatherStatus", "weatherRiskList", "summaryEditor", "printSummary", "actionNote", "printActionNote", "aiConnectionState", "aiModelSelect", "aiCoverageState", "aiSummaryStatus", "generateAiSummaryBtn", "ruleSummaryBtn", "star5Bar", "star4Bar", "star3Bar", "star2Bar", "star1Bar", "star5Count", "star4Count", "star3Count", "star2Count", "star1Count", "topIssues", "articleList", "articleSearch", "categoryFilter", "sourceTypeFilter", "riskFilter", "selectionFilter", "selectedOnlyBtn", "selectedOnlyCount", "autoSelectBtn", "autoSelectionOverlay", "autoSelectionMeta", "autoSelectionList", "autoSelectionLimitations", "autoSelectionApplyBtn", "autoSelectionCloseBtn", "manualGroupModeBtn", "manualGroupOverlay", "manualGroupSearch", "manualGroupList", "manualGroupCloseBtn", "manualGroupBtn", "manualGroupUnitCount", "manualGroupCount", "manualGroupCancelBtn", "sortOrder", "visibleCount", "footerTimestamp", "sourceStateBox", "sourceStateTitle", "sourceStateDetail", "collectionErrors", "collectionErrorsSummary", "collectionErrorsList", "keywordCloud", "settingsOverlay", "articleOverlay", "historyOverlay", "historyList", "querySettings", "clusterOverlay", "clusterThreshold", "clusterThresholdValue", "clusterThresholdHint", "clusterRecalculateBtn", "clusterProposalMeta", "clusterDiffSummary", "clusterProposalList", "clusterApplyBtn", "reclusterBtn", "toastRegion", "fileInput", "previewBtn", "cancelFinalizeBtn", "finalReportBtn", "briefingState", "reportDraftOverlay", "externalAnalysisPaste", "reportDraftContent", "reportDraftSource", "reportDraftStatus"].forEach(id => els[id] = $(id));
   els.governmentPressBtn = $("governmentPressBtn");
+  ["discoveredIssuesOverlay", "discoveredIssuesMeta", "discoveredIssuesList"].forEach(id => els[id] = $(id));
   ["weatherDetailPanel", "weatherDetailRainfall", "weatherDetailRainfallPlace", "weatherDetailTemperature", "weatherDetailTemperaturePlace", "weatherDetailAlertSummary", "weatherDetailPriority", "weatherResponseTabCount", "weatherSourceGrid", "weatherOfficialAlerts", "weatherComparisonDaySelect", "weatherRegionComparison", "weatherCompactSource", "weatherOpenBtn", "weatherCompactLevel", "weatherCompactAlerts", "weatherCompactFocus", "weatherCompactForecast", "weatherCompactTemperature", "weatherCompactRainfall", "weatherCompactProbability", "weatherCompactNotice", "weatherOverlay"].forEach(id => els[id] = $(id));
   els.weatherExcludeBtn = $("weatherExcludeBtn");
 
@@ -68,6 +70,8 @@ function bindEvents() {
   $("articleForm").addEventListener("submit", addManualArticle);
   els.refreshBtn.addEventListener("click", () => runSearch(false));
   els.governmentPressBtn.addEventListener("click", () => runSearch(false, "government"));
+  $("discoveredIssuesBtn").addEventListener("click", openDiscoveredIssues);
+  $("discoveredIssuesRefreshBtn").addEventListener("click", openDiscoveredIssues);
   const activateWeatherTab = tab => {
     document.querySelectorAll("[data-weather-tab]").forEach(button => {
       const active = button.dataset.weatherTab === tab;

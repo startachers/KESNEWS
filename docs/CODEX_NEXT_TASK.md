@@ -1,5 +1,24 @@
 # 현재 작업 체크포인트
 
+## 2026-07-23 완료 — 검색군 확장 + '이슈 기사 찾아보기'
+
+기사 검색식을 22→25개로 확장하고(cyber_security·labor_safety·peer_agencies), 이 셋이
+본 후보 풀에 편입되도록 `get_relevance`에 rank ⑧⑨⑩ 기준을 함께 추가했다(검색군만
+늘리면 rank 99로 폐기되므로 관련도 기준 동반 확장이 필수).
+
+공사와 무관해도 여러 매체가 크게 다룬 사건을 따로 보여주는 '이슈 기사 찾아보기' 버튼을
+신설했다. 본 파이프라인(관련도·우선순위·브리핑)과 완전히 분리된다.
+
+- 저장: 수집 시 관련도 미달로 제외된 기사를 `dropped_article_pool`(migration 0029)에 보관.
+  collector가 `dropped_article_repository.replace_for_run`으로 보고일별 최신 실행분만 유지.
+- 조회: `GET /api/collections/discovered-issues?report_date=`가 버튼 클릭 시에만 그 풀을
+  느슨하게 클러스터링(`services/collection/dropped_issue.py`). 정책: 같은 사건 5건 이상만
+  이슈로, 큰 순 상위 5개, 연예·스포츠 제외(정치·경제·사회 등은 포함).
+- 프론트: 헤더 '이슈 기사 찾아보기' 버튼 + `discoveredIssuesOverlay` 패널,
+  `features/discovered-issues.js`. app.js/app.css 캐시버스팅 20260723-30.
+- 테스트: `tests/unit/test_dropped_issue.py`, `tests/integration/test_discovered_issues_api.py`.
+- 운영 주의: 예전 설정 저장 이력(SQLite override)이 있으면 새 검색군 3개는 설정 초기화 후 반영.
+
 ## 2026-07-23 완료
 
 CEO 브리핑 분석 페이지에 **정부부처 동향** 섹션을 신설했다. 기존 4개 섹션 중

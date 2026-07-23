@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>한국전기안전공사 CEO 언론브리핑</title>
   <link rel="icon" href="assets/kesco-symbol.png" type="image/png">
-  <link rel="stylesheet" href="css/app.css?v=20260722-1">
+  <link rel="stylesheet" href="css/app.css?v=20260723-30">
   <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
@@ -38,6 +38,9 @@
         </button>
         <button class="btn btn-ghost" id="governmentPressBtn" data-testid="refresh-government-press" title="공공데이터포털 정책브리핑 API에서 최근 24시간 전 부처 보도자료를 수집합니다">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V9h14v12M3 9l9-6 9 6M8 12v5m4-5v5m4-5v5"/></svg><span>정부 보도자료 수집</span>
+        </button>
+        <button class="btn btn-ghost" id="discoveredIssuesBtn" title="관련도 미달로 제외됐던 기사 중 여러 매체가 함께 다룬 큰 이슈를 찾아 보여줍니다">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>이슈 기사 찾아보기</span>
         </button>
         <button class="btn btn-primary" id="refreshBtn" data-testid="refresh-news">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span>오늘 기사 검색</span>
@@ -341,6 +344,17 @@
     </div>
   </div>
 
+  <div class="overlay" id="discoveredIssuesOverlay" role="dialog" aria-modal="true" aria-labelledby="discoveredIssuesTitle">
+    <div class="modal">
+      <div class="modal-header"><div><h2 id="discoveredIssuesTitle">이슈 기사 찾아보기</h2><p id="discoveredIssuesMeta">관련도 미달로 제외됐던 기사 중 여러 매체가 함께 다룬 큰 이슈입니다.</p></div><button class="close-btn" data-close="discoveredIssuesOverlay" aria-label="닫기">×</button></div>
+      <div class="modal-body">
+        <p class="history-helper">‘오늘 기사 검색’에서 공사 관련도가 낮아 브리핑 후보에서 빠진 기사 중, 같은 사건을 여러 매체가 함께 다룬 것만 모았습니다(연예·스포츠 제외). 참고용이며 브리핑에는 반영되지 않습니다.</p>
+        <div class="discovered-issues-list" id="discoveredIssuesList"></div>
+      </div>
+      <div class="modal-footer"><button class="btn" data-close="discoveredIssuesOverlay">닫기</button><button class="btn btn-primary" id="discoveredIssuesRefreshBtn">다시 찾기</button></div>
+    </div>
+  </div>
+
   <div class="overlay" id="historyOverlay" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
     <div class="modal">
       <div class="modal-header"><h2 id="historyTitle">지난 언론브리핑·CEO 보고서</h2><button class="close-btn" data-close="historyOverlay" aria-label="닫기">×</button></div>
@@ -494,6 +508,6 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
   <script src="js/restart-guard.js?v=20260720-1"></script>
-  <script type="module" src="js/app.js?v=20260723-7"></script>
+  <script type="module" src="js/app.js?v=20260723-30"></script>
 </body>
 </html>

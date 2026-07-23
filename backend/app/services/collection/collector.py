@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.app.core.clock import SEOUL_TZ, now_iso, today_seoul
 from backend.app.repositories import article_repository as article_repo
+from backend.app.repositories import dropped_article_repository as dropped_repo
 from backend.app.repositories import press_release_repository as press_release_repo
 from backend.app.repositories import run_repository as run_repo
 from backend.app.repositories.database import get_connection
@@ -553,6 +554,16 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
         )
         and article_within_lookback(article)
     ]
+    # 관련도 미달로 본 파이프라인에서 빠진 기사는 '이슈 기사 찾아보기' 전용 임시 풀에만 보관한다.
+    # (정부 직접·사건 센티넬·관련도 통과 기사는 이미 본 후보에 들어가 있으므로 제외한다.)
+    relevant_ids = {id(article) for article in relevant}
+    dropped_pool_articles = [
+        article
+        for article in sentinel_checked
+        if id(article) not in relevant_ids
+        and not should_exclude(article, exclude_keywords)
+        and article_within_lookback(article)
+    ]
     first_pass_items, duplicates_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
 
     classified_items = [classify_article(raw, risk_keywords, positive_keywords) for raw in first_pass_items]
@@ -663,6 +674,13 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
                         ORIGIN_CLASSIFIER_VERSION,
                     )
                     origin_matched_count += 1
+
+            dropped_repo.replace_for_run(
+                connection,
+                collection_run_id=run_id,
+                report_date=report_date,
+                articles=dropped_pool_articles,
+            )
 
             status = "success" if not failures else "partial"
             stale_reused_count = len(run_repo.unrefreshed_candidate_ids(connection, report_date, run_id))

@@ -219,6 +219,10 @@ export function getLatestCollection(date) {
   return request(`/collections/latest?report_date=${encodeURIComponent(date)}`);
 }
 
+export function getDiscoveredIssues(date) {
+  return request(`/collections/discovered-issues?report_date=${encodeURIComponent(date)}`, {}, 30000);
+}
+
 export function getWeatherBriefing(date) {
   return request(`/weather/briefing?report_date=${encodeURIComponent(date)}`);
 }
