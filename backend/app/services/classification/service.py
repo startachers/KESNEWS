@@ -188,6 +188,120 @@ def get_relevance(article: Article) -> dict[str, Any]:
             "⑦ 신산업·전략·거시·기상 동향",
             industry_strategy_macro_or_weather,
         ),
+        (
+            8,
+            "cyber_security_incident",
+            "⑧ 사이버보안·정보유출",
+            lambda text: (
+                lambda threat, context: [*threat, *context] if threat and context else []
+            )(
+                matched_terms(
+                    text,
+                    (
+                        "해킹",
+                        "랜섬웨어",
+                        "디도스",
+                        "ddos",
+                        "악성코드",
+                        "사이버 공격",
+                        "사이버공격",
+                        "정보 유출",
+                        "개인정보 유출",
+                        "정보보안",
+                        "사이버보안",
+                    ),
+                ),
+                matched_terms(
+                    text,
+                    (
+                        "공공기관",
+                        "한국전기안전공사",
+                        "전기안전공사",
+                        "전력망",
+                        "제어시스템",
+                        "scada",
+                        "발전소",
+                        "기반시설",
+                        "에너지",
+                        "한전",
+                        "한국전력",
+                    ),
+                ),
+            ),
+        ),
+        (
+            9,
+            "labor_industrial_safety",
+            "⑨ 노동·산업안전·중대재해",
+            lambda text: (
+                lambda hazard, context: [*hazard, *context] if hazard and context else []
+            )(
+                matched_terms(
+                    text,
+                    (
+                        "중대재해처벌법",
+                        "중대재해",
+                        "산업재해",
+                        "산재",
+                        "산업안전보건",
+                        "작업중지",
+                        "노동안전",
+                        "안전보건",
+                    ),
+                ),
+                matched_terms(
+                    text,
+                    (
+                        "감전",
+                        "전기공사",
+                        "전기설비",
+                        "전기작업",
+                        "건설현장",
+                        "작업자",
+                        "근로자",
+                    ),
+                ),
+            ),
+        ),
+        (
+            10,
+            "peer_agency_trend",
+            "⑩ 유사·경쟁기관 동향",
+            lambda text: (
+                lambda agency, context: [*agency, *context] if agency and context else []
+            )(
+                matched_terms(
+                    text,
+                    (
+                        "한국가스안전공사",
+                        "가스안전공사",
+                        "소방청",
+                        "한국전기연구원",
+                        "한국산업안전보건공단",
+                        "안전보건공단",
+                        "국가기술표준원",
+                        "한국전력",
+                        "한국에너지공단",
+                    ),
+                ),
+                matched_terms(
+                    text,
+                    (
+                        "안전점검",
+                        "안전관리",
+                        "점검",
+                        "사고",
+                        "화재",
+                        "정전",
+                        "경영평가",
+                        "혁신",
+                        "규제",
+                        "기준",
+                        "감사",
+                    ),
+                ),
+            ),
+        ),
     ]
     matches = [
         (rank, rule, reason, finder(full_text))
@@ -210,7 +324,7 @@ def get_relevance(article: Article) -> dict[str, Any]:
     primary_rank, primary_rule, _, primary_terms = matches[0]
     primary_finder = criteria[primary_rank - 1][3]
     title_match = bool(primary_finder(title))
-    base_score = {1: 100, 2: 88, 3: 80, 4: 65, 5: 55, 6: 45, 7: 40}[primary_rank]
+    base_score = {1: 100, 2: 88, 3: 80, 4: 65, 5: 55, 6: 45, 7: 40, 8: 38, 9: 38, 10: 32}[primary_rank]
     score = (
         100
         if primary_rank == 1

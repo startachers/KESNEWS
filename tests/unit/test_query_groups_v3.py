@@ -33,19 +33,23 @@ QUERY_IDS = [
     "ev_industry",
     "macro_economy",
     "ai_trend",
+    "cyber_security",
+    "labor_safety",
+    "peer_agencies",
 ]
 
 
-def test_server_defaults_are_the_single_source_for_22_query_groups():
+def test_server_defaults_are_the_single_source_for_25_query_groups():
     config = json.loads(
         (ROOT / "config/collection_settings.json").read_text(encoding="utf-8")
     )
     assert [query["id"] for query in config["queries"]] == QUERY_IDS
     by_id = {query["id"]: query for query in config["queries"]}
     assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
-    assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 66
+    assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 75
     assert by_id["macro_economy"]["maxRecords"] == 20
     assert by_id["ai_trend"]["maxRecords"] == 20
+    assert by_id["peer_agencies"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")
     default_block = store_source.split("export const CATEGORY_COLORS", 1)[0]

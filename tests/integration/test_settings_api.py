@@ -35,7 +35,7 @@ def _defaults() -> dict:
 
 def test_settings_get_put_and_reset_round_trip():
     defaults = _defaults()
-    assert len(defaults["queries"]) == 22
+    assert len(defaults["queries"]) == 25
     assert defaults["lookback"] == 24
 
     changed = {
@@ -43,7 +43,7 @@ def test_settings_get_put_and_reset_round_trip():
         "collectionLimit": 321,
         "coreKeywords": ["한국전기안전공사", "사용자 키워드"],
         "queries": [
-            {**query, "enabled": query["id"] != "ai_trend"}
+            {**query, "enabled": query["id"] != "peer_agencies"}
             for query in defaults["queries"]
         ],
     }
