@@ -145,8 +145,34 @@ def test_issue_evidence_roles_quality_limits_and_revision_are_persisted():
     assert preserved["manualExcludedArticleIds"] == [article_ids[3]]
 
 
-def test_markdown_uses_only_confirmed_representative_and_supplemental():
+def test_markdown_preserves_all_selected_articles_including_government_press_release():
     issue, article_ids = _setup_issue("2096-10-02")
+    body = (
+        "정부는 전기설비 안전점검 결과와 피해 수치, 후속 조사 일정 및 재발 방지 대책을 "
+        "관계기관과 함께 확인해 발표했다고 밝혔다. " * 12
+    )
+    connection = get_connection()
+    try:
+        with connection:
+            for article_id in article_ids:
+                article_repo.update_article_body(
+                    connection, article_id, body_text=body,
+                    body_status="full_text", body_error="",
+                )
+            connection.execute(
+                "UPDATE article_observations SET provider = '정책브리핑 API', raw_source = '정책브리핑' "
+                "WHERE article_id = ?",
+                (article_ids[0],),
+            )
+    finally:
+        connection.close()
+    for article_id in article_ids:
+        briefing = client.get("/api/briefings/2096-10-02").json()["data"]
+        selected = client.patch(
+            f"/api/briefings/2096-10-02/articles/{article_id}",
+            json={"expectedRevision": briefing["revision"], "selected": True},
+        )
+        assert selected.status_code == 200, selected.json()
     patched = client.patch(
         f"/api/issues/{issue['id']}/evidence",
         json={
@@ -160,12 +186,20 @@ def test_markdown_uses_only_confirmed_representative_and_supplemental():
     content = markdown_service.generate(
         get_connection, "2096-10-02", allow_network=False
     ).content
-    assert f"기사 ID: `{article_ids[1]}`" in content
-    assert f"기사 ID: `{article_ids[2]}`" in content
-    assert f"기사 ID: `{article_ids[0]}`" not in content
-    assert f"기사 ID: `{article_ids[3]}`" not in content
+    assert "- 선정 기사: 4건" in content
+    for article_id in article_ids:
+        assert f"기사 ID: `{article_id}`" in content
     assert "근거 역할: 대표기사" in content
     assert "근거 역할: 보조근거" in content
+    assert "근거 역할: 브리핑 선정기사" in content
+    source_context = markdown_service.build_source_context(
+        get_connection(), "2096-10-02", markdown_service.load_config()
+    )
+    assert source_context is not None
+    government = next(
+        item for item in source_context.exchange.articles if item["id"] == article_ids[0]
+    )
+    assert government["governmentPressRelease"] is True
 
 
 def test_reextract_updates_quality_and_enables_evidence_selection(monkeypatch):

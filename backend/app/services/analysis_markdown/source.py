@@ -32,13 +32,10 @@ def _confirmed_issue_evidence(
     candidates = article_repo.list_candidates(connection, report_date, include_dismissed=False)
     by_id = {item["id"]: item for item in candidates}
     originally_selected = {item["id"] for item in exchange.articles}
-    grouped_ids: set[str] = set()
-    chosen: list[dict[str, Any]] = []
-    chosen_ids: set[str] = set()
+    issues = issue_repo.list_for_report_date(connection, report_date)
     missing: list[dict[str, Any]] = []
-    for issue in issue_repo.list_for_report_date(connection, report_date):
+    for issue in issues:
         members = set(issue.get("articleIds") or [])
-        grouped_ids.update(members)
         if not members.intersection(originally_selected):
             continue
         representative_id = issue.get("representativeArticleId")
@@ -66,38 +63,48 @@ def _confirmed_issue_evidence(
                     }],
                     "availableActions": ["관련기사 선택", "본문 다시 추출", "원문 확인"],
                 })
-            continue
-        evidence_ids = [representative_id, *(issue.get("manualSupplementalArticleIds") or [])]
-        excluded = set(issue.get("manualExcludedArticleIds") or [])
-        for index, article_id in enumerate(evidence_ids):
-            if article_id in chosen_ids or article_id in excluded or article_id not in members or article_id not in by_id:
-                continue
-            chosen.append({
-                **by_id[article_id],
-                "issueId": issue["id"],
-                "issueTitle": issue.get("effectiveTitle") or issue.get("autoTitle") or "",
-                "evidenceRole": "representative" if index == 0 else "supplemental",
-                "evidenceSelectionMethod": (
-                    "manual" if index > 0 or issue.get("manualRepresentative") else "automatic"
-                ),
-            })
-            chosen_ids.add(article_id)
+
+    chosen: list[dict[str, Any]] = []
     for article in exchange.articles:
-        if article["id"] in grouped_ids or article["id"] in chosen_ids:
-            continue
+        memberships = [
+            issue for issue in issues if article["id"] in set(issue.get("articleIds") or [])
+        ]
+        representative_issue = next(
+            (
+                issue for issue in memberships
+                if issue.get("representativeArticleId") == article["id"]
+            ),
+            None,
+        )
+        supplemental_issue = next(
+            (
+                issue for issue in memberships
+                if article["id"] in set(issue.get("manualSupplementalArticleIds") or [])
+            ),
+            None,
+        )
+        primary_issue = representative_issue or supplemental_issue or (memberships[0] if memberships else None)
+        if representative_issue:
+            evidence_role = "representative"
+            selection_method = (
+                "manual" if representative_issue.get("manualRepresentative") else "automatic"
+            )
+        elif supplemental_issue:
+            evidence_role = "supplemental"
+            selection_method = "manual"
+        else:
+            evidence_role = "briefing_selected"
+            selection_method = "briefing"
         chosen.append({
             **article,
-            "issueId": None,
-            "issueTitle": "",
-            "evidenceRole": "representative",
-            "evidenceSelectionMethod": "individual",
+            "issueId": primary_issue["id"] if primary_issue else None,
+            "issueTitle": (
+                primary_issue.get("effectiveTitle") or primary_issue.get("autoTitle") or ""
+                if primary_issue else ""
+            ),
+            "evidenceRole": evidence_role,
+            "evidenceSelectionMethod": selection_method,
         })
-        chosen_ids.add(article["id"])
-    if (
-        [item["id"] for item in chosen] == [item["id"] for item in exchange.articles]
-        and all(item.get("issueId") is None for item in chosen)
-    ):
-        return exchange, tuple(missing)
     evidence = {f"A{index:02d}": item["id"] for index, item in enumerate(chosen, start=1)}
     raw = json.dumps(
         {

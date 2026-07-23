@@ -179,6 +179,13 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
   const reextractingAll = issue && reextractingIssueIds.has(issue.id);
   const searchingRelated = searchingRelatedArticleIds.has(a.id);
   const relatedCount = relatedMembers.filter(member => member.article.id !== a.id).length;
+  const articleEditorKey = `article:${a.id}`;
+  const articleManualEditorOpen = relatedCount === 0 && manualBodyEditingKeys.has(articleEditorKey);
+  const articleManualBodyEditor = articleManualEditorOpen ? `<div class="manual-body-editor article-manual-body-editor no-print">
+    <label>실제 기사 원문 주소 <span>Google 뉴스 주소라면 언론사 원문 주소로 바꿔 주세요.</span><input type="url" data-manual-body-url value="${escapeAttr(safeUrl(a.canonicalUrl) || href || "")}" placeholder="https://언론사.example/article"></label>
+    <label>기사 본문 <span>제목·기자명·추천기사 영역은 제외하고 기사 문장이 끝나는 곳까지 붙여넣어 주세요.</span><textarea data-manual-body-text rows="10" placeholder="복사한 기사 본문을 붙여넣으세요.">${escapeHtml(a.bodyText || a.description || "")}</textarea></label>
+    <div class="manual-body-editor-actions"><button type="button" data-action="cancel-article-manual-body">취소</button><button type="button" class="manual-body-save" data-action="save-article-manual-body">수동 본문 저장·평가</button></div>
+  </div>` : "";
   const relatedArticles = issue && relatedCount ? `<details class="related-articles" data-issue-id="${escapeAttr(issue.id)}" ${expandedIssueIds.has(issue.id) ? "open" : ""}>
     <summary>관련기사 ${relatedCount}건 <span class="related-articles-chevron" aria-hidden="true">›</span></summary>
     <div class="related-article-toolbar no-print">
@@ -205,11 +212,13 @@ function renderArticleCard(a, issue = null, relatedMembers = []) {
     <div class="article-actions">
       ${reviewControl}
       <button class="related-search-btn" data-action="search-related" aria-busy="${String(searchingRelated)}" title="제목 핵심어를 여러 조합으로 Google·네이버에서 검색해 관련기사를 최대 10건 찾습니다" ${state.status === "final" || searchingRelated ? "disabled" : ""}>${searchingRelated ? "검색 중…" : "관련기사 검색"}</button>
+      ${relatedCount === 0 ? `<button class="article-body-edit-btn" data-action="edit-article-manual-body" ${state.status === "final" ? "disabled" : ""}>${a.manualBodyOverride ? "수동 본문 수정" : "본문 직접 입력"}</button>` : ""}
       ${directCoverageButton}
       ${topIssueButton}
       <button class="small-icon ${a.starred ? "active" : ""}" data-action="star" title="중요 기사" aria-label="중요 기사" ${state.status === "final" ? "disabled" : ""}>${ICONS.star}</button>
       <button class="small-icon" data-action="delete" title="기사 삭제" aria-label="기사 삭제" ${state.status === "final" ? "disabled" : ""}>${ICONS.trash}</button>
     </div>
+    ${articleManualBodyEditor}
     ${relatedArticles}
   </article>`;
 }
@@ -237,7 +246,7 @@ function renderRelatedArticle(a, issue) {
   const sourceVerified = !!quality.sourceDomain && !validationErrors.some(item => ["publisher_identity_mismatch", "canonical_url_unresolved"].includes(item));
   const manualEditorOpen = manualBodyEditingKeys.has(previewKey);
   const manualBodyEditor = manualEditorOpen ? `<div class="manual-body-editor">
-    <label>실제 기사 원문 주소 <span>Google 뉴스 주소라면 언론사 원문 주소로 바꿔 주세요.</span><input type="url" data-manual-body-url value="${escapeAttr(quality.canonicalUrl || href || "")}" placeholder="https://언론사.example/article"></label>
+    <label>실제 기사 원문 주소 <span>Google 뉴스 주소라면 언론사 원문 주소로 바꿔 주세요.</span><input type="url" data-manual-body-url value="${escapeAttr(safeUrl(quality.canonicalUrl) || href || "")}" placeholder="https://언론사.example/article"></label>
     <label>기사 본문 <span>제목·기자명·추천기사 영역은 제외하고 기사 문장이 끝나는 곳까지 붙여넣어 주세요.</span><textarea data-manual-body-text rows="10" placeholder="복사한 기사 본문을 붙여넣으세요.">${escapeHtml(quality.cleanedText || "")}</textarea></label>
     <div class="manual-body-editor-actions"><button type="button" data-action="cancel-manual-body">취소</button><button type="button" class="manual-body-save" data-action="save-manual-body">수동 본문 저장·평가</button></div>
   </div>` : "";
@@ -656,6 +665,21 @@ export function handleArticleClick(e) {
     return;
   }
   if (state.status === "final") return;
+  const articleCard = e.target.closest(".article-card[data-id]");
+  if (articleCard && ["edit-article-manual-body", "cancel-article-manual-body", "save-article-manual-body"].includes(action)) {
+    const key = `article:${articleCard.dataset.id}`;
+    if (action === "edit-article-manual-body") {
+      manualBodyEditingKeys.add(key);
+      renderArticles();
+      requestAnimationFrame(() => document.querySelector(`.article-card[data-id="${CSS.escape(articleCard.dataset.id)}"] [data-manual-body-text]`)?.focus());
+    } else if (action === "cancel-article-manual-body") {
+      manualBodyEditingKeys.delete(key);
+      renderArticles();
+    } else {
+      saveManualBody(null, articleCard.dataset.id, articleCard, key);
+    }
+    return;
+  }
   if (action === "search-related") {
     const card = e.target.closest(".article-card[data-id]");
     if (card) searchRelatedArticles(card.dataset.id);
@@ -671,7 +695,7 @@ export function handleArticleClick(e) {
       manualBodyEditingKeys.delete(key);
       renderArticles();
     } else {
-      saveManualBody(evidenceRow.dataset.issueId, evidenceRow.dataset.id, evidenceRow);
+      saveManualBody(evidenceRow.dataset.issueId, evidenceRow.dataset.id, evidenceRow, key);
     }
     return;
   }
@@ -724,7 +748,7 @@ export function handleArticleClick(e) {
   }
 }
 
-async function saveManualBody(issueId, articleId, row) {
+async function saveManualBody(issueId, articleId, row, editingKey = `${issueId}:${articleId}`) {
   const bodyText = row.querySelector("[data-manual-body-text]")?.value.trim() || "";
   const sourceUrl = row.querySelector("[data-manual-body-url]")?.value.trim() || "";
   if (!bodyText) {
@@ -735,7 +759,19 @@ async function saveManualBody(issueId, articleId, row) {
   if (saveButton) { saveButton.disabled = true; saveButton.textContent = "저장·평가 중…"; }
   try {
     const result = await api.putManualArticleBody(articleId, { reportDate: state.date, bodyText, sourceUrl });
-    manualBodyEditingKeys.delete(`${issueId}:${articleId}`);
+    manualBodyEditingKeys.delete(editingKey);
+    const article = state.articles.find(item => item.id === articleId);
+    if (article) {
+      article.bodyText = bodyText;
+      article.bodyStatus = "full_text";
+      article.bodyError = "";
+      article.manualBodyOverride = true;
+      if (sourceUrl) {
+        article.url = sourceUrl;
+        article.canonicalUrl = sourceUrl;
+      }
+    }
+    if (result.data.analysisEligible) evidenceFailureByArticleId.delete(articleId);
     const issuesResult = await api.listIssues(state.date);
     state.issues = issuesResult.data.issues || [];
     renderAll();

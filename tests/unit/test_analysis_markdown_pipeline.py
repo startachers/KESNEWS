@@ -8,6 +8,7 @@ from backend.app.services.analysis_markdown.replacement_finder import (
     related_query_variants,
     search_related_candidates,
 )
+from backend.app.services.analysis_markdown.service import _prepare
 from backend.app.services.extraction.cleaner import clean_article_text
 from backend.app.services.extraction.evidence_quality import assess
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
@@ -82,6 +83,29 @@ def test_eligibility_rejects_navigation_and_short_text_but_accepts_factual_rss()
     assert evaluate(short, status="success_full", url="https://example.com/a", config=CONFIG).reason == "body_too_short"
     summary = clean_article_text("7월 20일 정부는 전기요금 시간 차등제를 검토한다고 밝혔으며 구체적 적용 대상과 시범사업 계획, 향후 일정과 소비자 영향 등을 관계기관과 논의하고 있다고 설명했다. " * 2)
     assert evaluate(summary, status="success_summary", url="https://news1.kr/a", config=CONFIG).eligible
+
+
+def test_prepare_uses_eligible_official_rss_when_stored_page_body_is_contaminated():
+    article = {
+        "id": "government-release-1",
+        "title": "정부 전기안전 대책 공식 발표",
+        "source": "정부부처 보도자료",
+        "rawSource": "정책브리핑",
+        "url": "https://www.korea.kr/news/policyNewsView.do?newsId=1",
+        "pubDate": "2026-07-23T01:00:00Z",
+        "bodyText": "많이 본 뉴스 로그인 메뉴 기사목록 좋아요 응원해요 " * 30,
+        "description": (
+            "정부는 전기설비 40곳의 안전점검 결과와 피해 수치, 후속 조사 일정 및 "
+            "재발 방지 대책을 관계기관과 함께 확인해 발표했다고 밝혔다. " * 4
+        ),
+    }
+
+    prepared = _prepare(article, CONFIG, allow_network=False)
+
+    assert prepared["analysisEligible"] is True
+    assert prepared["status"] == "success_summary"
+    assert prepared["extractionMethod"] == "official_rss"
+    assert prepared["rawText"] == article["description"]
 
 
 def test_clean_full_text_remains_eligible_after_page_extras_are_removed():

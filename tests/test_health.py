@@ -44,7 +44,7 @@ def test_index_html_is_served_at_root():
     assert 'id="governmentPressBtn"' in response.text
     assert response.text.index('id="governmentPressBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260723-5" in response.text
+    assert "js/app.js?v=20260723-6" in response.text
     assert 'id="cancelFinalizeBtn" hidden>확정 취소</button>' in response.text
     assert 'id="finalizeBtn">최종 확정</button>' not in response.text
     assert 'id="reopenBtn"' not in response.text
@@ -59,7 +59,7 @@ def test_index_html_is_served_at_root():
 
     app_script = client.get("/js/app.js")
     assert 'dialogs.js?v=20260720-1' in app_script.text
-    assert 'articles.js?v=20260721-3' in app_script.text
+    assert 'articles.js?v=20260723-1' in app_script.text
     assert 'collection.js?v=20260723-21' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
     assert 'report-draft.js?v=20260722-3' in app_script.text
@@ -88,7 +88,7 @@ def test_index_html_is_served_at_root():
 
     dialogs_script = client.get("/js/ui/dialogs.js")
     assert 'import { setStatus, showToast } from "./notifications.js?v=20260716-1";' in dialogs_script.text
-    assert 'articles.js?v=20260721-3' in dialogs_script.text
+    assert 'articles.js?v=20260723-1' in dialogs_script.text
     assert "await api.getServerProcessId()" in dialogs_script.text
 
     client_script = client.get("/js/api/client.js")
@@ -101,9 +101,12 @@ def test_index_html_is_served_at_root():
     assert "관련기사 검색" in articles_script.text
     assert "여러 조합으로 Google·네이버" in articles_script.text
     assert "최대 10건" in articles_script.text
+    assert 'data-action="edit-article-manual-body"' in articles_script.text
+    assert 'data-action="save-article-manual-body"' in articles_script.text
+    assert "article-manual-body-editor" in articles_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
-    assert 'articles.js?v=20260721-3' in renderers_script.text
+    assert 'articles.js?v=20260723-1' in renderers_script.text
 
     auto_selection_script = client.get("/js/features/auto-selection.js")
     assert 'setAttribute("aria-busy", String(value))' in auto_selection_script.text

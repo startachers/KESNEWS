@@ -96,12 +96,18 @@ def build(
             "manual": "담당자 수동 선택",
             "automatic": "자동 선택",
             "individual": "개별 기사 선택",
+            "briefing": "브리핑 선정",
         }.get(article.get("evidenceSelectionMethod"), "자동 선택")
+        evidence_role_label = {
+            "representative": "대표기사",
+            "supplemental": "보조근거",
+            "briefing_selected": "브리핑 선정기사",
+        }.get(article.get("evidenceRole"), "브리핑 선정기사")
         lines.extend([
             "", f"### [A{index:02d}] {article.get('title') or '제목 없음'}", "",
             f"- 기사 ID: `{article['id']}`",
             f"- 이슈 ID: {_value(article.get('issueId'))}",
-            f"- 근거 역할: {'대표기사' if article.get('evidenceRole') == 'representative' else '보조근거'}",
+            f"- 근거 역할: {evidence_role_label}",
             f"- 근거 선택: {selection_label}",
             f"- 원 기사 ID: `{article.get('originalArticleId') or article['id']}`",
             f"- 대체 기사 여부: {'예' if article.get('replacesArticleId') else '아니오'}",

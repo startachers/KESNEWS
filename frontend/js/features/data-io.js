@@ -11,7 +11,7 @@ import { formatDateTime, localDateKey } from "../utils/dates.js";
 import { showToast, setStatus } from "../ui/notifications.js?v=20260716-1";
 import { renderAll } from "../ui/renderers.js";
 import { setRuleSummary, refreshRuleSummaryIfNeeded } from "./ai-analysis.js";
-import { flushArticleChanges } from "./articles.js?v=20260721-3";
+import { flushArticleChanges } from "./articles.js?v=20260723-1";
 
 const PREVIEW_PRESENTATION_PREFIX = "kesco-preview-presentation";
 

@@ -56,6 +56,23 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
         attempts = ({"stage": "official_rss", "status": "success"},)
     cleaning = clean_article_text(raw, title=article.get("title") or "")
     eligibility = evaluate(cleaning, status=status, url=resolved_url, config=config)
+    if not eligibility.eligible and article.get("description"):
+        summary_raw = article["description"]
+        summary_cleaning = clean_article_text(
+            summary_raw, title=article.get("title") or ""
+        )
+        summary_eligibility = evaluate(
+            summary_cleaning,
+            status="success_summary",
+            url=resolved_url,
+            config=config,
+        )
+        if summary_eligibility.eligible:
+            raw = summary_raw
+            status = "success_summary"
+            cleaning = summary_cleaning
+            eligibility = summary_eligibility
+            attempts = ({"stage": "official_rss", "status": "success"},)
     if allow_network and (not eligibility.eligible or status != "success_full") and article.get("url"):
         def acceptable_body(body: str, body_url: str) -> bool:
             candidate_cleaning = clean_article_text(body, title=article.get("title") or "")
