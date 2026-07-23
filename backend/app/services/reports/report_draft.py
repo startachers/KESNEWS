@@ -19,6 +19,12 @@ class ReportDraftInvalid(ValueError):
     pass
 
 
+# 외부 분석(평문) 경로에서 생성하는 keyIssue의 제목 마커.
+# 렌더러가 이 제목으로 ③(기타 참고 동향)/④(정부부처 동향) 라우팅을 구분한다.
+REFERENCE_ISSUE_TITLE = "기타 동향"
+GOVERNMENT_ISSUE_TITLE = "정부부처 동향"
+
+
 class ReportDraftStale(ValueError):
     pass
 
@@ -117,6 +123,9 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
         "management": re.compile(
             r"(?im)^\s*(?:(?:③|3[.)]?)\s*)?경영\s*참고\s*사항\s*$"
         ),
+        "government": re.compile(
+            r"(?im)^\s*(?:(?:③|④|3[.)]?|4[.)]?)\s*)?정부\s*부처\s*동향\s*$"
+        ),
         "reference": re.compile(
             r"(?im)^\s*(?:(?:③|④|3[.)]?|4[.)]?)\s*)?(?:기타|참고)\s*동향\s*$"
         ),
@@ -139,39 +148,47 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     core = sections.get("core") or normalized
     implication = sections.get("implication") or ""
     references = sections.get("reference") or ""
+    government = sections.get("government") or ""
     management = sections.get("management") or ""
     if references.rstrip(" .") in {"별도 기타 동향 없음", "별도 참고 동향 없음"}:
         references = ""
+    if government.rstrip(" .") in {"별도 정부부처 동향 없음", "정부부처 동향 없음"}:
+        government = ""
     if management.rstrip(" .") == "직접적인 경영 현안은 제한적입니다":
         management = ""
+
+    def _reference_issue(title: str, summary: str) -> dict[str, Any]:
+        return {
+            "title": title,
+            "urgency": "reference",
+            "summary": summary,
+            "managementImpact": "",
+            "articleIds": evidence_ids,
+            "evidenceQuotes": [
+                {"articleId": article_id, "fact": summary}
+                for article_id in evidence_ids
+            ],
+            "certainty": "reported",
+            "electricalCauseStatus": "not_applicable",
+            "kescoJurisdiction": "MONITORING",
+            "jurisdictionReason": "외부 분석 텍스트로 입력됨",
+            "excludedElements": [],
+            "recommendation": "",
+            "actionLevel": "policy_monitoring",
+        }
+
+    key_issues: list[dict[str, Any]] = []
+    if references:
+        key_issues.append(_reference_issue(REFERENCE_ISSUE_TITLE, references))
+    if government:
+        key_issues.append(_reference_issue(GOVERNMENT_ISSUE_TITLE, government))
     return {
         "managementMessage": {"text": core, "articleIds": evidence_ids},
         "situationSummary": {
             "text": implication,
             "articleIds": evidence_ids if implication else [],
         },
-        "keyIssues": (
-            [{
-                "title": "기타 동향",
-                "urgency": "reference",
-                "summary": references,
-                "managementImpact": "",
-                "articleIds": evidence_ids,
-                "evidenceQuotes": [
-                    {"articleId": article_id, "fact": references}
-                    for article_id in evidence_ids
-                ],
-                "certainty": "reported",
-                "electricalCauseStatus": "not_applicable",
-                "kescoJurisdiction": "MONITORING",
-                "jurisdictionReason": "외부 분석의 기타 동향으로 입력됨",
-                "excludedElements": [],
-                "recommendation": "",
-                "actionLevel": "policy_monitoring",
-            }]
-            if references
-            else []
-        ),
+        "keyIssues": key_issues,
         "decisionPoints": [],
         "actionItems": (
             [{

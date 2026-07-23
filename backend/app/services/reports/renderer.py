@@ -9,7 +9,11 @@ from typing import Any
 from backend.app.services.ai.article_selection import is_government_article
 from backend.app.services.extraction.cleaner import clean_article_text, clean_text
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
-from backend.app.services.reports.report_draft import content_from_plain_text
+from backend.app.services.reports.report_draft import (
+    GOVERNMENT_ISSUE_TITLE,
+    REFERENCE_ISSUE_TITLE,
+    content_from_plain_text,
+)
 
 KST = timezone(timedelta(hours=9))
 
@@ -177,7 +181,15 @@ def _reference_issue_texts(
     for item in analysis.get("keyIssues") or []:
         if item.get("urgency") != "reference" and item.get("kescoJurisdiction") != "MONITORING":
             continue
-        is_gov = bool(gov_ids.intersection(str(a) for a in item.get("articleIds") or []))
+        # 외부 분석(평문) 경로는 모든 evidence id를 붙이므로 evidence 교집합으로는
+        # 정부/비정부를 가릴 수 없다. content_from_plain_text가 부여한 제목 마커를 우선한다.
+        title = str(item.get("title") or "")
+        if title == GOVERNMENT_ISSUE_TITLE:
+            is_gov = True
+        elif title == REFERENCE_ISSUE_TITLE:
+            is_gov = False
+        else:
+            is_gov = bool(gov_ids.intersection(str(a) for a in item.get("articleIds") or []))
         if is_gov != government:
             continue
         text = " ".join(

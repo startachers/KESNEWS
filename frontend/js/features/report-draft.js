@@ -10,6 +10,10 @@ let currentSignature = "";
 let currentSourceType = "manual";
 let currentEvidenceIds = [];
 
+// content_from_plain_text가 정부부처 동향 섹션에 부여하는 keyIssue 제목 마커.
+// (백엔드 report_draft.GOVERNMENT_ISSUE_TITLE과 동일해야 한다)
+const GOVERNMENT_ISSUE_TITLE = "정부부처 동향";
+
 const EXTERNAL_AI_PROVIDERS = {
   chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" },
   claude: { label: "Claude", url: "https://claude.ai/new" }
@@ -140,7 +144,7 @@ export const EXTERNAL_ANALYSIS_PROMPT = `첨부한 「KESCO CEO 일일 언론브
 
 ③ 경영 참고사항
 
-④ 기타 동향
+④ 정부부처 동향
 
 [분량 제한]
 
@@ -200,6 +204,8 @@ export const EXTERNAL_ANALYSIS_PROMPT = `첨부한 「KESCO CEO 일일 언론브
 - 공사가 보유한 안전정보의 활용 가능성
 - 내부적으로 확인할 필요가 있는 경영관리 사항
 
+정부부처가 아닌 그 밖의 참고 동향(중요도는 낮지만 CEO가 알아둘 사항)도 이 항목에 함께 통합하십시오.
+
 구체적인 실행과제 목록을 만들지 마십시오.
 
 부서별 업무를 지시하지 마십시오.
@@ -208,17 +214,19 @@ export const EXTERNAL_ANALYSIS_PROMPT = `첨부한 「KESCO CEO 일일 언론브
 
 “직접적인 경영 현안은 제한적입니다.”
 
-④ 기타 동향
+④ 정부부처 동향
 
-앞의 세 항목에 포함할 정도로 중요하지 않지만 CEO가 알아둘 필요가 있는 동향이 있을 때만 작성하십시오.
+정부부처(대통령실·국무총리실·국무조정실·기획재정부·산업통상자원부·기후에너지환경부 등)의 정책·제도·발표 동향 중 CEO가 알아둘 필요가 있는 것을 작성하십시오.
 
-최대 한 문단, 2문장으로 작성하십시오.
+공사 소관 업무와 직접 연결되지 않아도, 정부의 방향과 그 경영환경상 의미가 확인되면 포함하십시오.
 
-기사 내용을 다시 요약하지 말고, 해당 동향이 경영환경에서 무엇을 의미하는지만 작성하십시오.
+최대 한 문단, 2~3문장으로 작성하십시오.
+
+기사 내용을 그대로 옮기지 말고, 해당 정책·동향이 무엇을 의미하는지 요약하십시오.
 
 앞 항목과 같은 사건, 수치와 정책을 반복하지 마십시오.
 
-참고할 만한 독립적인 동향이 없으면 ④ 제목과 본문을 모두 생략하십시오.
+참고할 만한 정부부처 동향이 없으면 ④ 제목과 본문을 모두 생략하십시오.
 
 [반복 방지 규칙]
 
@@ -237,7 +245,7 @@ export const EXTERNAL_ANALYSIS_PROMPT = `첨부한 「KESCO CEO 일일 언론브
 
 ②에서 분석한 내용을 ③에서 다시 요약하지 마십시오.
 
-④에는 ①~③에서 사용한 기사나 논점을 다시 넣지 마십시오.
+④ 정부부처 동향에는 ①~③에서 사용한 기사나 논점을 다시 넣지 마십시오.
 
 [금지되는 문체]
 
@@ -378,24 +386,31 @@ function contentFromText(text) {
 
 function setEditorContent(content) {
   const value = content || emptyContent();
-  const references = (value.keyIssues || [])
-    .filter(item => item.urgency === "reference" || item.kescoJurisdiction === "MONITORING")
-    .map(item => [item.summary, item.managementImpact].filter(Boolean).join(" ").trim())
-    .filter(Boolean);
+  const referenceIssues = (value.keyIssues || [])
+    .filter(item => item.urgency === "reference" || item.kescoJurisdiction === "MONITORING");
+  const toText = item => [item.summary, item.managementImpact].filter(Boolean).join(" ").trim();
+  const governmentRefs = referenceIssues
+    .filter(item => item.title === GOVERNMENT_ISSUE_TITLE)
+    .map(toText).filter(Boolean);
+  const otherRefs = referenceIssues
+    .filter(item => item.title !== GOVERNMENT_ISSUE_TITLE)
+    .map(toText).filter(Boolean);
   const management = (value.actionItems || [])
     .filter(item => [undefined, "DIRECT", "COLLABORATIVE"].includes(item.kescoJurisdiction))
     .filter(item => item.ownerType !== "EXTERNAL_AGENCY")
     .map(item => item.action?.trim())
     .filter(Boolean);
+  // 정부부처가 아닌 참고 동향은 리포트와 동일하게 ③ 경영 참고사항으로 병합한다.
+  const managementCombined = [...management, ...otherRefs];
   const sections = [
     "① 오늘 한줄",
     value.managementMessage?.text || "",
     "② 언론 동향 분석",
     value.situationSummary?.text || "",
     "③ 경영 참고사항",
-    management.length ? management.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
+    managementCombined.length ? managementCombined.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
   ];
-  if (references.length) sections.push("④ 기타 동향", references.join("\n\n"));
+  if (governmentRefs.length) sections.push("④ 정부부처 동향", governmentRefs.join("\n\n"));
   $("reportDraftContent").value = sections.join("\n\n");
 }
 

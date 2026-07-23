@@ -1,4 +1,5 @@
 from backend.app.services.ai.article_selection import is_government_article
+from backend.app.services.reports.report_draft import content_from_plain_text
 from backend.app.services.reports.renderer import (
     _government_evidence_ids,
     _render_government_reference,
@@ -106,3 +107,31 @@ def test_no_government_evidence_yields_empty_section():
     assert _render_government_reference(analysis, evidence) == ""
     # 정부 항목이 없으면 기존과 동일하게 참고 동향은 ③에 남는다.
     assert "일반 참고 동향" in _render_management_reference(analysis, evidence)
+
+
+def test_external_plain_text_routes_government_section_by_title_marker():
+    text = (
+        "① 오늘 한줄\n오늘의 핵심 메시지\n\n"
+        "② 언론 동향 분석\n언론 동향 요약\n\n"
+        "③ 경영 참고사항\n현장 대응 확인 사항\n\n"
+        "④ 정부부처 동향\n정부가 전기안전 종합대책을 발표했다.\n\n"
+        "기타 동향\n비정부 일반 참고 동향"
+    )
+    # 외부 경로는 모든 evidence id를 keyIssue에 붙인다. 정부 기사가 섞여 있어도
+    # 제목 마커로 ③/④를 갈라야 한다.
+    content = content_from_plain_text(text, ["A01", "A02"])
+    evidence = _evidence(
+        {
+            "A01": {"governmentPressRelease": True, "title": "정책브리핑"},
+            "A02": {"category": "electrical_safety", "title": "일반"},
+        }
+    )
+
+    gov = _render_government_reference(content, evidence)
+    mgmt = _render_management_reference(content, evidence)
+
+    assert "전기안전 종합대책" in gov
+    assert "비정부 일반 참고 동향" not in gov
+    # 정부 기사가 선정돼 있어도 기타 동향은 evidence 교집합이 아니라 제목으로 ③에 남는다.
+    assert "비정부 일반 참고 동향" in mgmt
+    assert "전기안전 종합대책" not in mgmt

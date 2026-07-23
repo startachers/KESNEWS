@@ -308,10 +308,17 @@ export function formatAiAnalysis(analysis, evidenceMap = []) {
     .filter(item => item.ownerType !== "EXTERNAL_AGENCY")
     .map(item => item.action?.trim())
     .filter(Boolean);
-  const references = (analysis.keyIssues || [])
-    .filter(issue => issue.urgency === "reference" || issue.kescoJurisdiction === "MONITORING")
-    .map(issue => [issue.summary, issue.managementImpact].filter(Boolean).join(" ").trim())
-    .filter(Boolean);
+  const referenceIssues = (analysis.keyIssues || [])
+    .filter(issue => issue.urgency === "reference" || issue.kescoJurisdiction === "MONITORING");
+  const toText = issue => [issue.summary, issue.managementImpact].filter(Boolean).join(" ").trim();
+  const governmentReferences = referenceIssues
+    .filter(issue => issue.title === "정부부처 동향")
+    .map(toText).filter(Boolean);
+  const otherReferences = referenceIssues
+    .filter(issue => issue.title !== "정부부처 동향")
+    .map(toText).filter(Boolean);
+  // 정부부처가 아닌 참고 동향은 리포트와 동일하게 ③ 경영 참고사항으로 병합한다.
+  const managementCombined = [...managementReferences, ...otherReferences];
   const lines = [
     "① 오늘 한줄",
     analysis.managementMessage?.text?.trim() || "핵심 경영메시지를 생성하지 못했습니다.",
@@ -320,8 +327,8 @@ export function formatAiAnalysis(analysis, evidenceMap = []) {
     analysis.situationSummary?.text?.trim() || "언론 동향 분석을 생성하지 못했습니다.",
     "",
     "③ 경영 참고사항",
-    managementReferences.length ? managementReferences.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
+    managementCombined.length ? managementCombined.join("\n\n") : "직접적인 경영 현안은 제한적입니다."
   ];
-  if (references.length) lines.push("", "④ 기타 동향", references.join("\n\n"));
+  if (governmentReferences.length) lines.push("", "④ 정부부처 동향", governmentReferences.join("\n\n"));
   return lines.join("\n");
 }

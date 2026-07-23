@@ -16,6 +16,11 @@ CEO 브리핑 분석 페이지에 **정부부처 동향** 섹션을 신설했다
 - 렌더 단계: `renderer._render_government_reference`가 스냅샷 `evidence` 맵으로
   keyIssue를 정부/비정부로 결정론적 분할. 담당자가 체크했으나 keyIssue로 안 잡힌 정부
   기사는 제목·출처 한 줄로 보강(WYSIWYG).
+- 외부(GPT/Claude 바로가기) 평문 경로도 정합화: `EXTERNAL_ANALYSIS_PROMPT`의 ④를
+  정부부처 동향으로 바꾸고, `content_from_plain_text`가 "정부부처 동향" 헤딩을 별도
+  keyIssue(제목 마커 `GOVERNMENT_ISSUE_TITLE`)로 파싱한다. 평문 경로는 모든 evidence
+  id를 붙이므로 렌더러는 evidence 교집합 대신 제목 마커로 ③/④를 구분한다. 프론트
+  요약/편집 빌더(`setEditorContent`, `formatAiAnalysis`)도 같은 규칙으로 병합·분리한다.
 - 테스트: `tests/unit/test_government_briefing_section.py`,
   `tests/integration/test_markdown_report_draft.py`(섹션 재편 반영)
 
