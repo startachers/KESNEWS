@@ -22,3 +22,6 @@ backups/
 # 편집기
 .idea/
 .vscode/
+
+# Claude Code 로컬 설정 (세션별 임시 허용 목록 — 공유 가치 없음)
+.claude/
