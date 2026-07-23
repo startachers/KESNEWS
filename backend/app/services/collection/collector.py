@@ -343,13 +343,16 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
     exclude_keywords = payload.get("excludeKeywords") or []
     endpoint = payload.get("endpoint") or ""
 
-    def within_lookback(article: Article) -> bool:
+    def within_lookback(pub_date: str | None) -> bool:
+        return _within_lookback(pub_date, report_date, lookback_hours)
+
+    def article_within_lookback(article: Article) -> bool:
         if (
             article.get("_official_government") is True
             and article.get("provider") in DATE_ONLY_GOVERNMENT_PROVIDERS
         ):
             return _within_date_only_government_window(article.get("pubDate"), report_date)
-        return _within_lookback(article.get("pubDate"), report_date, lookback_hours)
+        return within_lookback(article.get("pubDate"))
 
     started_at = now_iso()
 
@@ -548,7 +551,7 @@ async def run_collection(payload: dict[str, Any]) -> dict[str, Any]:
             article.get("_official_government") is True
             or not should_exclude(article, exclude_keywords)
         )
-        and within_lookback(article)
+        and article_within_lookback(article)
     ]
     first_pass_items, duplicates_removed = deduplicate_detailed(eligible, risk_keywords, positive_keywords)
 

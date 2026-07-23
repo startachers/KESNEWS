@@ -454,6 +454,58 @@ def test_naver_and_google_same_article_create_two_observations(monkeypatch):
     }
 
 
+def test_naver_and_yonhap_receive_pub_date_lookback_callback(monkeypatch):
+    report_date = "2025-01-28"
+    pub_date = f"{report_date}T09:00:00Z"
+    monkeypatch.setenv("NAVER_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "test-client-secret")
+
+    def fake_yonhap(within_lookback, collection_limit):
+        assert within_lookback(pub_date) is True
+        return _yonhap_result(
+            "https://www.yna.co.kr/view/AKR202501280001-callback",
+            pub_date,
+        )
+
+    def fake_naver(query, client_id, client_secret, within_lookback):
+        assert query == "한국전기안전공사"
+        assert (client_id, client_secret) == ("test-client-id", "test-client-secret")
+        assert within_lookback(pub_date) is True
+        return [
+            {
+                "title": "한국전기안전공사 전기화재 예방대책 발표",
+                "source": "yna.co.kr",
+                "url": "https://www.yna.co.kr/view/AKR202501280002-callback",
+                "originalLink": "https://www.yna.co.kr/view/AKR202501280002-callback",
+                "naverUrl": "https://n.news.naver.com/article/001/2",
+                "pubDate": pub_date,
+                "description": "한국전기안전공사가 전기화재 예방대책을 발표했다.",
+                "provider": "네이버 뉴스 API",
+            }
+        ]
+
+    monkeypatch.setattr(collector_module, "fetch_yonhap_rss", fake_yonhap)
+    monkeypatch.setattr(collector_module, "fetch_naver_news", fake_naver)
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+
+    payload = _base_payload(
+        reportDate=report_date,
+        queries=[{
+            "id": "direct",
+            "label": "기관 직접",
+            "query": '("한국전기안전공사")',
+            "naverQueries": ["한국전기안전공사"],
+        }],
+    )
+    response = client.post("/api/collections", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["naverStatus"] == "네이버 뉴스 API 연결됨"
+    assert not any("'str' object has no attribute 'get'" in item for item in data.get("warnings", []))
+    assert not any("'str' object has no attribute 'get'" in item for item in data.get("failures", []))
+
+
 def test_naver_auth_failure_is_warning_and_never_exposes_credentials(monkeypatch):
     report_date = "2025-01-28"
     client_id = "sensitive-client-id"
