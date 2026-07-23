@@ -594,6 +594,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
         else ""
     )
     report_date_json = json.dumps(report_date, ensure_ascii=False).replace("<", "\\u003c")
+    pdf_filename = f"KESCO_{report_date}_{'미리보기' if preview else f'v{version}'}.pdf"
+    pdf_filename_json = json.dumps(pdf_filename, ensure_ascii=False).replace("<", "\\u003c")
     source_revision = int(snapshot.get("sourceRevision") or briefing.get("revision") or 0)
     presentation_key_json = json.dumps(
         f"kesco-preview-presentation:{report_date}:{source_revision}", ensure_ascii=False
@@ -824,7 +826,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     @media print{body{background:#fff}.toolbar{display:none}main{width:210mm;margin:0;display:block}.report-page{height:294mm;box-shadow:none;break-after:page;page-break-after:always}.report-page:last-child{break-after:auto;page-break-after:auto}a{text-decoration:none;color:inherit}.article-link,.issue-rep a{color:var(--navy)}}
     """
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>KESCO CEO 언론브리핑 { _text(report_date) }</title><style>{styles}</style></head><body>
-    <div class="toolbar">{finalize_button}{summary_button}<button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button type="button" onclick="window.print()">인쇄·PDF</button></div>
+    <div class="toolbar">{finalize_button}{summary_button}<button id="articleSortBtn" type="button" aria-pressed="false" onclick="toggleArticleSort()">기사 중요도순</button><button id="downloadPdfBtn" type="button" onclick="downloadReportPdf()">인쇄·PDF</button><span id="pdfStatus" class="toolbar-status" role="status" aria-live="polite"></span></div>
     <main>
     <section class="report-page analysis-page" data-fit-page><div class="page-inner">
     <header class="masthead">
@@ -863,6 +865,40 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
       button.setAttribute('aria-pressed', String(importanceMode));
       button.textContent = importanceMode ? '기사 편집순' : '기사 중요도순';
       if (typeof savePreviewPresentation === 'function') savePreviewPresentation();
+    }}
+
+    async function downloadReportPdf() {{
+      const button = document.getElementById('downloadPdfBtn');
+      const status = document.getElementById('pdfStatus');
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      if (status) {{ status.classList.remove('error'); status.textContent = 'PDF 생성 중…'; }}
+      try {{
+        const html = '<!doctype html>' + document.documentElement.outerHTML;
+        const response = await fetch('/api/reports/render-pdf', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{html, filename: {pdf_filename_json}}}),
+        }});
+        if (!response.ok) throw new Error(`PDF 생성 실패 (${{response.status}})`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = {pdf_filename_json};
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        if (status) status.textContent = '';
+      }} catch (error) {{
+        if (status) {{
+          status.classList.add('error');
+          status.textContent = error instanceof Error ? error.message : 'PDF 생성에 실패했습니다.';
+        }}
+      }} finally {{
+        button.disabled = false;
+      }}
     }}
     {finalize_script}
     {summary_script}

@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import asyncio
 from uuid import uuid4
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from backend.app.api.briefings import _serialize
@@ -24,6 +25,7 @@ from backend.app.services.ai.ollama_client import OllamaError, default_client
 from backend.app.services.ai.runtime import CancellationToken, analysis_registry
 from backend.app.services.reports.renderer import render_report
 from backend.app.services.reports.renderer import _article_body_preview, _article_source_label
+from backend.app.services.reports.pdf import render_pdf
 from backend.app.services.reports.snapshot import build_snapshot
 from backend.app.services.reports.storage import write_report, write_snapshot_backup
 
@@ -47,6 +49,11 @@ class FinalizeRequest(RevisionRequest):
 
 class ArticleSummaryRequest(BaseModel):
     model: str
+
+
+class RenderPdfRequest(BaseModel):
+    html: str
+    filename: str = "KESCO_리포트.pdf"
 
 
 def _briefing_error(exc: Exception, report_date: str):
@@ -319,4 +326,20 @@ async def final_report(report_date: str, version: int | None = Query(None)):
     return HTMLResponse(
         render_report(json.loads(row["snapshot_json"])),
         headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.post("/api/reports/render-pdf")
+async def render_pdf_endpoint(body: RenderPdfRequest) -> Response:
+    pdf_bytes = await render_pdf(body.html)
+    ascii_fallback = "KESCO_report.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_fallback}"; '
+                f"filename*=UTF-8''{quote(body.filename)}"
+            )
+        },
     )

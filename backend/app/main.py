@@ -33,6 +33,7 @@ from backend.app.repositories import ai_run_repository as ai_runs_repo
 from backend.app.repositories import ai_selection_repository as ai_selection_repo
 from backend.app.services.ai.ollama_client import OllamaError, default_client
 from backend.app.services.collection.kesco_press_cache import refresh_kesco_press_cache
+from backend.app.services.reports.pdf import close_pdf_browser
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -119,6 +120,11 @@ async def _refresh_weather_on_startup() -> None:
             "기상정보 시작 갱신 실패, 마지막 정상 데이터를 유지합니다.",
             exc_info=True,
         )
+
+
+@app.on_event("shutdown")
+async def _shutdown_pdf_browser() -> None:
+    await close_pdf_browser()
 
 
 def _check_db_connected() -> bool:
