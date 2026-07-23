@@ -156,7 +156,7 @@ export async function cancelFinalization() {
     setState(await loadDailyState(state.date));
     const presentationRestored = restoreFinalPresentation(
       state.date,
-      state.revision,
+      version.data?.sourceRevision,
       version.data?.snapshot,
     );
     renderAll();
