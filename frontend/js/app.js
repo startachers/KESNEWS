@@ -14,7 +14,7 @@ import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal,
 import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260723-7";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260721-1";
 import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
-import { openDiscoveredIssues } from "./features/discovered-issues.js?v=20260723-30";
+import { handleDiscoveredIssuesClick, openDiscoveredIssues } from "./features/discovered-issues.js?v=20260723-32";
 
 document.addEventListener("DOMContentLoaded", () => { init(); });
 
@@ -72,6 +72,7 @@ function bindEvents() {
   els.governmentPressBtn.addEventListener("click", () => runSearch(false, "government"));
   $("discoveredIssuesBtn").addEventListener("click", openDiscoveredIssues);
   $("discoveredIssuesRefreshBtn").addEventListener("click", openDiscoveredIssues);
+  els.discoveredIssuesList.addEventListener("click", handleDiscoveredIssuesClick);
   const activateWeatherTab = tab => {
     document.querySelectorAll("[data-weather-tab]").forEach(button => {
       const active = button.dataset.weatherTab === tab;

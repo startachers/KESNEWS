@@ -44,14 +44,14 @@ def test_index_html_is_served_at_root():
     assert 'id="governmentPressBtn"' in response.text
     assert response.text.index('id="governmentPressBtn"') < response.text.index('id="refreshBtn"')
     assert "js/restart-guard.js?v=20260720-1" in response.text
-    assert "js/app.js?v=20260723-6" in response.text
+    assert "js/app.js?v=20260723-32" in response.text
     assert 'id="cancelFinalizeBtn" hidden>확정 취소</button>' in response.text
     assert 'id="finalizeBtn">최종 확정</button>' not in response.text
     assert 'id="reopenBtn"' not in response.text
     assert 'id="resetTodayBtn"' in response.text
     assert 'id="searchProgress"' in response.text
     assert 'role="progressbar"' in response.text
-    assert "css/app.css?v=20260722-1" in response.text
+    assert "css/app.css?v=20260723-32" in response.text
     assert 'id="chatGptShortcutBtn" type="button"' in response.text
     assert 'id="claudeShortcutBtn" type="button"' in response.text
     assert 'id="autoSelectBtn" type="button" aria-busy="false"' in response.text
@@ -62,13 +62,14 @@ def test_index_html_is_served_at_root():
     assert 'articles.js?v=20260723-1' in app_script.text
     assert 'collection.js?v=20260723-21' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
-    assert 'report-draft.js?v=20260722-3' in app_script.text
+    assert 'report-draft.js?v=20260723-7' in app_script.text
     assert 'openExternalAi("chatgpt")' in app_script.text
     assert 'openExternalAi("claude")' in app_script.text
-    assert 'ai-analysis.js?v=20260722-1' in app_script.text
+    assert 'ai-analysis.js?v=20260723-7' in app_script.text
     assert 'auto-selection.js?v=20260721-1' in app_script.text
     assert 'dataset.restartHandler = "module"' in app_script.text
     assert 'runSearch(false, "government")' in app_script.text
+    assert "handleDiscoveredIssuesClick" in app_script.text
 
     assert '$("resetTodayBtn").addEventListener("click", resetTodayWork)' in app_script.text
 
@@ -104,6 +105,14 @@ def test_index_html_is_served_at_root():
     assert 'data-action="edit-article-manual-body"' in articles_script.text
     assert 'data-action="save-article-manual-body"' in articles_script.text
     assert "article-manual-body-editor" in articles_script.text
+
+    discovered_script = client.get("/js/features/discovered-issues.js")
+    assert 'data-action="import-discovered-article"' in discovered_script.text
+    assert 'data-action="import-discovered-issue"' in discovered_script.text
+    assert 'data-action="delete-discovered-article"' in discovered_script.text
+    assert "api.createManualIssueGroup" in discovered_script.text
+    assert "api.patchBriefingIssue" in discovered_script.text
+    assert "기존 브리핑 중복" in discovered_script.text
 
     renderers_script = client.get("/js/ui/renderers.js")
     assert 'articles.js?v=20260723-1' in renderers_script.text
@@ -171,8 +180,8 @@ def test_index_html_is_served_at_root():
     assert "최대 2개 문단으로 작성하십시오." in report_draft_script.text
     assert "전체 분량은 공백 포함 약 1,000~1,400자" in report_draft_script.text
     assert "최대 1,600자를 넘지 마십시오." in report_draft_script.text
-    assert "④ 기타 동향" in report_draft_script.text
-    assert "④ 참고 동향" not in report_draft_script.text
+    assert "④ 정부부처 동향" in report_draft_script.text
+    assert "④ 기타 동향" not in report_draft_script.text
     assert "기사 ID, 이슈 ID, URL, 분석 적합도와 내부 분류값을 출력하지 마십시오." in (
         report_draft_script.text
     )

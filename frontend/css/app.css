@@ -533,12 +533,25 @@ a { color: inherit; }
 .discovered-empty { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .discovered-issue { border: 1px solid var(--line); border-radius: 12px; background: var(--soft); padding: 14px 16px; }
 .discovered-issue-head { display: flex; gap: 12px; align-items: flex-start; }
+.discovered-issue-head > div { min-width: 0; flex: 1; }
 .discovered-rank { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 999px; background: #326c9c; color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
 .discovered-issue-head h3 { margin: 0; font-size: 14px; line-height: 1.4; }
 .discovered-count { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
 .discovered-links { list-style: none; margin: 10px 0 0; padding: 0 0 0 38px; display: grid; gap: 6px; }
-.discovered-links li { font-size: 12px; line-height: 1.45; }
+.discovered-links li { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.45; }
+.discovered-article-label { min-width: 0; flex: 1; }
 .discovered-source { color: var(--muted); font-size: 11px; }
+.discovered-article-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+.discovered-import-one, .discovered-import-all, .discovered-delete-one { border: 1px solid #8bb2d3; border-radius: 7px; background: #fff; color: #245d92; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.discovered-import-one { flex: 0 0 auto; padding: 4px 7px; }
+.discovered-delete-one { padding: 4px 7px; border-color: #d9aaa5; color: #9f3434; }
+.discovered-import-all { flex: 0 0 auto; min-height: 31px; padding: 6px 10px; background: #edf6ff; }
+.discovered-import-one:hover:not(:disabled), .discovered-import-all:hover:not(:disabled) { border-color: #2472b8; background: #e4f2ff; }
+.discovered-delete-one:hover:not(:disabled) { background: #fff1ef; }
+.discovered-import-one:disabled, .discovered-import-all:disabled, .discovered-delete-one:disabled { cursor: default; opacity: .55; }
+.discovered-duplicate, .discovered-overlap { display: inline-block; margin-top: 6px; padding: 3px 7px; border-radius: 999px; font-size: 9px; font-weight: 800; }
+.discovered-duplicate { background: #fff0dd; color: #985b0b; }
+.discovered-overlap { background: #e9f2f8; color: #326c9c; }
 .history-item { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(280px, 1.2fr); gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
 .history-summary strong { color: var(--navy); font-size: 14px; }
 .history-summary small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }

@@ -14,7 +14,7 @@ from backend.app.services.deduplication.fuzzy import bigram_similarity
 
 # 같은 사건으로 볼 판단 임계값. 제목 문자 bigram 유사도이거나, 핵심 토큰이 겹치면 묶는다.
 _BIGRAM_THRESHOLD = 0.55
-_SHARED_TOKEN_MIN = 2
+_SHARED_TOKEN_MIN = 3
 # 노출 정책(담당자 확정값): 같은 사건 5건 이상만 '이슈'로 보고, 큰 순으로 최대 5개까지.
 DEFAULT_MIN_ARTICLES = 5
 DEFAULT_MAX_ISSUES = 5
@@ -75,29 +75,13 @@ def _similar(a_norm: str, a_tokens: frozenset[str], b_norm: str, b_tokens: froze
     return len(a_tokens & b_tokens) >= _SHARED_TOKEN_MIN
 
 
-def _clusters_touch(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    return any(
-        _similar(a["norm"], a["tokens"], b["norm"], b["tokens"])
-        for a in left["members"]
-        for b in right["members"]
+def _similar_to_majority(item: dict[str, Any], cluster: dict[str, Any]) -> bool:
+    members = cluster["members"]
+    similar_count = sum(
+        _similar(item["norm"], item["tokens"], member["norm"], member["tokens"])
+        for member in members
     )
-
-
-def _merge_clusters(clusters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    merged = True
-    while merged:
-        merged = False
-        result: list[dict[str, Any]] = []
-        for cluster in clusters:
-            for existing in result:
-                if _clusters_touch(existing, cluster):
-                    existing["members"].extend(cluster["members"])
-                    merged = True
-                    break
-            else:
-                result.append({"members": list(cluster["members"])})
-        clusters = result
-    return clusters
+    return similar_count * 2 > len(members)
 
 
 def discover_issues(
@@ -128,20 +112,13 @@ def discover_issues(
     for item in prepared:
         target = None
         for cluster in clusters:
-            if any(
-                _similar(item["norm"], item["tokens"], member["norm"], member["tokens"])
-                for member in cluster["members"]
-            ):
+            if _similar_to_majority(item, cluster):
                 target = cluster
                 break
         if target is None:
             clusters.append({"members": [item]})
         else:
             target["members"].append(item)
-
-    # 단일 패스 그리디는 처리 순서에 따라 같은 사건이 갈라질 수 있으므로, 더 이상 합쳐지지
-    # 않을 때까지 서로 겹치는 클러스터를 병합한다.
-    clusters = _merge_clusters(clusters)
 
     issues = []
     for cluster in clusters:

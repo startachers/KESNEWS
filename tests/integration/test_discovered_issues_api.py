@@ -45,10 +45,10 @@ def test_discovered_issues_returns_big_event_and_excludes_entertainment():
     report_date = "2026-07-23"
     fire = [
         _article("경남 창원 공장 화재로 2명 사망", "한겨레"),
-        _article("창원 공장서 큰불…2명 숨져", "중앙일보"),
-        _article("창원 공장 화재 사망자 2명 확인", "동아일보"),
-        _article("창원 공장 화재 원인 조사 착수", "경향신문"),
-        _article("창원 공장 화재 소방 대응 2단계", "서울신문"),
+        _article("경남 창원 공장 화재…2명 숨져", "중앙일보"),
+        _article("경남 창원 공장 화재 사망자 2명 확인", "동아일보"),
+        _article("경남 창원 공장 화재 원인 조사 착수", "경향신문"),
+        _article("경남 창원 공장 화재 소방 대응 2단계", "서울신문"),
     ]
     entertainment = [
         _article("인기 아이돌 그룹 컴백 무대 화제", "스포츠서울"),
@@ -77,3 +77,119 @@ def test_discovered_issues_empty_when_no_pool():
     data = response.json()["data"]
     assert data["pooledCount"] == 0
     assert data["issues"] == []
+
+
+def test_discovered_issue_articles_can_be_imported_grouped_and_trimmed():
+    report_date = "2026-07-24"
+    briefing = client.put(
+        f"/api/briefings/{report_date}",
+        json={"expectedRevision": 0, "patch": {}},
+    ).json()["data"]
+    articles = [
+        _article(f"인천 물류센터 화재 진화 작업 {index}", f"매체{index}")
+        for index in range(5)
+    ]
+    _seed_pool(report_date, articles)
+    issue = client.get(
+        "/api/collections/discovered-issues",
+        params={"report_date": report_date},
+    ).json()["data"]["issues"][0]
+
+    imported_ids = []
+    for article in issue["articles"]:
+        imported = client.post(
+            "/api/articles",
+            json={
+                "reportDate": report_date,
+                "title": article["title"],
+                "source": article["source"],
+                "url": article["url"],
+                "pubDate": article["publishedAt"],
+                "category": "other",
+                "forcedRisk": "auto",
+            },
+        )
+        assert imported.status_code == 200
+        imported_ids.append(imported.json()["data"]["id"])
+
+    grouped = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": imported_ids,
+            "expectedRevision": briefing["revision"],
+        },
+    )
+    assert grouped.status_code == 200
+    grouped_data = grouped.json()["data"]
+    assert grouped_data["issue"]["manualGroup"] is True
+    assert set(grouped_data["issue"]["articleIds"]) == set(imported_ids)
+
+    trimmed = client.patch(
+        f"/api/briefings/{report_date}/issues/{grouped_data['issue']['id']}",
+        json={
+            "expectedRevision": grouped_data["revision"],
+            "articleId": imported_ids[-1],
+            "membershipAction": "remove",
+        },
+    )
+    assert trimmed.status_code == 200
+    visible = client.get(
+        "/api/issues",
+        params={"report_date": report_date},
+    ).json()["data"]["issues"]
+    saved_group = next(item for item in visible if item["id"] == grouped_data["issue"]["id"])
+    assert imported_ids[-1] not in saved_group["articleIds"]
+    assert set(imported_ids[:-1]).issubset(saved_group["articleIds"])
+
+
+def test_overlapping_discovered_import_extends_existing_group_without_replacing_it():
+    report_date = "2026-07-25"
+    briefing = client.put(
+        f"/api/briefings/{report_date}",
+        json={"expectedRevision": 0, "patch": {}},
+    ).json()["data"]
+
+    article_ids = []
+    for index in range(3):
+        created = client.post(
+            "/api/articles",
+            json={
+                "reportDate": report_date,
+                "title": f"기존 브리핑 중복 이슈 기사 {index}",
+                "source": f"매체{index}",
+                "url": f"https://news.example/existing-issue/{index}",
+                "category": "other",
+            },
+        )
+        assert created.status_code == 200
+        article_ids.append(created.json()["data"]["id"])
+
+    grouped = client.post(
+        "/api/issues/manual-group",
+        json={
+            "reportDate": report_date,
+            "articleIds": article_ids[:2],
+            "expectedRevision": briefing["revision"],
+        },
+    ).json()["data"]
+    issue_id = grouped["issue"]["id"]
+
+    extended = client.patch(
+        f"/api/briefings/{report_date}/issues/{issue_id}",
+        json={
+            "expectedRevision": grouped["revision"],
+            "articleId": article_ids[2],
+            "membershipAction": "add",
+        },
+    )
+    assert extended.status_code == 200
+
+    issues = client.get(
+        "/api/issues",
+        params={"report_date": report_date},
+    ).json()["data"]["issues"]
+    manual_groups = [issue for issue in issues if issue["manualGroup"]]
+    assert len(manual_groups) == 1
+    assert manual_groups[0]["id"] == issue_id
+    assert set(manual_groups[0]["articleIds"]) == set(article_ids)

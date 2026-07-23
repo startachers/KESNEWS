@@ -91,11 +91,11 @@ def test_top_issues_capped_and_sorted_by_size():
         ],
         "광주 도심 정전": [
             "광주 도심 대규모 정전 발생",
-            "광주 정전으로 신호등 마비",
-            "광주 한때 정전에 시민 불편",
+            "광주 도심 정전으로 신호등 마비",
+            "광주 도심 한때 정전에 시민 불편",
             "광주 도심 정전 복구 완료",
-            "광주 정전 원인 변전소 고장",
-            "광주 정전 피해 신고 속출",
+            "광주 도심 정전 원인 변전소 고장",
+            "광주 도심 정전 피해 신고 속출",
         ],
         "울산 화학공장 누출": [
             "울산 화학공장 유독가스 누출",
@@ -115,6 +115,29 @@ def test_top_issues_capped_and_sorted_by_size():
     assert len(issues) == 2
     assert issues[0]["articleCount"] == 7
     assert issues[1]["articleCount"] == 6
+
+
+def test_bridge_article_does_not_chain_different_events_into_one_issue():
+    rows = [
+        _row("서울 지하철 정전으로 운행 중단", "서울신문"),
+        _row("서울 지하철 정전 원인 조사", "경향신문"),
+        _row("서울 지하철 정전 복구 작업", "국민일보"),
+        # '정전·복구·작업'으로 위 기사 하나와 닿지만, 뒤의 제주 태풍 기사에 속한다.
+        _row("제주 태풍 피해 정전 복구 작업", "한겨레"),
+        _row("제주 태풍 피해로 도로 통제", "중앙일보"),
+        _row("제주 태풍 피해 주민 긴급 대피", "동아일보"),
+        _row("제주 태풍 피해 복구 지원 착수", "연합뉴스"),
+    ]
+
+    issues = discover_issues(rows, min_articles=3)
+
+    assert sorted(issue["articleCount"] for issue in issues) == [3, 4]
+    for issue in issues:
+        titles = [article["title"] for article in issue["articles"]]
+        assert not (
+            any("서울 지하철" in title for title in titles)
+            and any("제주 태풍" in title for title in titles)
+        )
 
 
 def test_is_entertainment_or_sports_flags():
