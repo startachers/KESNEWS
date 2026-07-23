@@ -5,13 +5,13 @@ import { setStatus, showToast } from "./ui/notifications.js?v=20260716-1";
 import { renderAll } from "./ui/renderers.js?v=20260720-3";
 import { openSettings, saveSettingsFromForm, resetSettingsForm, restartServerFromSettings, openArticleModal, addManualArticle, openOverlay, closeOverlay, populateStaticControls } from "./ui/dialogs.js?v=20260720-1";
 import { runSearch } from "./features/collection.js?v=20260723-21";
-import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js?v=20260722-1";
+import { setRuleSummary, handleAiAnalysisAction, checkAiServer, renderSummary, renderAiSummaryStatus } from "./features/ai-analysis.js?v=20260723-7";
 import { persistAndRender, handleArticleChange, handleArticleInput, handleArticleClick, handleTopIssuesClick, renderArticles, createManualGroup, openManualGroupPicker, closeManualGroupPicker, handleManualGroupPickerChange, handleManualGroupSearch } from "./features/articles.js?v=20260723-1";
 import { importFile, exportJson, exportCsv, copySummary, changeReportDate, cancelFinalization, openPreview, openFinalReport, resetTodayWork } from "./features/data-io.js?v=20260722-2";
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
-import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260722-3";
+import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260723-7";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260721-1";
 import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
 
