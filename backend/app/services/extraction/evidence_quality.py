@@ -205,6 +205,10 @@ def _apply_publisher_status(
     article: dict[str, Any],
     quality: dict[str, Any],
 ) -> dict[str, Any]:
+    # 담당자가 직접 확인·입력한 수동 본문은 사람이 근거를 검증한 것이므로 언론사 격리·
+    # 자동 품질 판정과 무관하게 항상 분석 근거로 사용한다(생성 로직과 동일 원칙).
+    if article.get("manualBodyOverride"):
+        return {**quality, "analysisEligible": True, "representativeSelectable": True}
     config = load_config()
     publisher = article.get("publisherId") or article.get("source")
     blocked = set(config.get("disabled_publishers") or [])

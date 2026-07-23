@@ -10,7 +10,7 @@ from backend.app.services.analysis_markdown.replacement_finder import (
 )
 from backend.app.services.analysis_markdown.service import _prepare
 from backend.app.services.extraction.cleaner import clean_article_text
-from backend.app.services.extraction.evidence_quality import assess
+from backend.app.services.extraction.evidence_quality import _apply_publisher_status, assess
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
 
 
@@ -106,6 +106,35 @@ def test_prepare_uses_eligible_official_rss_when_stored_page_body_is_contaminate
     assert prepared["status"] == "success_summary"
     assert prepared["extractionMethod"] == "official_rss"
     assert prepared["rawText"] == article["description"]
+
+
+def test_manual_body_override_always_passes_without_replacement(monkeypatch):
+    # 담당자가 확인·입력한 수동 본문은 자동 품질 판정으로 걸러지는 짧은/오염 본문이어도
+    # 그대로 근거로 통과해야 하며, 네트워크 재추출로 덮어써서도 안 된다.
+    def fail_if_called(*args, **kwargs):  # pragma: no cover - 호출되면 테스트 실패
+        raise AssertionError("수동 본문은 네트워크 재추출을 시도하면 안 된다")
+
+    monkeypatch.setattr(
+        "backend.app.services.analysis_markdown.service.fetch_article_body_with_retries",
+        fail_if_called,
+    )
+    article = {
+        "id": "manual-1",
+        "title": "춘천서 낙뢰로 신호등 고장",
+        "source": "연합뉴스",
+        "rawSource": "연합뉴스",
+        "url": "https://www.yna.co.kr/view/AKR1",
+        "canonicalUrl": "https://www.yna.co.kr/view/AKR1",
+        "pubDate": "2026-07-23T01:00:00Z",
+        "bodyText": "많이 본 뉴스 로그인",
+        "manualBodyOverride": True,
+    }
+
+    prepared = _prepare(article, CONFIG, allow_network=True)
+
+    assert prepared["analysisEligible"] is True
+    assert prepared["failureReason"] == ""
+    assert prepared["rawText"] == article["bodyText"]
 
 
 def test_clean_full_text_remains_eligible_after_page_extras_are_removed():
@@ -329,3 +358,29 @@ def test_publisher_quality_warning_and_quarantine_calculation():
     stats = {item["publisherId"]: item for item in publisher_statistics(connection, CONFIG)}
     assert stats["bad"]["status"] == "quarantine"
     assert stats["new"]["status"] == "warning"
+
+
+def test_publisher_quarantine_never_blocks_manual_body_override():
+    # 담당자 확인 본문은 언론사가 격리 상태여도 화면·대표 선정 판정에서 항상 통과해야 한다.
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("""CREATE TABLE publisher_extraction_events (
+        id TEXT, article_id TEXT, publisher_id TEXT, publisher_name TEXT,
+        extraction_status TEXT, analysis_eligible INTEGER, noise_detected INTEGER,
+        ai_content_detected INTEGER, access_blocked INTEGER, failure_reason TEXT,
+        attempted_at TEXT, cleaning_rule_version TEXT)""")
+    for index in range(10):
+        connection.execute(
+            "INSERT INTO publisher_extraction_events VALUES (?, 'a', 'yonhap', '연합뉴스', 'failed', 0, 0, 0, 1, 'access_blocked', ?, 'article-clean-v2.3')",
+            (str(index), f"2026-07-{index + 1:02d}"),
+        )
+    quality = {"analysisEligible": True, "contentQualityScore": 82, "qualityGrade": "good", "qualityReasons": ["전문 확보"]}
+
+    auto = _apply_publisher_status(connection, {"publisherId": "yonhap"}, dict(quality))
+    manual = _apply_publisher_status(
+        connection, {"publisherId": "yonhap", "manualBodyOverride": True}, dict(quality)
+    )
+
+    assert auto["analysisEligible"] is False  # 자동 기사는 격리 언론사라 차단
+    assert manual["analysisEligible"] is True  # 수동 본문은 통과
+    assert manual["contentQualityScore"] == 82  # 59로 캡되지 않음

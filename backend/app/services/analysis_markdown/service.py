@@ -43,6 +43,9 @@ class GenerationOutput:
 
 
 def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
+    # 담당자가 직접 확인·입력한 수동 본문은 사람이 검증한 근거다. RSS 요약으로 대체하거나
+    # 네트워크로 재추출해 덮어쓰지 않고, 자동 품질 판정과 무관하게 분석 근거로 통과시킨다.
+    manual_override = bool(article.get("manualBodyOverride"))
     raw = article.get("bodyText") or ""
     status = "success_full" if raw else "failed"
     attempts: tuple[dict[str, str], ...] = ()
@@ -56,7 +59,7 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
         attempts = ({"stage": "official_rss", "status": "success"},)
     cleaning = clean_article_text(raw, title=article.get("title") or "")
     eligibility = evaluate(cleaning, status=status, url=resolved_url, config=config)
-    if not eligibility.eligible and article.get("description"):
+    if not manual_override and not eligibility.eligible and article.get("description"):
         summary_raw = article["description"]
         summary_cleaning = clean_article_text(
             summary_raw, title=article.get("title") or ""
@@ -73,7 +76,7 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
             cleaning = summary_cleaning
             eligibility = summary_eligibility
             attempts = ({"stage": "official_rss", "status": "success"},)
-    if allow_network and (not eligibility.eligible or status != "success_full") and article.get("url"):
+    if not manual_override and allow_network and (not eligibility.eligible or status != "success_full") and article.get("url"):
         def acceptable_body(body: str, body_url: str) -> bool:
             candidate_cleaning = clean_article_text(body, title=article.get("title") or "")
             return evaluate(
@@ -150,6 +153,9 @@ def _prepare(article: dict, config: dict, *, allow_network: bool) -> dict:
             (reason for reason in result["qualityReasons"] if reason in blocking_reasons),
             "quality_below_threshold",
         )
+    if manual_override:
+        result["analysisEligible"] = True
+        result["failureReason"] = ""
     return result
 
 
@@ -267,6 +273,11 @@ def save_manual_body(
         "cleaningRuleVersion": config["cleaning_rule_version"],
         **quality_result,
     }
+    # 담당자가 직접 확인·입력한 수동 본문은 자동 품질 판정과 무관하게 항상 근거로 통과시킨다.
+    prepared["manualBodyOverride"] = True
+    prepared["analysisEligible"] = True
+    prepared["representativeSelectable"] = True
+    prepared["failureReason"] = ""
     extraction_id = _save_extraction(connection, prepared)
     quality.record_event(connection, prepared, prepared)
     article_repo.upsert_manual_body_override(
@@ -537,6 +548,10 @@ def generate(
     finally:
         connection.close()
     for article in all_prepared:
+        # 언론사 격리는 자동 추출 품질을 불신하는 장치다. 담당자가 직접 확인·입력한
+        # 수동 본문은 사람이 근거를 검증한 것이므로 격리 대상에서 제외한다.
+        if article.get("manualBodyOverride"):
+            continue
         if (article.get("publisherId") or article.get("source")) in quarantine:
             article["analysisEligible"] = False
             article["failureReason"] = "publisher_quarantined"
@@ -546,10 +561,21 @@ def generate(
         if article["analysisEligible"]:
             continue
         validation_errors = article.get("validationErrors") or []
-        errors = serialize_errors(validation_errors) if validation_errors else [{
-            "code": "ARTICLE_ANALYSIS_INELIGIBLE", "status": "analysis_ineligible",
-            "message": "기사 근거가 현재 분석 정책을 통과하지 못했습니다.",
-        }]
+        if validation_errors:
+            errors = serialize_errors(validation_errors)
+        elif article.get("failureReason") == "publisher_quarantined":
+            errors = [{
+                "code": "PUBLISHER_QUARANTINED", "status": "analysis_ineligible",
+                "message": (
+                    f"'{article.get('source') or '해당'}' 언론사가 추출 품질 저하로 격리되어 "
+                    "자동 근거로 사용할 수 없습니다. 본문을 직접 확인·입력하면 사용할 수 있습니다."
+                ),
+            }]
+        else:
+            errors = [{
+                "code": "ARTICLE_ANALYSIS_INELIGIBLE", "status": "analysis_ineligible",
+                "message": "기사 근거가 현재 분석 정책을 통과하지 못했습니다.",
+            }]
         invalid_selected.append({
             "articleId": article["id"], "title": article.get("title") or "",
             "issueId": article.get("issueId") or None,
