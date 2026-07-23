@@ -12,7 +12,7 @@ from backend.app.services.deduplication.fuzzy import bigram_similarity
 from backend.app.services.normalization.dates import date_value
 from backend.app.services.review_priority import rank_issues
 
-ALGORITHM_VERSION = "event-aware-title-tfidf-v3"
+ALGORITHM_VERSION = "event-aware-title-tfidf-v4"
 PAIR_THRESHOLD = 0.40
 MAJOR_OUTLETS = {
     "연합뉴스", "KBS", "MBC", "SBS", "조선일보", "중앙일보", "동아일보", "한겨레", "경향신문"
@@ -46,6 +46,7 @@ def input_signature(articles: list[dict[str, Any]]) -> str:
             item.get("relevanceScore"),
             item.get("severityScore"),
             item.get("directMention"),
+            item.get("governmentPressRelease"),
             item.get("originType"),
             item.get("pressReleaseId"),
         ]
@@ -115,6 +116,10 @@ def _event_anchors(article: dict[str, Any]) -> set[str]:
 def pair_score(
     left: dict[str, Any], right: dict[str, Any], left_vector: dict[str, float], right_vector: dict[str, float]
 ) -> float:
+    # 정부부처가 직접 배포한 자료는 그 자체가 화면의 독립 항목이다. 정책자료끼리 반복되는
+    # 서식 문구나 언론기사와의 제목 유사성으로 자동 관련기사 묶음을 만들지 않는다.
+    if left.get("governmentPressRelease") or right.get("governmentPressRelease"):
+        return 0.0
     if (
         left.get("pressReleaseId")
         and left.get("pressReleaseId") == right.get("pressReleaseId")

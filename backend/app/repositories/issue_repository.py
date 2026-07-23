@@ -22,6 +22,16 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
         SELECT a.id, a.title, a.description, a.source, a.published_at,
                aa.auto_relevance_score, aa.auto_severity_score, aa.auto_reasons_json,
                COALESCE(aa.final_event_type, aa.auto_event_type) AS event_type,
+               EXISTS (
+                   SELECT 1
+                   FROM article_observations government_observation
+                   WHERE government_observation.article_id = a.id
+                     AND government_observation.provider IN (
+                         '국무조정실 보도자료',
+                         '기후에너지환경부 보도자료',
+                         '정책브리핑 API'
+                     )
+               ) AS is_government_press_release,
                COALESCE(aoa.final_origin_type, aoa.auto_origin_type) AS origin_type,
                CASE
                    WHEN aoa.final_origin_type = 'independent' THEN NULL
@@ -53,6 +63,7 @@ def clustering_input(connection: sqlite3.Connection, report_date: str) -> list[d
                 "severityScore": row["auto_severity_score"] or 0,
                 "eventType": row["event_type"] or "general",
                 "directMention": bool(reasons.get("directMention")),
+                "governmentPressRelease": bool(row["is_government_press_release"]),
                 "originType": row["origin_type"],
                 "pressReleaseId": row["press_release_id"],
                 "pressReleaseTitle": row["press_release_title"],

@@ -180,6 +180,51 @@ def test_cluster_proposal_apply_and_issue_list_keep_distinct_articles():
     assert {item["id"] for item in articles} == {first, second, unrelated}
 
 
+def test_government_press_release_observations_are_not_auto_grouped():
+    report_date = "2027-12-31"
+    _create_briefing(report_date)
+    first = _create_article(
+        report_date,
+        "government-1",
+        "정부, 블록체인 기반 예금토큰 민간 인프라 확산",
+        "과학기술정보통신부",
+        "2027-12-31T05:00:00Z",
+    )
+    second = _create_article(
+        report_date,
+        "government-2",
+        "정부, 블록체인 기반 디지털 산업 인프라 확산",
+        "문화체육관광부",
+        "2027-12-31T06:00:00Z",
+    )
+    connection = get_connection()
+    try:
+        with connection:
+            connection.execute(
+                "UPDATE article_observations SET provider = '정책브리핑 API' "
+                "WHERE article_id IN (?, ?)",
+                (first, second),
+            )
+    finally:
+        connection.close()
+
+    proposed = client.post(
+        "/api/cluster-runs",
+        json={
+            "reportDate": report_date,
+            "asOf": "2027-12-31T12:00:00Z",
+            "similarityThreshold": 0.15,
+        },
+    )
+
+    assert proposed.status_code == 200
+    proposal = proposed.json()["data"]["proposal"]
+    assert {frozenset(issue["articleIds"]) for issue in proposal} == {
+        frozenset({first}),
+        frozenset({second}),
+    }
+
+
 def test_cluster_run_accepts_similarity_threshold_and_rejects_out_of_range():
     report_date = "2026-08-05"
     _create_briefing(report_date)

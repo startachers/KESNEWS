@@ -123,7 +123,35 @@ def test_same_event_clusters_when_headlines_use_different_wording_and_number_uni
 
     assert len(clusters) == 1
     assert set(clusters[0]["articleIds"]) == {"a1", "a2"}
-    assert clusters[0]["autoReasons"]["algorithmVersion"] == "event-aware-title-tfidf-v3"
+    assert clusters[0]["autoReasons"]["algorithmVersion"] == "event-aware-title-tfidf-v4"
+
+
+def test_government_press_releases_always_remain_independent_cards():
+    clusters = build_clusters(
+        [
+            _article(
+                "policy-1",
+                title="정부, 블록체인 기반 예금토큰 민간 인프라 확산",
+                description="정부는 정책 추진 계획과 향후 일정을 발표했다",
+                source="과학기술정보통신부",
+                governmentPressRelease=True,
+            ),
+            _article(
+                "policy-2",
+                title="정부, 블록체인 기반 디지털 산업 인프라 확산",
+                description="정부는 정책 추진 계획과 향후 일정을 발표했다",
+                source="문화체육관광부",
+                governmentPressRelease=True,
+            ),
+        ],
+        AS_OF,
+        pair_threshold=0.15,
+    )
+
+    assert {frozenset(cluster["articleIds"]) for cluster in clusters} == {
+        frozenset({"policy-1"}),
+        frozenset({"policy-2"}),
+    }
 
 
 def test_broad_threshold_does_not_merge_unrelated_fires_without_shared_event_details():
@@ -233,6 +261,7 @@ def test_input_signature_covers_values_used_by_clustering():
         ("relevanceScore", 41),
         ("severityScore", 84),
         ("directMention", True),
+        ("governmentPressRelease", True),
         ("originType", "kesco_based"),
         ("pressReleaseId", "kesco:171545"),
     ):

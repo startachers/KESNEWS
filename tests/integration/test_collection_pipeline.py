@@ -696,6 +696,85 @@ def test_policy_briefing_button_saves_and_displays_every_returned_item(monkeypat
     assert {item["title"] for item in government} == {"산업부 보도자료", "고용부 보도자료"}
 
 
+@pytest.mark.parametrize(
+    ("report_date", "first_endpoint", "second_endpoint"),
+    [
+        ("2028-01-21", "/api/government-press-releases/collections", "/api/collections"),
+        ("2028-03-22", "/api/collections", "/api/government-press-releases/collections"),
+    ],
+)
+def test_media_and_government_collection_order_preserves_existing_articles(
+    monkeypatch, report_date, first_endpoint, second_endpoint
+):
+    monkeypatch.setenv("POLICY_BRIEFING_SERVICE_KEY", "test-key")
+    media_url = (
+        "https://www.yna.co.kr/view/AKR"
+        f"{report_date.replace('-', '')}0001-preserve-order"
+    )
+    government_url = (
+        "https://www.korea.kr/briefing/pressReleaseView.do?newsId="
+        f"{report_date.replace('-', '')}"
+    )
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_yonhap_rss",
+        lambda *a, **k: _yonhap_result(
+            media_url,
+            f"{report_date}T09:00:00Z",
+            title=f"한국전기안전공사 {report_date} 수집 순서 보존 언론기사",
+        ),
+    )
+    monkeypatch.setattr(collector_module, "fetch_google_rss", lambda *a, **k: [])
+    monkeypatch.setattr(
+        collector_module,
+        "fetch_policy_briefing",
+        lambda *a, **k: {
+            "items": [
+                {
+                    "id": f"raw-policy-{report_date}",
+                    "sourceId": f"policy-briefing:{report_date}",
+                    "title": f"{report_date} 수집 순서 보존 정부 보도자료",
+                    "source": "문화체육관광부",
+                    "url": government_url,
+                    "pubDate": f"{report_date}T08:00:00Z",
+                    "description": "정부 정책 발표 원문",
+                    "provider": "정책브리핑 API",
+                }
+            ],
+            "provider": "정책브리핑 API",
+        },
+    )
+    payload = _base_payload(
+        reportDate=report_date,
+        enableYonhap=True,
+        enableOpmPress=False,
+        enableMePress=False,
+    )
+
+    first = client.post(first_endpoint, json=payload)
+    assert first.status_code == 200
+    before = _articles(report_date)["data"]["articles"]
+    assert len(before) == 1
+    preserved = {
+        key: before[0][key]
+        for key in ("id", "title", "source", "url", "description", "governmentPressRelease")
+    }
+
+    second = client.post(second_endpoint, json=payload)
+    assert second.status_code == 200
+    after = _articles(report_date)["data"]["articles"]
+
+    assert len(after) == 2
+    assert preserved in [
+        {
+            key: article[key]
+            for key in ("id", "title", "source", "url", "description", "governmentPressRelease")
+        }
+        for article in after
+    ]
+    assert {article["url"] for article in after} == {media_url, government_url}
+
+
 def test_legacy_unclassified_article_is_hidden_unless_editor_state_exists(monkeypatch):
     report_date = "2025-01-23"
     url = "https://www.yna.co.kr/view/AKR2026072300001-legacy"
