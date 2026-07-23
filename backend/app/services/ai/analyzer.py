@@ -85,6 +85,9 @@ def select_articles(articles: list[dict[str, Any]], limit: int = 20) -> list[dic
 def build_evidence_input(
     articles: list[dict[str, Any]], issue_ids_by_article: dict[str, list[str]] | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    # 지연 import: article_selection이 analyzer(AiClient)를 import하므로 순환 참조 회피
+    from backend.app.services.ai.article_selection import is_government_article
+
     issue_ids_by_article = issue_ids_by_article or {}
     inputs: list[dict[str, Any]] = []
     evidence: dict[str, str] = {}
@@ -99,6 +102,7 @@ def build_evidence_input(
                 "source": article.get("source") or "",
                 "publishedAt": article.get("pubDate"),
                 "content": article.get("bodyText") or article.get("description") or "",
+                "governmentSource": is_government_article(article),
                 "bodyStatus": (
                     "full_text"
                     if article.get("bodyText")

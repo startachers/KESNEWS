@@ -242,7 +242,7 @@ def test_preview_and_report_routes_are_read_only_and_versioned():
     assert latest.headers["cache-control"] == "no-store"
     assert specified.headers["cache-control"] == "no-store"
     assert "최종본 v1" in latest.text
-    assert "onclick=\"window.print()\"" in latest.text
+    assert "onclick=\"downloadReportPdf()\"" in latest.text
     assert "편집 화면" not in latest.text
     assert "최종 확정" not in latest.text
     assert "AI 본문 요약" not in latest.text

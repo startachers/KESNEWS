@@ -168,7 +168,10 @@ def test_external_analysis_is_validated_saved_and_used_by_preview():
     assert "오늘 한줄" in preview.text
     assert "언론 동향 분석" in preview.text
     assert "경영 참고사항" in preview.text
-    assert "기타 동향" in preview.text
+    # 비정부 참고·모니터링 동향은 경영 참고사항으로 병합된다.
+    assert "현장 대응 확인" in preview.text
+    # 정부부처 기사가 없으면 정부부처 동향 섹션은 렌더되지 않는다.
+    assert "정부부처 동향" not in preview.text
     assert "참고 동향" not in preview.text
     assert "관련기사" in preview.text
     assert "분석 근거" not in preview.text

@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import Any
 
+from backend.app.services.ai.article_selection import is_government_article
 from backend.app.services.extraction.cleaner import clean_article_text, clean_text
 from backend.app.services.extraction.evidence_validation import body_errors, validate_source
 from backend.app.services.reports.report_draft import content_from_plain_text
@@ -145,7 +146,17 @@ def _render_trend_analysis(analysis: dict[str, Any]) -> str:
     return f'<div class="analysis-prose"><p>{_text(situation_text)}</p></div>'
 
 
-def _render_management_reference(analysis: dict[str, Any]) -> str:
+def _government_evidence_ids(evidence: dict[str, Any] | None) -> set[str]:
+    """스냅샷 evidence 맵에서 정부부처 기사에 대응하는 evidence id 집합."""
+    result: set[str] = set()
+    for evidence_id, entry in (evidence or {}).items():
+        article = (entry or {}).get("article") or {}
+        if is_government_article(article):
+            result.add(str(evidence_id))
+    return result
+
+
+def _action_item_texts(analysis: dict[str, Any]) -> list[str]:
     items: list[str] = []
     for item in analysis.get("actionItems") or []:
         if item.get("kescoJurisdiction") not in (None, "DIRECT", "COLLABORATIVE"):
@@ -155,16 +166,19 @@ def _render_management_reference(analysis: dict[str, Any]) -> str:
         action = str(item.get("action") or "").strip()
         if action:
             items.append(action)
-    if not items:
-        return '<p class="empty">직접적인 경영 현안은 제한적입니다.</p>'
-    combined = "\n\n".join(items)
-    return f'<div class="analysis-prose"><p>{_text(combined)}</p></div>'
+    return items
 
 
-def _render_monitoring_reference(analysis: dict[str, Any]) -> str:
+def _reference_issue_texts(
+    analysis: dict[str, Any], gov_ids: set[str], *, government: bool
+) -> list[str]:
+    """reference/MONITORING keyIssue 요약을 정부부처 여부로 분리해 반환."""
     items: list[str] = []
     for item in analysis.get("keyIssues") or []:
         if item.get("urgency") != "reference" and item.get("kescoJurisdiction") != "MONITORING":
+            continue
+        is_gov = bool(gov_ids.intersection(str(a) for a in item.get("articleIds") or []))
+        if is_gov != government:
             continue
         text = " ".join(
             value.strip()
@@ -176,10 +190,54 @@ def _render_monitoring_reference(analysis: dict[str, Any]) -> str:
         )
         if text:
             items.append(text)
+    return items
+
+
+def _render_management_reference(
+    analysis: dict[str, Any], evidence: dict[str, Any] | None = None
+) -> str:
+    gov_ids = _government_evidence_ids(evidence)
+    items = _action_item_texts(analysis)
+    # 정부부처가 아닌 참고·모니터링 동향은 경영 참고사항으로 병합한다.
+    items.extend(_reference_issue_texts(analysis, gov_ids, government=False))
     if not items:
-        return ""
+        return '<p class="empty">직접적인 경영 현안은 제한적입니다.</p>'
     combined = "\n\n".join(items)
     return f'<div class="analysis-prose"><p>{_text(combined)}</p></div>'
+
+
+def _covered_evidence_ids(analysis: dict[str, Any]) -> set[str]:
+    covered: set[str] = set()
+    for item in analysis.get("keyIssues") or []:
+        covered.update(str(a) for a in item.get("articleIds") or [])
+    return covered
+
+
+def _render_government_reference(
+    analysis: dict[str, Any], evidence: dict[str, Any] | None = None
+) -> str:
+    gov_ids = _government_evidence_ids(evidence)
+    if not gov_ids:
+        return ""
+    items = _reference_issue_texts(analysis, gov_ids, government=True)
+    combined = "\n\n".join(items)
+    prose = f'<div class="analysis-prose"><p>{_text(combined)}</p></div>' if items else ""
+    # WYSIWYG 보강: 담당자가 체크했으나 어떤 keyIssue에도 잡히지 않은 정부부처 기사는
+    # 제목·출처 한 줄로 남겨 누락되지 않게 한다.
+    covered = _covered_evidence_ids(analysis)
+    fallback_rows: list[str] = []
+    for evidence_id in sorted(gov_ids - covered):
+        article = ((evidence or {}).get(evidence_id) or {}).get("article") or {}
+        title = str(article.get("title") or "").strip()
+        if not title:
+            continue
+        source = str(article.get("source") or "").strip()
+        suffix = f' <span>{_text(source)}</span>' if source else ""
+        fallback_rows.append(f"<li>{_text(title)}{suffix}</li>")
+    fallback = (
+        f'<ul class="gov-extra">{"".join(fallback_rows)}</ul>' if fallback_rows else ""
+    )
+    return f"{prose}{fallback}"
 
 
 def _article_badges(item: dict[str, Any]) -> str:
@@ -576,6 +634,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     analysis = _analysis_for_display(
         report_draft.get("content") or ((ai_run.get("response") or {}).get("analysis") or {})
     )
+    evidence = snapshot.get("evidence") or {}
     weather_html = _render_weather(snapshot)
     article_count = len(snapshot.get("articles") or [])
     article_layout_class = " is-twelve" if article_count == 12 else ""
@@ -819,6 +878,7 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     .article .badges{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
     .article .desc{display:-webkit-box;align-self:start;min-width:0;height:calc(4.44em + 9px);margin:0;padding-top:8px;overflow:hidden;border-top:1px solid #cfd9dd;color:#4e5e67;font-size:13px;line-height:1.48;line-clamp:3;-webkit-box-orient:vertical;-webkit-line-clamp:3}
     .empty{color:#7c8991}
+    .gov-extra{margin:8px 0 0;padding-left:18px}.gov-extra li{margin:3px 0;font-size:13px;color:#4e5e67;line-height:1.45}.gov-extra li span{color:var(--muted);font-size:12px;margin-left:6px}
     .weather-section{margin-top:20px}.weather-heading{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #9eb0bb}.weather-heading h2{margin:0;border:0}.weather-heading small{padding-bottom:6px;color:var(--muted);font-size:10px}
     .weather-forecasts{display:grid;gap:4px;margin-top:5px}.weather-forecast{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:center;padding:6px 9px;border-left:4px solid var(--teal);background:#f4f8fa}.weather-forecast.weather-폭우{border-left-color:var(--red);background:#fdf4f4}.weather-forecast.weather-폭염{border-left-color:var(--amber);background:#fff8e9}.weather-forecast>strong{color:var(--navy);font-size:var(--copy-size);line-height:1.45}.weather-forecast>p{display:flex;flex-wrap:wrap;gap:2px 14px;margin:0;font-size:var(--copy-size);line-height:1.45}.weather-forecast>p b{color:var(--navy)}.weather-forecast>p span{color:#6f3030;font-weight:600}
     @media screen and (max-width:760px){main{width:calc(100% - 16px)}.report-page{width:100%;height:auto;min-height:0;padding:20px;overflow:visible}.page-inner{width:100%;transform:none}.masthead .top{display:block}.date{text-align:left;margin-top:12px}.weather-forecast{grid-template-columns:1fr;gap:2px}.articles,.articles.is-twelve{grid-template-columns:1fr;grid-template-rows:none;height:auto}.article{min-height:112px}.appendix-title{grid-template-columns:auto auto}.appendix-count{grid-column:1/-1;justify-self:start;margin-top:7px}}
@@ -837,8 +897,8 @@ def render_report(snapshot: dict[str, Any], *, preview: bool = False) -> str:
     <div class="body">
     <section class="section"><h2>① 오늘 한줄</h2>{_render_lead(analysis.get('managementMessage'))}</section>
     <section class="section trend-section"><h2>② 언론 동향 분석</h2>{_render_trend_analysis(analysis)}</section>
-    <section class="section"><h2>③ 경영 참고사항</h2>{_render_management_reference(analysis)}</section>
-    {f'<section class="section"><h2>④ 기타 동향</h2>{monitoring_reference}</section>' if (monitoring_reference := _render_monitoring_reference(analysis)) else ''}
+    <section class="section"><h2>③ 경영 참고사항</h2>{_render_management_reference(analysis, evidence)}</section>
+    {f'<section class="section"><h2>④ 정부부처 동향</h2>{government_reference}</section>' if (government_reference := _render_government_reference(analysis, evidence)) else ''}
     {weather_html}
     </div></div></section>
     <section class="report-page articles-page" data-fit-page><div class="page-inner">

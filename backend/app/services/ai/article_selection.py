@@ -47,6 +47,7 @@ GOVERNMENT_PATTERN = re.compile(
     r"기후에너지환경부|환경부|행정안전부|고용노동부|국토교통부|중소벤처기업부|"
     r"과학기술정보통신부|금융위원회|공정거래위원회"
 )
+SUPPLEMENTAL_GOVERNMENT_TARGET = 2
 ECONOMY_PATTERN = re.compile(
     r"경제|금리|물가|환율|성장률|국내총생산|GDP|전기요금|에너지요금|공공요금|유가",
     re.IGNORECASE,
@@ -101,6 +102,17 @@ class SelectionOutput:
     result: dict[str, Any]
     raw_response: str
     attempts: int
+
+
+def is_government_article(article: dict[str, Any]) -> bool:
+    """정부부처 보도자료(공식 provider) 또는 정부 메시지 카테고리 기사 여부.
+
+    프론트엔드 정부부처 필터(governmentPressRelease + 정부 카테고리 그룹)와
+    동일한 집합을 결정론적으로 판정한다. 선정·분석·렌더 전 구간 공용.
+    """
+    return bool(article.get("governmentPressRelease")) or (
+        str(article.get("category") or "") in GOVERNMENT_CATEGORIES
+    )
 
 
 def article_topic_groups(article: dict[str, Any]) -> list[str]:
@@ -367,6 +379,8 @@ def _prompt(
 rank 1~{min(CORE_SELECTION_COUNT, target_count)}는 공사 직접성·법정업무 연관성을 우선하는 핵심 선정이다.
 rank {CORE_SELECTION_COUNT + 1} 이후는 CEO 경영 시야를 위한 추가 참고로, 공사 직접 관련이 낮아도
 정부정책·거시경제·AI 중요 동향을 포함할 수 있다: {json.dumps(preferred_labels, ensure_ascii=False)}.
+추가 참고 구간에는 topicGroups에 government이 있는 정부부처 동향을 후보가 있으면
+최소 {SUPPLEMENTAL_GOVERNMENT_TARGET}건 우선 포함한다(후보가 부족하면 있는 만큼만).
 후보의 topicGroups를 참고하고 일반 동향을 공사 직접 기사인 것처럼 설명하지 않는다.
 각 추천은 articleFact(기사에 명시된 사실), kescoRelevance(공사와의 연결),
 selectionReason(CEO 보고 가치)을 분리해 작성한다. 연관성을 추정하면 추정임을 명시한다.
@@ -404,6 +418,7 @@ def _completion_prompt(
 rank {start_rank}~{end_rank}로 변환한다. 품질 판단을 이유로 개수를 줄이지 않는다.
 보충 응답의 앞 {core_needed}건은 공사 직접 언급·법정업무·전기안전 관련 후보를 우선하고,
 나머지는 정부정책·거시경제·AI 중요 동향을 포함할 수 있다: {json.dumps(preferred_labels, ensure_ascii=False)}.
+정부부처 동향(topicGroups에 government) 후보가 있으면 우선 포함한다.
 각 추천은 articleFact, kescoRelevance, selectionReason을 기사 근거 안에서 작성한다.
 후보 ID만 사용하고 JSON 객체만 출력한다.
 

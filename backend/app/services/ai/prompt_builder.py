@@ -44,6 +44,9 @@ def build_basis_prompt(report_date: str, prepared_by: str, articles: list[dict[s
 - jurisdictionReason와 excludedElements에 소관 판단 근거와 제외할 건축·소방 등 요소를 적는다.
 - actionLevel과 ownerType은 공사의 실제 권한 수준에 맞춘다.
 - OUT_OF_SCOPE이면 managementRecommendation을 비우고 actionLevel을 exclude로 둔다.
+- governmentSource=true 기사(정부부처 보도자료·정부 메시지)는 공사 소관과 무관하게 section을
+  reference로 두고, 정책·제도 동향을 1~2문장으로 요약한다. OUT_OF_SCOPE여도 요약을 생략하지
+  않으며(managementRecommendation은 비운 채) articleFact·kescoInterpretation에 동향과 시사점만 담는다.
 
 [보고 정보]
 보고일: {report_date}
@@ -90,6 +93,9 @@ def build_prompt(
 - 전기적 원인이 not_confirmed이면 검사체계 미비를 단정하거나 점검 항목 변경을 직접 제안하지 않는다.
 - 적절한 제언이 없으면 빈 목록으로 두며 개수를 억지로 채우지 않는다.
 - 입력 기사에 없는 공사 내부 AI 도입 현황, 사고 세부사항, 해외 사례, 수치, 설비·정책명을 추가하지 않는다.
+- governmentSource=true 기사는 공사 소관과 무관하게 keyIssues에 urgency=reference 항목으로 남겨
+  정부 정책·제도 동향을 summary·managementImpact에 요약한다. OUT_OF_SCOPE·MONITORING이어도 누락하지
+  않되, recommendation은 비우고 공사가 즉시 반영·개정한다고 쓰지 않는다.
 
 [보고 정보]
 보고일: {report_date}
