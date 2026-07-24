@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.services.extraction.article_body import BodyFetchResult
+from backend.app.services.reports.report_draft import normalize_plain_text_content
 from backend.app.services.reports.renderer import _analysis_for_display
 
 client = TestClient(app)
@@ -72,6 +73,36 @@ def test_legacy_single_field_external_analysis_is_split_for_display_only():
     assert displayed["situationSummary"]["text"] == "현장 흐름을 분석합니다."
     assert displayed["actionItems"][0]["action"] == "내부 체계를 살펴봅니다."
     assert legacy["managementMessage"]["text"].startswith("1. 언론 동향 시사점")
+
+
+def test_nested_plain_text_draft_keeps_first_user_edited_section():
+    nested = {
+        "managementMessage": {
+            "text": (
+                "① 오늘 한줄\n오늘의 문장\n\n"
+                "② 언론 동향 분석\n수정한 마지막 문장입니다.\n\n"
+                "③ 경영 참고사항\n수정한 참고사항\n\n"
+                "② 언론 동향 분석\n이전 마지막 문장입니다.\n\n"
+                "③ 경영 참고사항\n이전 참고사항\n\n"
+                "② 언론 동향 분석\n\n"
+                "③ 경영 참고사항\n직접적인 경영 현안은 제한적입니다."
+            ),
+            "articleIds": ["A01"],
+        },
+        "situationSummary": {"text": "", "articleIds": []},
+        "keyIssues": [],
+        "decisionPoints": [],
+        "actionItems": [],
+        "riskOutlook": {"text": "", "articleIds": [], "isInference": True},
+        "limitations": [],
+        "confidence": "medium",
+    }
+
+    normalized = normalize_plain_text_content(nested)
+
+    assert normalized["situationSummary"]["text"] == "수정한 마지막 문장입니다."
+    assert normalized["actionItems"][0]["action"] == "수정한 참고사항"
+    assert "이전 마지막 문장" not in normalized["situationSummary"]["text"]
 
 
 def test_new_plain_text_no_reference_phrase_does_not_create_reference_issue():

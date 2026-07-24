@@ -62,7 +62,7 @@ def test_index_html_is_served_at_root():
     assert 'articles.js?v=20260723-1' in app_script.text
     assert 'collection.js?v=20260723-21' in app_script.text
     assert 'notifications.js?v=20260716-1' in app_script.text
-    assert 'report-draft.js?v=20260723-7' in app_script.text
+    assert 'report-draft.js?v=20260724-2' in app_script.text
     assert 'openExternalAi("chatgpt")' in app_script.text
     assert 'openExternalAi("claude")' in app_script.text
     assert 'ai-analysis.js?v=20260723-7' in app_script.text
@@ -173,6 +173,20 @@ def test_index_html_is_served_at_root():
     assert 'chatgpt: { label: "ChatGPT", url: "https://chatgpt.com/" }' in report_draft_script.text
     assert 'claude: { label: "Claude", url: "https://claude.ai/new" }' in report_draft_script.text
     assert "export const EXTERNAL_ANALYSIS_PROMPT" in report_draft_script.text
+    assert "if (reportDraftSavePromise) return reportDraftSavePromise;" in report_draft_script.text
+    persist_draft_function = report_draft_script.text.split(
+        "async function persistReportDraft()", 1
+    )[1].split("export function saveReportDraft()", 1)[0]
+    assert persist_draft_function.index(
+        "await api.validateReportDraft"
+    ) < persist_draft_function.index("await api.putReportDraft")
+    assert "content: validated.data.content" in persist_draft_function
+    preview_draft_function = report_draft_script.text.split(
+        "export async function previewFromDraftEditor()", 1
+    )[1].split("export function closeReportDraftEditor()", 1)[0]
+    assert preview_draft_function.index("await pendingSave") < preview_draft_function.index(
+        "previewWindow.location.replace(`/preview/"
+    )
     assert "첨부한 「KESCO CEO 일일 언론브리핑 AI 분석자료」 Markdown 파일만을 근거" in (
         report_draft_script.text
     )

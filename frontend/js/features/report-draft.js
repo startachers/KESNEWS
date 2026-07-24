@@ -9,6 +9,7 @@ import { flushArticleChanges, focusRelatedEvidence, renderArticles, setEvidenceV
 let currentSignature = "";
 let currentSourceType = "manual";
 let currentEvidenceIds = [];
+let reportDraftSavePromise = null;
 
 // content_from_plain_text가 정부부처 동향 섹션에 부여하는 keyIssue 제목 마커.
 // (백엔드 report_draft.GOVERNMENT_ISSUE_TITLE과 동일해야 한다)
@@ -374,16 +375,6 @@ function emptyContent() {
   };
 }
 
-function contentFromText(text) {
-  return {
-    managementMessage: { text: String(text || "").trim(), articleIds: currentEvidenceIds },
-    situationSummary: { text: "", articleIds: [] },
-    keyIssues: [], decisionPoints: [], actionItems: [],
-    riskOutlook: { text: "", articleIds: [], isInference: true },
-    limitations: [], confidence: "medium"
-  };
-}
-
 function setEditorContent(content) {
   const value = content || emptyContent();
   const referenceIssues = (value.keyIssues || [])
@@ -561,31 +552,59 @@ export function loadGemmaDraft() {
   setDraftStatus("Gemma 분석 결과를 편집 폼에 불러왔습니다. 저장 전 내용을 수정할 수 있습니다.", "ready");
 }
 
-export async function saveReportDraft() {
+async function persistReportDraft() {
   try {
     const reportText = $("reportDraftContent").value.trim();
     if (!reportText) throw new Error("저장할 CEO 보고 분석 내용이 없습니다.");
-    const content = contentFromText(reportText);
+    const validated = await api.validateReportDraft(state.date, {
+      reportDate: state.date,
+      inputSignature: currentSignature,
+      sourceLabel: $("reportDraftSource").value.trim(),
+      text: reportText
+    });
+    currentSignature = validated.data.inputSignature;
+    currentEvidenceIds = Object.keys(validated.data.evidence || {});
     const result = await api.putReportDraft(state.date, {
       expectedRevision: state.revision,
       sourceType: ["external", "gemma"].includes(currentSourceType) ? currentSourceType : "manual",
       sourceLabel: $("reportDraftSource").value.trim(),
       inputSignature: currentSignature,
-      content,
+      content: validated.data.content,
       basedOnAiRunId: null
     });
     state.revision = result.data.revision;
     currentSourceType = result.data.draft.sourceType;
     setDraftStatus(`${result.data.draft.sourceLabel || "CEO 보고 편집본"} · 저장 완료`, "ready");
     showToast("CEO 보고 편집본을 저장했습니다. 미리보기에 반영됩니다.", "success");
+    return true;
   } catch (error) {
     const reason = error.details?.reason ? ` (${error.details.reason})` : "";
     setDraftStatus(`저장 실패: ${friendlyError(error)}${reason}`, "error");
+    return false;
   }
 }
 
-export function previewFromDraftEditor() {
-  window.open(`/preview/${encodeURIComponent(state.date)}`, "_blank", "noopener");
+export function saveReportDraft() {
+  if (reportDraftSavePromise) return reportDraftSavePromise;
+  reportDraftSavePromise = persistReportDraft().finally(() => {
+    reportDraftSavePromise = null;
+  });
+  return reportDraftSavePromise;
+}
+
+export async function previewFromDraftEditor() {
+  const previewWindow = window.open("about:blank", "_blank");
+  if (previewWindow) previewWindow.opener = null;
+  const pendingSave = reportDraftSavePromise;
+  if (pendingSave && !(await pendingSave)) {
+    previewWindow?.close();
+    return;
+  }
+  if (previewWindow) {
+    previewWindow.location.replace(`/preview/${encodeURIComponent(state.date)}`);
+  } else {
+    showToast("팝업이 차단되어 CEO 미리보기를 열지 못했습니다.", "error");
+  }
 }
 
 export function closeReportDraftEditor() {

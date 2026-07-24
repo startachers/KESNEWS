@@ -145,7 +145,10 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
     for index, (_, end, section) in enumerate(matches):
         next_start = matches[index + 1][0] if index + 1 < len(matches) else len(normalized)
         value = normalized[end:next_start].strip()
-        if value:
+        # 과거 편집본은 전체 평문을 managementMessage에 다시 감싸 저장하면서 같은
+        # 섹션이 중첩될 수 있었다. 이 경우 화면 상단에서 사용자가 수정한 첫 섹션을
+        # 뒤쪽의 오래된 복제본으로 덮어쓰지 않는다.
+        if value and section not in sections:
             sections[section] = value
 
     core = sections.get("core") or normalized
@@ -211,3 +214,25 @@ def content_from_plain_text(text: str, evidence_ids: list[str]) -> dict[str, Any
         "limitations": [],
         "confidence": "medium",
     }
+
+
+def normalize_plain_text_content(content: dict[str, Any]) -> dict[str, Any]:
+    """단일 필드에 저장된 과거 평문 편집본을 섹션별 구조로 읽기 전용 정규화한다."""
+    management = content.get("managementMessage")
+    if not isinstance(management, dict):
+        return content
+    management_text = str(management.get("text") or "")
+    evidence_ids = list(management.get("articleIds") or [])
+    has_separate_sections = bool(
+        str((content.get("situationSummary") or {}).get("text") or "")
+        or content.get("keyIssues")
+        or content.get("decisionPoints")
+        or content.get("actionItems")
+        or str((content.get("riskOutlook") or {}).get("text") or "")
+    )
+    if not management_text or has_separate_sections:
+        return content
+    parsed = content_from_plain_text(management_text, evidence_ids)
+    if parsed["managementMessage"]["text"] == management_text:
+        return content
+    return {**content, **parsed}

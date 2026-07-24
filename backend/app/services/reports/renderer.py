@@ -12,7 +12,7 @@ from backend.app.services.extraction.evidence_validation import body_errors, val
 from backend.app.services.reports.report_draft import (
     GOVERNMENT_ISSUE_TITLE,
     REFERENCE_ISSUE_TITLE,
-    content_from_plain_text,
+    normalize_plain_text_content,
 )
 
 KST = timezone(timedelta(hours=9))
@@ -120,20 +120,7 @@ def _claim(value: Any) -> tuple[str, list[str]]:
 
 
 def _analysis_for_display(analysis: dict[str, Any]) -> dict[str, Any]:
-    management_text, evidence_ids = _claim(analysis.get("managementMessage"))
-    has_separate_sections = bool(
-        _claim(analysis.get("situationSummary"))[0]
-        or analysis.get("keyIssues")
-        or analysis.get("decisionPoints")
-        or analysis.get("actionItems")
-        or _claim(analysis.get("riskOutlook"))[0]
-    )
-    if not management_text or has_separate_sections:
-        return analysis
-    parsed = content_from_plain_text(management_text, evidence_ids)
-    if parsed["managementMessage"]["text"] == management_text:
-        return analysis
-    return {**analysis, **parsed}
+    return normalize_plain_text_content(analysis)
 
 
 def _render_lead(value: Any) -> str:

@@ -11,7 +11,7 @@ import { importFile, exportJson, exportCsv, copySummary, changeReportDate, cance
 import { handleHistoryClick, openBriefingHistory } from "./features/history.js";
 import { openClusterProposal, applyClusterProposal, handleClusterThresholdInput, recalculateClusterProposal } from "./features/clustering.js";
 import { loadKescoPressStatus, openKescoPressViewer, refreshKescoPressFromModal, refreshKescoPressReleases } from "./features/press-releases.js";
-import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260723-7";
+import { closeReportDraftEditor, downloadAnalysisMarkdown, loadGemmaDraft, openExternalAi, openReportDraftEditor, previewFromDraftEditor, saveReportDraft, validateExternalAnalysis } from "./features/report-draft.js?v=20260724-2";
 import { applyAutoSelectionProposal, closeAutoSelectionProposal, openAutoSelectionProposal } from "./features/auto-selection.js?v=20260721-1";
 import { excludeWeatherFromReport, refreshWeather, toggleWeatherReview } from "./features/weather.js";
 import { handleDiscoveredIssuesClick, openDiscoveredIssues } from "./features/discovered-issues.js?v=20260723-32";

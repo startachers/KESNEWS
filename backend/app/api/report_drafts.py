@@ -17,6 +17,7 @@ from backend.app.services.reports.report_draft import (
     ReportDraftInvalid,
     build_exchange_context,
     content_from_plain_text,
+    normalize_plain_text_content,
     normalize_external_payload,
     validate_content,
 )
@@ -70,6 +71,8 @@ async def get_report_draft(report_date: str) -> Any:
         data = draft_repo.serialize(
             row, stale=bool(row is not None and row["input_signature"] != context.signature)
         )
+        if data is not None:
+            data["content"] = normalize_plain_text_content(data["content"])
     finally:
         connection.close()
     return ok_envelope(
