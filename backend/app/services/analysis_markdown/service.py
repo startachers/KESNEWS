@@ -450,6 +450,9 @@ def _signature_payload(
             "status": (effective or article).get("status") or article.get("bodyStatus"),
             "note": article.get("note") or "", "priority": article.get("priority"),
             "category": article.get("category"), "risk": article.get("risk"),
+            "governmentPressRelease": bool(article.get("governmentPressRelease")),
+            "governmentProviders": article.get("governmentProviders") or [],
+            "governmentSources": article.get("governmentSources") or [],
             "analysisEligible": bool(effective),
         })
     return {

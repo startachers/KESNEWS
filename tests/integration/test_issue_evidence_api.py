@@ -145,7 +145,7 @@ def test_issue_evidence_roles_quality_limits_and_revision_are_persisted():
     assert preserved["manualExcludedArticleIds"] == [article_ids[3]]
 
 
-def test_markdown_preserves_all_selected_articles_including_government_press_release():
+def test_markdown_tags_policy_briefing_and_ministry_sources_as_government_trends():
     issue, article_ids = _setup_issue("2096-10-02")
     body = (
         "정부는 전기설비 안전점검 결과와 피해 수치, 후속 조사 일정 및 재발 방지 대책을 "
@@ -163,6 +163,20 @@ def test_markdown_preserves_all_selected_articles_including_government_press_rel
                 "UPDATE article_observations SET provider = '정책브리핑 API', raw_source = '정책브리핑' "
                 "WHERE article_id = ?",
                 (article_ids[0],),
+            )
+            connection.execute(
+                "UPDATE articles SET source = '인사혁신처', publisher_id = 'official:korea.kr' "
+                "WHERE id = ?",
+                (article_ids[0],),
+            )
+            connection.execute(
+                "UPDATE article_observations SET provider = '기후에너지환경부 보도자료', "
+                "raw_source = '기후에너지환경부 보도자료' WHERE article_id = ?",
+                (article_ids[1],),
+            )
+            connection.execute(
+                "UPDATE articles SET source = '기후에너지환경부' WHERE id = ?",
+                (article_ids[1],),
             )
     finally:
         connection.close()
@@ -192,6 +206,13 @@ def test_markdown_preserves_all_selected_articles_including_government_press_rel
     assert "근거 역할: 대표기사" in content
     assert "근거 역할: 보조근거" in content
     assert "근거 역할: 브리핑 선정기사" in content
+    assert "- 정부부처 동향: 2건" in content
+    assert content.count("- 분석 태그: 정부부처 동향") == 2
+    assert "- 발표 부처: 인사혁신처" in content
+    assert "- 유통 출처: 정책브리핑" in content
+    assert "- 발표 부처: 기후에너지환경부" in content
+    assert "- 유통 출처: 기후에너지환경부 보도자료" in content
+    assert "정부의 공식 발표·정책 방향으로 구분해 분석" in content
     source_context = markdown_service.build_source_context(
         get_connection(), "2096-10-02", markdown_service.load_config()
     )

@@ -76,6 +76,9 @@ def build_exchange_context(connection: sqlite3.Connection, report_date: str) -> 
                 "sentiment": article.get("sentiment"),
                 "eventType": article.get("eventType"),
                 "matchedKeywords": article.get("matchedKeywords") or [],
+                "governmentPressRelease": bool(article.get("governmentPressRelease")),
+                "governmentProviders": article.get("governmentProviders") or [],
+                "governmentSources": article.get("governmentSources") or [],
                 "issues": issues_by_article.get(article["id"], []),
             }
         )

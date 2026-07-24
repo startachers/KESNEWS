@@ -1241,6 +1241,11 @@ POST /api/briefings/{date}/analysis-markdown
   파일 해시와 생성 입력 snapshot 서명을 함께 기록한다. 외부 AI 결과 검증은 이 manifest가
   현재 작업본 입력과 일치할 때 같은 서명·근거표를 사용하고, manifest가 없거나 오래됐으면
   기존 CEO 보고 편집본 입력 계약으로 되돌아간다.
+- 정부부처 직접 수집 observation(`국무조정실 보도자료`, `기후에너지환경부 보도자료`,
+  `정책브리핑 API`)이 연결된 포함 기사는 MD에서 `정부부처 동향`으로 표시한다.
+  정책브리핑은 유통 출처, observation의 실제 부처명은 발표 부처로 분리하며 일반 언론의
+  정부 정책 인용 보도에는 이 태그를 붙이지 않는다. 정부자료 여부와 provider·발표 부처도
+  입력 서명에 포함한다.
 - 저장 경로는 `reports/ai_inputs/YYYY-MM-DD/KESCO_AI분석자료_YYYY-MM-DD.md`이며 임시 파일을
   같은 디렉터리에 fsync한 뒤 `os.replace`한다. `KESCO_REPORTS_DIR`가 설정되면 해당 경로를
   보고서 루트로 사용한다.

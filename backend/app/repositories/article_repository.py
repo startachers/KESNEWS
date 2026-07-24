@@ -456,6 +456,8 @@ government_observations AS (
     SELECT
         article_id,
         1 AS is_government_press_release,
+        GROUP_CONCAT(DISTINCT provider) AS government_providers,
+        GROUP_CONCAT(DISTINCT raw_source) AS government_sources,
         MAX(CASE WHEN provider IN (
             '국무조정실 보도자료',
             '기후에너지환경부 보도자료'
@@ -497,6 +499,8 @@ SELECT
     lo.raw_source AS raw_source,
     lo.provider AS provider,
     COALESCE(go.is_government_press_release, 0) AS is_government_press_release,
+    go.government_providers AS government_providers,
+    go.government_sources AS government_sources,
     COALESCE(go.is_date_only_government, 0) AS is_date_only_government,
     aa.auto_risk AS auto_risk,
     aa.auto_risk_score AS auto_risk_score,
@@ -639,6 +643,16 @@ def list_candidates(
                     else None
                 ),
                 "governmentPressRelease": bool(row["is_government_press_release"]),
+                "governmentProviders": sorted(
+                    item
+                    for item in (row["government_providers"] or "").split(",")
+                    if item
+                ),
+                "governmentSources": sorted(
+                    item
+                    for item in (row["government_sources"] or "").split(",")
+                    if item
+                ),
                 "risk": {"required": "critical", "review": "watch", "reference": "routine"}.get(effective_priority, row["auto_risk"]),
                 "riskScore": row["auto_severity_score"] if row["auto_severity_score"] is not None else row["auto_risk_score"],
                 "sentiment": effective_tone,
