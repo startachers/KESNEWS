@@ -35,7 +35,7 @@ def _defaults() -> dict:
 
 def test_settings_get_put_and_reset_round_trip():
     defaults = _defaults()
-    assert len(defaults["queries"]) == 25
+    assert len(defaults["queries"]) == 26
     assert defaults["lookback"] == 24
 
     changed = {
@@ -71,6 +71,38 @@ def test_settings_validation_rejects_invalid_values_without_overwriting():
 
     assert response.status_code == 422
     assert client.get("/api/settings").json()["data"] == defaults
+
+
+def test_older_override_receives_new_default_query_without_overwriting_edits():
+    defaults = _defaults()
+    older = {
+        **defaults,
+        "settingsVersion": 10,
+        "collectionLimit": 321,
+        "queries": [
+            {**query, "enabled": False}
+            for query in defaults["queries"]
+            if query["id"] != "it_industry"
+        ],
+    }
+    connection = get_connection()
+    try:
+        with connection:
+            settings_repo.put_override(connection, older)
+    finally:
+        connection.close()
+
+    loaded = client.get("/api/settings").json()["data"]
+
+    assert loaded["settingsVersion"] == 11
+    assert loaded["collectionLimit"] == 321
+    assert all(
+        query["enabled"] is False
+        for query in loaded["queries"]
+        if query["id"] != "it_industry"
+    )
+    added = next(query for query in loaded["queries"] if query["id"] == "it_industry")
+    assert added["enabled"] is True
 
 
 def test_collection_uses_server_settings_and_ignores_legacy_body(monkeypatch):

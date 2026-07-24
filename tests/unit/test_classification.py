@@ -32,8 +32,8 @@ def test_rules_v3_relevance_rank_and_category(description, rank, score, category
     assert infer_category(article) == category
 
 
-def test_classifier_version_is_rules_v12():
-    assert CLASSIFIER_VERSION == "rules-v12"
+def test_classifier_version_is_rules_v13():
+    assert CLASSIFIER_VERSION == "rules-v13"
 
 
 @pytest.mark.parametrize(
@@ -208,6 +208,30 @@ def test_expanded_topic_categories_are_classified_and_relevant(title, category):
     relevance = get_relevance(article)
     assert relevance["rank"] == 7
     assert relevance["score"] == 47
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "삼성전자 HBM 반도체 투자 확대",
+        "애플, 신제품 아이폰 출시",
+        "엔비디아 AI GPU 실적 발표",
+    ],
+)
+def test_major_it_industry_articles_are_classified_and_relevant(title):
+    article = {"title": title, "description": ""}
+
+    assert infer_category(article) == "it_industry"
+    relevance = get_relevance(article)
+    assert relevance["rank"] == 7
+    assert relevance["score"] == 47
+
+
+def test_company_name_without_it_context_is_not_it_industry():
+    article = {"title": "애플 재배 농가 지원 확대", "description": ""}
+
+    assert infer_category(article) == "other"
+    assert get_relevance(article)["rank"] == 99
 
 
 def test_expanded_industry_rules_do_not_override_accident_categories():

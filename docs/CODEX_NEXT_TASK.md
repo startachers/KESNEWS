@@ -1,5 +1,18 @@
 # 현재 작업 체크포인트
 
+## 2026-07-24 완료 — 국내외 주요 IT 산업동향 검색 확장
+
+검색 기본값을 25→26개로 확장하고 `it_industry` 검색군을 추가했다. 삼성전자·
+SK하이닉스·애플·엔비디아를 비롯한 주요 글로벌 IT 기업과 반도체·AI·스마트폰·GPU·
+HBM·클라우드·소프트웨어·실적·투자·규제 등 산업 문맥을 함께 검색한다.
+
+- Google 뉴스 RSS 검색식 1개와 네이버 검색어 3개를 추가하고 검색군 상한은 20건으로 뒀다.
+- 검색 결과가 관련도 미달로 폐기되지 않도록 관련도 rank ⑦ 및 `it_industry` 분류 규칙을
+  함께 추가했다. 회사명만 같은 비IT 문맥(예: 사과를 뜻하는 애플)은 제외한다.
+- 설정 버전은 11로 올렸다. 저장된 version 10 override에는 담당자의 기존 수정·비활성화·
+  수집 상한을 보존하면서 누락된 새 검색군만 자동 보충한다.
+- 회귀 기록: `docs/regression/IT_SEARCH_EXPANSION_2026-07-24.md`
+
 ## 2026-07-23 완료 — 검색군 확장 + '이슈 기사 찾아보기'
 
 기사 검색식을 22→25개로 확장하고(cyber_security·labor_safety·peer_agencies), 이 셋이
@@ -17,7 +30,8 @@
 - 프론트: 헤더 '이슈 기사 찾아보기' 버튼 + `discoveredIssuesOverlay` 패널,
   `features/discovered-issues.js`. app.js/app.css 캐시버스팅 20260723-30.
 - 테스트: `tests/unit/test_dropped_issue.py`, `tests/integration/test_discovered_issues_api.py`.
-- 운영 주의: 예전 설정 저장 이력(SQLite override)이 있으면 새 검색군 3개는 설정 초기화 후 반영.
+- 운영 주의: version 11부터 예전 설정 저장 이력(SQLite override)의 기존 수정값은 보존하고,
+  버전 상승 중 누락된 기본 검색군만 자동 보충한다.
 
 ## 2026-07-23 완료
 

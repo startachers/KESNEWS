@@ -26,7 +26,7 @@ from backend.app.services.media import is_yonhap_article
 from backend.app.services.normalization.dates import date_value
 
 Article = dict[str, Any]
-CLASSIFIER_VERSION = "rules-v12"
+CLASSIFIER_VERSION = "rules-v13"
 
 PRIORITY_ORDER = {"reference": 0, "review": 1, "required": 2}
 
@@ -82,6 +82,58 @@ def get_relevance(article: Article) -> dict[str, Any]:
         return []
 
     def industry_strategy_macro_or_weather(text: str) -> list[str]:
+        it_companies = matched_terms(
+            text,
+            (
+                "삼성전자",
+                "sk하이닉스",
+                "애플",
+                "apple",
+                "엔비디아",
+                "nvidia",
+                "마이크로소프트",
+                "microsoft",
+                "구글",
+                "google",
+                "아마존",
+                "amazon",
+                "메타",
+                "meta",
+                "tsmc",
+            ),
+        )
+        it_topics = matched_terms(
+            text,
+            (
+                "반도체",
+                "인공지능",
+                "스마트폰",
+                "아이폰",
+                "gpu",
+                "hbm",
+                "파운드리",
+                "클라우드",
+                "데이터센터",
+                "소프트웨어",
+                "플랫폼",
+                "로봇",
+                "자율주행",
+                "신제품",
+                "출시",
+                "실적",
+                "영업이익",
+                "투자",
+                "인수",
+                "규제",
+                "공급망",
+                "주가",
+                "시가총액",
+            ),
+        )
+        if re.search(r"(?<![a-z0-9])ai(?![a-z0-9])", text):
+            it_topics.append("ai")
+        if it_companies and it_topics:
+            return [*it_companies, *it_topics]
         industry = matched_terms(text, ("ess", "에너지저장장치", "배터리", "전기차 충전"))
         safety = matched_terms(text, ("화재", "감전", "폭발", "사고", "안전점검", "결함", "리콜"))
         strategy = matched_terms(

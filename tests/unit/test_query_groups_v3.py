@@ -33,22 +33,27 @@ QUERY_IDS = [
     "ev_industry",
     "macro_economy",
     "ai_trend",
+    "it_industry",
     "cyber_security",
     "labor_safety",
     "peer_agencies",
 ]
 
 
-def test_server_defaults_are_the_single_source_for_25_query_groups():
+def test_server_defaults_are_the_single_source_for_26_query_groups():
     config = json.loads(
         (ROOT / "config/collection_settings.json").read_text(encoding="utf-8")
     )
     assert [query["id"] for query in config["queries"]] == QUERY_IDS
     by_id = {query["id"]: query for query in config["queries"]}
     assert all(1 <= len(query["naverQueries"]) <= 3 for query in config["queries"])
-    assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 75
+    assert sum(len(query["naverQueries"]) for query in config["queries"]) <= 78
     assert by_id["macro_economy"]["maxRecords"] == 20
     assert by_id["ai_trend"]["maxRecords"] == 20
+    assert by_id["it_industry"]["maxRecords"] == 20
+    assert {"삼성전자 SK하이닉스 반도체", "애플 엔비디아 AI", "글로벌 빅테크 IT"} == set(
+        by_id["it_industry"]["naverQueries"]
+    )
     assert by_id["peer_agencies"]["maxRecords"] == 20
 
     store_source = (ROOT / "frontend/js/state/store.js").read_text(encoding="utf-8")

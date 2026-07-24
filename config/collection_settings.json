@@ -1,5 +1,5 @@
 {
-  "settingsVersion": 10,
+  "settingsVersion": 11,
   "lookback": 24,
   "maxRecords": 50,
   "collectionLimit": 400,
@@ -29,6 +29,7 @@
     {"id": "ev_industry", "label": "전기차·충전인프라 산업동향", "query": "(전기차 OR 전기자동차) (보급 OR 충전소 OR 충전기 OR 충전인프라 OR 배터리 OR 보조금 OR 정책 OR 안전)", "naverQueries": ["전기차 충전인프라","전기차 배터리 안전","전기차 보조금"]},
     {"id": "macro_economy", "label": "에너지·공공요금 거시환경", "query": "(전기요금 OR 에너지요금 OR 공공요금 OR 유가 OR 물가 OR 금리 OR 경제성장률) (인상 OR 인하 OR 전망 OR 발표 OR 정책 OR 대책)", "maxRecords": 20, "naverQueries": ["전기요금 전망","에너지요금 정책","공공요금 대책"]},
     {"id": "ai_trend", "label": "AI·전력·공공부문 동향", "query": "(AI OR 인공지능) (데이터센터 OR 전력수요 OR 전력망 OR 에너지 OR 안전점검 OR 안전관리 OR 공공기관 OR 정부)", "maxRecords": 20, "naverQueries": ["AI 전력수요","인공지능 전력망","AI 공공기관"]},
+    {"id": "it_industry", "label": "국내외 주요 IT 산업동향", "query": "(\"삼성전자\" OR \"SK하이닉스\" OR 애플 OR Apple OR 엔비디아 OR NVIDIA OR 마이크로소프트 OR Microsoft OR 구글 OR Google OR 아마존 OR Amazon OR 메타 OR Meta OR TSMC) (반도체 OR AI OR 인공지능 OR 스마트폰 OR 아이폰 OR GPU OR HBM OR 파운드리 OR 클라우드 OR 데이터센터 OR 소프트웨어 OR 플랫폼 OR 로봇 OR 자율주행 OR 신제품 OR 출시 OR 실적 OR 영업이익 OR 투자 OR 인수 OR 규제 OR 공급망 OR 주가 OR 시가총액)", "maxRecords": 20, "naverQueries": ["삼성전자 SK하이닉스 반도체","애플 엔비디아 AI","글로벌 빅테크 IT"]},
     {"id": "cyber_security", "label": "사이버보안·정보유출", "query": "(해킹 OR 랜섬웨어 OR 디도스 OR DDoS OR 악성코드 OR \"사이버 공격\" OR \"사이버공격\" OR \"정보 유출\" OR \"개인정보 유출\" OR \"정보보안\" OR \"사이버보안\") (공공기관 OR \"한국전기안전공사\" OR 전력망 OR \"제어시스템\" OR SCADA OR 발전소 OR 기반시설 OR 에너지 OR 한전)", "naverQueries": ["공공기관 해킹","전력망 사이버보안","공공기관 개인정보 유출"]},
     {"id": "labor_safety", "label": "노동·산업안전·중대재해", "query": "(\"중대재해처벌법\" OR 중대재해 OR 산업재해 OR 산재 OR \"산업안전보건\" OR 작업중지 OR \"노동안전\") (감전 OR 전기 OR 전기공사 OR 전기설비 OR 전기작업 OR 건설현장 OR 작업자 OR 근로자 OR 사망 OR 부상 OR 추락)", "naverQueries": ["전기 작업자 감전","중대재해처벌법 감전","건설현장 감전 사고"]},
     {"id": "peer_agencies", "label": "유사·경쟁기관 동향", "query": "(\"한국가스안전공사\" OR \"가스안전공사\" OR 소방청 OR \"한국전기연구원\" OR \"한국산업안전보건공단\" OR \"안전보건공단\" OR \"국가기술표준원\" OR \"한국전력\" OR 한전 OR \"한국에너지공단\") (안전점검 OR 안전관리 OR 점검 OR 사고 OR 화재 OR 정전 OR 경영평가 OR 혁신 OR 규제 OR 기준 OR 감사)", "maxRecords": 20, "naverQueries": ["가스안전공사 점검","소방청 전기화재","한국전력 안전관리"]}

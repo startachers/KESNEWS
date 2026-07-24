@@ -308,6 +308,54 @@ _CATEGORY_RULES: list[tuple[str, tuple[tuple[str, ...], ...]]] = [
         ),
     ),
     (
+        "it_industry",
+        (
+            (
+                "삼성전자",
+                "sk하이닉스",
+                "애플",
+                "apple",
+                "엔비디아",
+                "nvidia",
+                "마이크로소프트",
+                "microsoft",
+                "구글",
+                "google",
+                "아마존",
+                "amazon",
+                "메타",
+                "meta",
+                "tsmc",
+            ),
+            (
+                "반도체",
+                "ai",
+                "인공지능",
+                "스마트폰",
+                "아이폰",
+                "gpu",
+                "hbm",
+                "파운드리",
+                "클라우드",
+                "데이터센터",
+                "소프트웨어",
+                "플랫폼",
+                "로봇",
+                "자율주행",
+                "신제품",
+                "출시",
+                "실적",
+                "영업이익",
+                "투자",
+                "인수",
+                "규제",
+                "공급망",
+                "주가",
+                "시가총액",
+            ),
+        ),
+    ),
+    (
         "law_standard_plan",
         (
             (
@@ -377,8 +425,8 @@ def matched_terms(text: str, terms: tuple[str, ...]) -> list[str]:
 
 
 def category_keyword_matches(text: str, keyword: str) -> bool:
-    """짧은 영문 약어 AI/UPS는 다른 영단어 내부에서 매칭하지 않는다."""
-    if keyword in {"ai", "ups"}:
+    """짧은 영문 약어는 다른 영단어 내부에서 매칭하지 않는다."""
+    if keyword in {"ai", "ups", "gpu", "hbm"}:
         return re.search(rf"(?<![a-z0-9]){keyword}(?![a-z0-9])", text) is not None
     return keyword.lower() in text
 

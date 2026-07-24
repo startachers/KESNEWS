@@ -42,7 +42,7 @@ export function renderQuerySettings(queries) {
     ["공공기관 경영", ["public_evaluation", "public_operations", "kesco_governance", "assembly_law"]],
     ["사고·안전", ["electrical_accident", "power_outage", "weather", "major_fire_breaking", "new_industry_safety", "labor_safety", "cyber_security"]],
     ["제도·성과·전략", ["law_standard_plan", "kesco_achievement", "strategic_trend", "peer_agencies"]],
-    ["산업·거시환경", ["renewable_ess_industry", "ev_industry", "macro_economy", "ai_trend"]]
+    ["산업·거시환경", ["renewable_ess_industry", "ev_industry", "macro_economy", "ai_trend", "it_industry"]]
   ];
   const byId = new Map(queries.map(query => [query.id, query]));
   els.querySettings.innerHTML = groups.map(([label, ids]) => {

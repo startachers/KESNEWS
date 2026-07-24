@@ -37,7 +37,7 @@ class SearchQuery(BaseModel):
 class CollectionSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    settingsVersion: int = Field(default=9, ge=1)
+    settingsVersion: int = Field(default=11, ge=1)
     lookback: int = Field(default=24, ge=1, le=24)
     maxRecords: int = Field(default=50, ge=20, le=100)
     collectionLimit: int = Field(default=400, ge=1, le=2000)
@@ -93,7 +93,29 @@ def get_effective_settings() -> tuple[CollectionSettings, dict[str, Any]]:
         override, updated_at = settings_repo.get_override(connection)
     finally:
         connection.close()
-    effective = CollectionSettings.model_validate(override) if override else defaults
+    if override and int(override.get("settingsVersion") or 0) < defaults.settingsVersion:
+        # 새 버전에 추가된 검색군만 보충하고, 담당자가 수정·비활성화한 기존 검색군과
+        # 수집 상한·키워드 등 나머지 override 값은 그대로 보존한다.
+        existing_ids = {
+            str(query.get("id") or "")
+            for query in override.get("queries", [])
+            if isinstance(query, dict)
+        }
+        effective_payload = {
+            **override,
+            "settingsVersion": defaults.settingsVersion,
+            "queries": [
+                *override.get("queries", []),
+                *[
+                    query.model_dump(exclude_none=True)
+                    for query in defaults.queries
+                    if query.id not in existing_ids
+                ],
+            ],
+        }
+        effective = CollectionSettings.model_validate(effective_payload)
+    else:
+        effective = CollectionSettings.model_validate(override) if override else defaults
     return effective, {
         "hasOverride": override is not None,
         "updatedAt": updated_at,

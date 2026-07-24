@@ -600,7 +600,7 @@ def test_init_db_backfills_phase4_assessment(tmp_path):
         ).fetchone()
         assert row["auto_priority"] == "review"
         assert row["auto_relevance_score"] == 100
-        assert row["classifier_version"] == "rules-v12"
+        assert row["classifier_version"] == "rules-v13"
         assert row["manual_override"] == 0
     finally:
         upgraded.close()

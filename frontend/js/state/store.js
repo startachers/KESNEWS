@@ -28,7 +28,8 @@ export const CATEGORY_COLORS = {
   major_fire_breaking: "#8f3030", new_industry_safety: "#b05c75", law_standard_plan: "#70539b",
   kesco_achievement: "#087f76", strategic_trend: "#397b62", renewable_ess_industry: "#247a73",
   ev_industry: "#2f6fa3", macro_economy: "#9a6a20", ai_trend: "#5364a8",
-  cyber_security: "#4a5568", labor_safety: "#a14a3a", peer_agencies: "#5c6b8a"
+  cyber_security: "#4a5568", labor_safety: "#a14a3a", peer_agencies: "#5c6b8a",
+  it_industry: "#4967a8"
 };
 export const SENTIMENT_LABELS = { positive: "긍정", neutral: "중립", negative: "부정" };
 export const SETTINGS_KEY = "kesco_media_briefing_settings_v1";
